@@ -1,4 +1,4 @@
 *.pyc
-./idea
+.idea
 *.h5
 *.hdf
