@@ -140,12 +140,13 @@ class BatchManV0:
             k = -1
             for seed in seeds:
                 k += 1
-                gts.append(self.get_adjacent_gts(seed, self.ids[batch][k],
-                                                 batch))
+                gts.append(self.get_adjacent_gts(seed, batch,
+                                                 self.ids[batch][k]))
             self.global_gts.append(gts)
 
-    def get_adjacent_gts(self, seed, id, batch):
-
+    def get_adjacent_gts(self, seed, batch, id=None):
+        if id is None:
+            id = self.global_label_batch[batch, 0, seed[0], seed[1]]
         seeds_x = [max(self.pad, seed[0]-1),
                    seed[0],
                    min(seed[0]+1, self.global_el - self.pad-1),
@@ -165,15 +166,10 @@ class BatchManV0:
 
     def crop_raw(self, seed, batch_counter):
 
-        print self.raw.shape
         raw = self.global_batch[batch_counter, :,
-                       seed[0] - self.pad:seed[0] + self.pad,
-                       seed[1] - self.pad:seed[1] + self.pad]
-        label = self.global_label_batch[batch_counter, :,
-                            seed[0] - self.pad:seed[0] + self.pad,
-                            seed[1] - self.pad:seed[1] + self.pad]
-
-        return raw, label
+                                seed[0] - self.pad:seed[0] + self.pad,
+                                seed[1] - self.pad:seed[1] + self.pad]
+        return raw
 
     def get_init_train_batch(self):
         print 'get init train batch'
@@ -184,24 +180,35 @@ class BatchManV0:
         raw_batch = np.zeros((self.bs, 1, self.pl, self.pl),
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 4), dtype=theano.config.floatX)
-        print 'end get init batch train'
+
+        counter = 0
+        all_seeds_initialized = False
         for b in range(self.batch_counter, self.bs):
             for segment in range(self.id_counter, len(self.ids[b])):
                 seed = self.global_seeds[b][segment]
                 print 'seed', seed, b
-                raw, label = self.crop_raw(seed, b)
-                raw = raw[0]
-                label = label[0]
-                gts = self.global_gts[b][segment]
-                print 'raw shape', raw.shape
-                plt.figure(figsize=(10, 10))
-                raw[29, 29] = 0
-                plt.imshow(raw, cmap='gray', interpolation='none')
-                plt.figure(figsize=(10, 10))
-                label[30, 30] = 0
-                plt.imshow(label, interpolation='none')
-                print gts
-                plt.show()
+                raw_batch[b, :, :] = self.crop_raw(seed, b)[0]
+                gts[b, :] = self.global_gts[b][segment]
+                counter += 1
+                if counter == self.bs:
+                    break
+                if b == self.bs - 1 and segment == len(self.ids[b]) - 1 :
+                    all_seeds_initialized = True
+
+        return raw_batch, gts, seed, all_seeds_initialized
+
+    def get_batches(self, seeds):
+
+        raw_batch = np.zeros((self.bs, 1, self.pl, self.pl),
+                             dtype=theano.config.floatX)
+        gts = np.zeros((self.bs, 4), dtype=theano.config.floatX)
+
+        for b in range(self.bs):
+            raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
+            gts[b, :] = self.get_adjacent_gts(seeds[b], b)
+
+        return raw_batch
+
 
 if __name__ == '__main__':
 
@@ -224,6 +231,7 @@ if __name__ == '__main__':
     bm.get_seeds()
     bm.seeds_initial_gt()
     bm.get_init_train_batch()
+    print bm.get_batches(10*[[45, 46]])
 
 
 
