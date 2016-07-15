@@ -36,8 +36,7 @@ def run_cnn_v1():
     bm_val = du.BatchManV0(raw_path, label_path, batch_size=batch_size,
                        patch_len=patch_len, global_edge_len=global_edge_len,
                            remain_in_territory=False)
-
-    bm.init_train_batch()  # Training
+    bm_val.init_train_batch()  # Training
 
 
     converged = False
@@ -56,11 +55,18 @@ def run_cnn_v1():
             u.save_2_images(
                 bm.global_claims[4, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
                 bm.global_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
-                im_path, iteration=battle_field_counter)
+                im_path, iteration=battle_field_counter, name='train')
+
+            u.save_2_images(
+                bm_val.global_claims[4, bm_val.pad:-bm_val.pad - 1,
+                                     bm_val.pad:-bm_val.pad - 1],
+                bm.global_batch[4, 0, bm_val.pad:-bm.pad - 1,
+                                      bm_val.pad:-bm_val.pad - 1],
+                im_path, iteration=battle_field_counter, name='val')
 
             battle_field_change = \
                 int((1.-1./(iteration + 2)**0.4) *
-                    ((global_edge_len - bm.pl)**2 - 100))
+                    ((global_edge_len - bm.pl)**2 - 300))
             print 'new global batch loaded', battle_field_counter, battle_field_change
             bm.init_train_batch()
             battle_field_counter = 0
@@ -70,6 +76,10 @@ def run_cnn_v1():
         probs = probs_f(raw)
         loss_train = loss_train_f(raw, gt)
         bm.update_priority_queue(probs, seeds, ids)
+
+        raw, gt, seeds, ids = bm_val.get_batches()
+        probs_val = probs_f(raw)
+        bm_val.update_priority_queue(probs_val, seeds, ids)
 
         if iteration % 100 == 0:
             print '\r loss train %.4f, iteration %i' % (loss_train, iteration),
