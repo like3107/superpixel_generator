@@ -7,6 +7,7 @@ fixed_rand = np.random.rand(256, 3)
 
 # A random colormap for matplotlib, https://gist.github.com/jgomezdans/402500
 def random_color_map():
+    fixed_rand[0, :] = 0
     cmap = matplotlib.colors.ListedColormap(fixed_rand)
     return cmap
 
@@ -23,3 +24,8 @@ def save_2_images(im_x, im_y, path, name='iteration', iteration=''):
 
 if __name__ == '__main__':
     print random_color_map()
+    a = np.random.randint(0, 2, size=(100, 100))
+    print a.shape
+
+    plt.imshow(a, interpolation='none', cmap=random_color_map())
+    plt.show()

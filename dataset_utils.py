@@ -188,6 +188,7 @@ class BatchManV0:
         seeds, ids = self.get_seeds_from_queue()
         raw_batch = np.zeros((self.bs, 1, self.pl, self.pl),
                              dtype=theano.config.floatX)
+
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
             raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
@@ -199,28 +200,28 @@ class BatchManV0:
         seeds = []
         ids = []
         for b in range(self.bs):
-            if self.priority_queue[b].empty():
-                print 'batch', b
-                raise Exception('priority queue is empty. This might be due to '
-                                'unconnected cmoponents with the same ID')
-            else:
-                already_claimed = True
-                out_of_territory = True
-                while already_claimed or out_of_territory:
-                    prob, seed, id = self.priority_queue[b].get()
-                    if self.global_claims[b, seed[0], seed[1]] == 0:
-                        already_claimed = False
-                    else:
-                        already_claimed = True
-                    if self.remain_in_territory:
-                        if self.global_label_batch[b, 0, seed[0], seed[1]] \
-                                == id:
-                            out_of_territory = False
-                        else:
-                            out_of_territory = True
+            already_claimed = True
+            out_of_territory = False
+            while already_claimed or out_of_territory:
+                if self.priority_queue[b].empty():
+                    raise Exception(
+                        'priority queue is empty. This might be due to '
+                        'unconnected cmoponents with the same ID')
 
-                seeds.append(seed)
-                ids.append(id)
+                prob, seed, id = self.priority_queue[b].get()
+                if self.global_claims[b, seed[0], seed[1]] == 0:
+                    already_claimed = False
+                else:
+                    already_claimed = True
+                if self.remain_in_territory:
+                    if self.global_label_batch[b, 0, seed[0], seed[1]] \
+                            == id:
+                        out_of_territory = False
+                    else:
+                        out_of_territory = True
+
+            seeds.append(seed)
+            ids.append(id)
 
         return seeds, ids
 

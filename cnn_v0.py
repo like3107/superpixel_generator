@@ -34,8 +34,9 @@ def run_cnn_v1():
                        patch_len=patch_len, global_edge_len=global_edge_len)
     bm.init_train_batch()
     bm_val = du.BatchManV0(raw_path, label_path, batch_size=batch_size,
-                       patch_len=patch_len, global_edge_len=global_edge_len,
+                           patch_len=patch_len, global_edge_len=global_edge_len,
                            remain_in_territory=False)
+
     bm_val.init_train_batch()  # Training
 
 
@@ -60,15 +61,17 @@ def run_cnn_v1():
             u.save_2_images(
                 bm_val.global_claims[4, bm_val.pad:-bm_val.pad - 1,
                                      bm_val.pad:-bm_val.pad - 1],
-                bm.global_batch[4, 0, bm_val.pad:-bm.pad - 1,
+                bm_val.global_batch[4, 0, bm_val.pad:-bm_val    .pad - 1,
                                       bm_val.pad:-bm_val.pad - 1],
                 im_path, iteration=battle_field_counter, name='val')
 
             battle_field_change = \
                 int((1.-1./(iteration + 2)**0.4) *
                     ((global_edge_len - bm.pl)**2 - 300))
-            print 'new global batch loaded', battle_field_counter, battle_field_change
+            print 'new global batch loaded', battle_field_counter, \
+                battle_field_change
             bm.init_train_batch()
+            bm_val.init_train_batch()
             battle_field_counter = 0
 
         # train da thing

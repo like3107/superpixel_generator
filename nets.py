@@ -26,7 +26,7 @@ def build_net_v0():
     return l_in, l_9
 
 
-def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-4):
+def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-3):
 
     all_params = L.get_all_params(last_layer)
 
