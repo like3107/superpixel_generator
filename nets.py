@@ -12,7 +12,7 @@ def build_net_v0():
     pool = [2, 2]
     dropout = [0.5, 0.5]
 
-    l_in = L.InputLayer((None, 1, 40, 40))
+    l_in = L.InputLayer((None, 2, 40, 40))
     l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
     l_2 = L.DropoutLayer(l_1, p=dropout[0])
     l_3 = L.MaxPool2DLayer(l_2, pool[0])
@@ -39,7 +39,7 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-3):
 
     loss_train = T.mean(
         las.objectives.binary_crossentropy(l_out_train, target)) + \
-                                           L1_weight * L1_norm
+                        L1_weight * L1_norm
     loss_valid = T.mean(
         las.objectives.binary_crossentropy(l_out_valid, target))
 
@@ -51,3 +51,5 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-3):
     probs_f = theano.function([l_in.input_var], l_out_valid)
 
     return loss_train_f, loss_valid_f, probs_f
+
+

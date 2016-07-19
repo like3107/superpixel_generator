@@ -36,7 +36,11 @@ def load_h5(path, h5_key=None, group=None, group2=None):
 
 def save_h5(path, h5_key, data, overwrite='w-'):
     f = h.File(path, overwrite)
-    f.create_dataset(h5_key, data=data)
+    if isinstance(h5_key, str):
+        f.create_dataset(h5_key, data=data)
+    if isinstance(h5_key, list):
+        for key, values in zip(h5_key, data):
+            f.create_dataset(key, data=values)
     f.close()
 
 
@@ -53,7 +57,7 @@ class BatchManV0:
 
     def __init__(self, raw_path, label_path,
                  raw_key=None, label_key=None, batch_size=10,
-                 global_edge_len=110, patch_len=40, remain_in_territory=True):
+                 global_edge_len=110, patch_len=40):
 
         self.raw = load_h5(raw_path, h5_key=raw_key)[0]
         self.labels = load_h5(label_path, h5_key=label_key)[0]
@@ -66,7 +70,6 @@ class BatchManV0:
         self.pl = patch_len
         self.pad = patch_len / 2
         self.rl = self.raw.shape[1]
-        self.remain_in_territory = remain_in_territory
 
         assert(patch_len <= global_edge_len)
         assert(global_edge_len < self.rl + self.pad)
@@ -85,7 +88,7 @@ class BatchManV0:
     def prepare_global_batch(self):
         # initialize two global batches = region where CNNs compete
         # against each other
-        self.global_batch = np.zeros((self.bs, 1,
+        self.global_batch = np.zeros((self.bs, 2,
                                      self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
         self.global_label_batch = np.zeros((self.bs, 1,
@@ -146,9 +149,7 @@ class BatchManV0:
                 q.put((-0.1, seed, id))
             self.priority_queue.append(q)
 
-    def get_adjacent_gts(self, seed, batch, id=None):
-        if id is None:
-            id = self.global_label_batch[batch, 0, seed[0], seed[1]]
+    def get_adjacent_gts(self, seed, batch, id):
         seeds_x = [max(self.pad, seed[0]-1),
                    seed[0],
                    min(seed[0]+1, self.global_el - self.pad-1),
@@ -166,10 +167,19 @@ class BatchManV0:
         return ground_truth
 
     def crop_raw(self, seed, batch_counter):
-        raw = self.global_batch[batch_counter, :,
+        raw = self.global_batch[batch_counter, 0,
                                 seed[0] - self.pad:seed[0] + self.pad,
                                 seed[1] - self.pad:seed[1] + self.pad]
         return raw
+
+    def crop_mask_claimed(self, seed, b, id):
+        labels = self.global_claims[b,
+                                    seed[0] - self.pad:seed[0] + self.pad,
+                                    seed[1] - self.pad:seed[1] + self.pad]
+        claimed = np.ones((self.pl, self.pl), dtype=theano.config.floatX) + 2
+        claimed[labels != id] = 1
+        claimed[labels == 0] = 0
+        return claimed
 
     def init_train_batch(self):
         # extract slices and ids within raw and label cubes
@@ -186,13 +196,14 @@ class BatchManV0:
 
     def get_batches(self):
         seeds, ids = self.get_seeds_from_queue()
-        raw_batch = np.zeros((self.bs, 1, self.pl, self.pl),
+        raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
 
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
             raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
-            gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b)
+            raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
+            gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
 
@@ -204,21 +215,11 @@ class BatchManV0:
             out_of_territory = False
             while already_claimed or out_of_territory:
                 if self.priority_queue[b].empty():
-                    raise Exception(
-                        'priority queue is empty. This might be due to '
-                        'unconnected cmoponents with the same ID')
+                    raise Exception('priority queue empty. All pixels labeled')
 
                 prob, seed, id = self.priority_queue[b].get()
                 if self.global_claims[b, seed[0], seed[1]] == 0:
                     already_claimed = False
-                else:
-                    already_claimed = True
-                if self.remain_in_territory:
-                    if self.global_label_batch[b, 0, seed[0], seed[1]] \
-                            == id:
-                        out_of_territory = False
-                    else:
-                        out_of_territory = True
 
             seeds.append(seed)
             ids.append(id)
