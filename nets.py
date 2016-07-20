@@ -26,6 +26,38 @@ def build_net_v0():
     return l_in, l_9
 
 
+def build_net_v1():
+    '''
+    cnn with 100 x 100 input and 4 classes out
+    :return:
+    '''
+    filt = [15, 10, 6, 6]
+    n_filt = [20, 25, 60, 30, 15, 4]
+    pool = [2, 2, 2]
+    dropout = [0.2, 0.2, 0.2]
+
+    l_in = L.InputLayer((None, 2, 100, 100))
+
+    l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
+    l_2 = L.DropoutLayer(l_1, p=dropout[0])
+    l_3 = L.MaxPool2DLayer(l_2, pool[0])
+    # 43
+    l_4 = L.Conv2DLayer(l_3, n_filt[1], filt[1])
+    l_5 = L.DropoutLayer(l_4, p=dropout[1])
+    l_6 = L.MaxPool2DLayer(l_5, pool[1])
+    # 17
+    l_7 = L.Conv2DLayer(l_6, n_filt[2], filt[2])
+    l_8 = L.DropoutLayer(l_7, p=dropout[2])
+    l_9 = L.MaxPool2DLayer(l_8, pool[2])
+    # 6
+    l_10 = L.Conv2DLayer(l_9, n_filt[3], 5, filt[3])
+    l_11 = L.Conv2DLayer(l_10, n_filt[4], 1)
+
+    l_12 = L.Conv2DLayer(l_11, n_filt[6], 1,
+                        nonlinearity=las.nonlinearities.sigmoid)
+    return l_in, l_12
+
+
 def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-8):
 
     all_params = L.get_all_params(last_layer)
