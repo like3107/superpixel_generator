@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import os
 from theano import tensor as T
 import utils as u
@@ -21,7 +23,7 @@ def run_cnn_v0():
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/cnn_v0/net_10000'
     tmp_path = '/media/liory/ladata/bla'
-    batch_size = 32
+    batch_size = 64
     patch_len = 40
     global_edge_len = 100
 
