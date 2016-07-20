@@ -189,8 +189,7 @@ class BatchManV0:
         self.initialize_priority_queue(global_seeds, global_ids)
 
         # remember where territory has been claimed before. 1 claimed, 0 free
-        self.global_claims = np.ones((self.bs, self.global_el, self.global_el),
-                                     dtype=int)
+        self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
     def get_batches(self):
@@ -203,7 +202,7 @@ class BatchManV0:
             raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
             gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
-            self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
+            self.global_claims[b, seeds[b][0], seeds[b][1]] = 1
         return raw_batch, gts, seeds, ids
 
     def get_seeds_from_queue(self):
