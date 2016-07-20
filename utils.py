@@ -14,21 +14,23 @@ def random_color_map():
     return cmap
 
 
-def save_2_images(im_x, im_y, path, name='iteration', iteration=''):
+def save_2_images(im_x, im_y, path, name='iteration', iteration=0,
+                  iterations_per_image=0):
     f, ax = plt.subplots(ncols=2)
     ax[0].imshow(im_x, interpolation='none', cmap=random_color_map())
     ax[1].imshow(im_y, cmap='gray')
-    f.savefig(path + name + '_%s' % str(iteration))
+    f.savefig(path + name + '_it%07d_im%07d' % (iteration, iterations_per_image))
     plt.close(f)
 
 
-def save_3_images(im_x, im_y, im_z, path, name='iteration', iteration=''):
+def save_3_images(im_x, im_y, im_z, path, name='iteration', iteration=0,
+                  iterations_per_image=0):
     f, ax1 = plt.subplots(ncols=3)
     ax1[0].imshow(im_x, interpolation='none', cmap=random_color_map())
     ax1[1].imshow(im_y, cmap='gray')
     ax1[2].imshow(im_z, interpolation='none', cmap=random_color_map())
 
-    f.savefig(path + name + '_%s' % str(iteration))
+    f.savefig(path + name + '_it%07d_im%07d' % (iteration, iterations_per_image))
     plt.close()
 
 

@@ -20,11 +20,11 @@ def run_cnn_v0():
     load_net_b = True
 
     # data params
-    label_path = './data/labels_as.h5'
-    raw_path = './data/raw_as.h5'
+    label_path = './data/volumes/labels_a.h5'
+    raw_path = './data/volumes/raw_a.h5'
     net_name = 'cnn_v0_test'
     save_net_path = './data/nets/' + net_name + '/'
-    load_net_path = './data/nets/cnn_v0/net_300000'
+    load_net_path = './data/nets/cnn_v0/net_10000'
     tmp_path = '/media/liory/ladata/bla'
     batch_size = 32
     patch_len = 40
@@ -74,19 +74,23 @@ def run_cnn_v0():
         if global_field_counter % global_field_change == 0:
             if save_net_b:
                 # plot train images
-                u.save_2_images(
+                u.save_3_images(
                     bm.global_claims[4, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
                     bm.global_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                    bm.global_label_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
                     save_net_path + '/images/',
-                    iteration=global_field_counter, name='train')
+                    iterations_per_image=global_field_counter, name='train',
+                    iteration=iteration)
                 # # # plot valid images
-                u.save_2_images(
+                u.save_3_images(
                     bm_val.global_claims[4, bm_val.pad:-bm_val.pad - 1,
                                          bm_val.pad:-bm_val.pad - 1],
                     bm_val.global_batch[4, 0, bm_val.pad:-bm_val    .pad - 1,
                                         bm_val.pad:-bm_val.pad - 1],
+                    bm_val.global_label_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
                     save_net_path + '/images/',
-                    iteration=global_field_counter, name='val')
+                    iterations_per_image=global_field_counter, name='train',
+                    iteration=iteration)
                 global_field_change = \
                     u.linear_growth(iteration,
                                     maximum=(global_edge_len - patch_len)**2-100,
@@ -132,15 +136,26 @@ def run_cnn_v0():
                                            'loss valid'])
 
             # debug
-            f, ax = plt.subplots(1, 2)
-            ax[0].imshow(bm.global_claims[4, bm.pad:-bm.pad], interpolation='none')
-            ax[1].imshow(bm.global_batch[4, 0, bm.pad:-bm.pad], cmap='gray')
+            f, ax = plt.subplots(1, 3)
+            ax[0].imshow(bm.global_claims[4, bm.pad:-bm.pad, bm.pad:-bm.pad],
+                         interpolation='none', cmap=u.random_color_map())
+            ax[1].imshow(bm.global_batch[4, 0, bm.pad:-bm.pad, bm.pad:-bm.pad],
+                         cmap='gray')
+            print bm.global_label_batch.shape
+            ax[2].imshow(bm.global_label_batch[4, 0, bm.pad:-bm.pad, bm.pad:-bm.pad],
+                         interpolation='none', cmap=u.random_color_map())
+
+            print 'gt', gt[4]
             plt.savefig(tmp_path)
             plt.close()
 
-            f, ax = plt.subplots(1, 2)
+
+            f, ax = plt.subplots(1, 3)
             ax[0].imshow(raw[4, 0], cmap='gray')
-            ax[1].imshow(raw[4, 1], cmap=u.random_color_map(), interpolation='none')
+            ax[1].imshow(raw[4, 1], cmap=u.random_color_map(),
+                         interpolation='none')
+            ax[2].imshow(gt[4, :, :, 0], cmap=u.random_color_map(),
+                         interpolation='none')
             plt.savefig(tmp_path + str(2))
             plt.close()
 

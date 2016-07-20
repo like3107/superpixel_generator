@@ -92,8 +92,7 @@ class BatchManV0:
                                      self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
         self.global_label_batch = np.zeros((self.bs, 1,
-                                            self.global_el, self.global_el),
-                                           dtype=theano.config.floatX)
+                                            self.global_el, self.global_el))
 
         # get indices for global batches in raw/ label cubes
         ind_b = np.random.permutation(self.n_slices)[:self.bs]
