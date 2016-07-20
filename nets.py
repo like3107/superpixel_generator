@@ -50,10 +50,10 @@ def build_net_v1():
     l_8 = L.DropoutLayer(l_7, p=dropout[2])
     l_9 = L.MaxPool2DLayer(l_8, pool[2])
     # 6
-    l_10 = L.Conv2DLayer(l_9, n_filt[3], 5, filt[3])
+    l_10 = L.Conv2DLayer(l_9, n_filt[3], filt[3])
     l_11 = L.Conv2DLayer(l_10, n_filt[4], 1)
 
-    l_12 = L.Conv2DLayer(l_11, n_filt[6], 1,
+    l_12 = L.Conv2DLayer(l_11, n_filt[5], 1,
                         nonlinearity=las.nonlinearities.sigmoid)
     return l_in, l_12
 
