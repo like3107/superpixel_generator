@@ -148,15 +148,20 @@ class BatchManV0:
                 q.put((-0.1, seed, id))
             self.priority_queue.append(q)
 
-    def get_adjacent_gts(self, seed, batch, id):
-        seeds_x = [max(self.pad, seed[0]-1),
+    def get_cross_coords(self, seed):
+        seeds_x = [max(self.pad, seed[0] - 1),
                    seed[0],
-                   min(seed[0]+1, self.global_el - self.pad-1),
+                   min(seed[0] + 1, self.global_el - self.pad - 1),
                    seed[0]]
+
         seeds_y = [seed[1],
-                   max(self.pad, seed[1]-1),
+                   max(self.pad, seed[1] - 1),
                    seed[1],
-                   min(seed[1]+1, self.global_el - self.pad-1)]
+                   min(seed[1] + 1, self.global_el - self.pad - 1)]
+        return seeds_x, seeds_y
+
+    def get_adjacent_gts(self, seed, batch, id):
+        seeds_x, seeds_y = self.get_cross_coords(seed)
 
         # boundary conditions
         ground_truth = \
@@ -175,9 +180,9 @@ class BatchManV0:
         labels = self.global_claims[b,
                                     seed[0] - self.pad:seed[0] + self.pad,
                                     seed[1] - self.pad:seed[1] + self.pad]
-        claimed = np.ones((self.pl, self.pl), dtype=theano.config.floatX) + 2
-        claimed[labels != id] = 1
-        claimed[labels == 0] = 0
+        claimed = np.zeros((self.pl, self.pl), dtype=theano.config.floatX)-1
+        claimed[labels != id] = 1       # the others
+        claimed[labels == 0] = 0       # me
         return claimed
 
     def init_train_batch(self):
@@ -188,7 +193,7 @@ class BatchManV0:
         # put seeds and ids in priority queue. All info to load batch is in pq
         self.initialize_priority_queue(global_seeds, global_ids)
 
-        # remember where territory has been claimed before. 1 claimed, 0 free
+        # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
@@ -202,7 +207,7 @@ class BatchManV0:
             raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
             gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
-            self.global_claims[b, seeds[b][0], seeds[b][1]] = 1
+            self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
 
     def get_seeds_from_queue(self):
@@ -210,8 +215,7 @@ class BatchManV0:
         ids = []
         for b in range(self.bs):
             already_claimed = True
-            out_of_territory = False
-            while already_claimed or out_of_territory:
+            while already_claimed:
                 if self.priority_queue[b].empty():
                     raise Exception('priority queue empty. All pixels labeled')
 
@@ -230,12 +234,12 @@ class BatchManV0:
 
         for b in range(self.bs):
             counter = -1
-            for x, y in zip([-1, 0, 1, 0], [0, -1, 0, 1]):
+            seeds_x, seeds_y = self.get_cross_coords(seeds[b])
+            for x, y in zip(seeds_x, seeds_y):
                 counter += 1
-                coords = [seeds[b][0] + x, seeds[b][1] + y]
-                if self.global_claims[b, coords[0], coords[1]] == 0:
+                if self.global_claims[b, x, y] == 0:
                     self.priority_queue[b].put((1 - probabilities[b][counter],
-                                                [coords[0], coords[1]], ids[b]))
+                                                [x, y], ids[b]))
 
 
 if __name__ == '__main__':

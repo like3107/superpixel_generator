@@ -10,7 +10,7 @@ def build_net_v0():
     filt = [7, 6, 6]
     n_filt = [20, 25, 60, 30, 4]
     pool = [2, 2]
-    dropout = [0.5, 0.5]
+    dropout = [0.2, 0.2]
 
     l_in = L.InputLayer((None, 2, 40, 40))
     l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
@@ -26,7 +26,7 @@ def build_net_v0():
     return l_in, l_9
 
 
-def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-3):
+def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-8):
 
     all_params = L.get_all_params(last_layer)
 
