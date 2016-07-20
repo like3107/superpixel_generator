@@ -3,10 +3,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 import theano
 from Queue import PriorityQueue
-
+import utils as u
 
 def load_h5(path, h5_key=None, group=None, group2=None):
-
+    print path
     f = h.File(path, 'r')
     if group is not None:
         g = f[group]
@@ -43,7 +43,6 @@ def save_h5(path, h5_key, data, overwrite='w-'):
             f.create_dataset(key, data=values)
     f.close()
 
-
 def make_array_cumulative(array):
     ids = np.unique(array)
     cumulative_array = np.zeros_like(array)
@@ -71,6 +70,8 @@ class BatchManV0:
         self.pad = patch_len / 2
         self.rl = self.raw.shape[1]
 
+        self.debug_counter = 0
+
         assert(patch_len <= global_edge_len)
         assert(global_edge_len < self.rl + self.pad)
 
@@ -82,18 +83,21 @@ class BatchManV0:
         self.global_batch = None
         self.global_label_batch = None
         self.global_claims = None
+        self.global_heightmap_batch = None
 
         self.priority_queue = None
 
     def prepare_global_batch(self):
         # initialize two global batches = region where CNNs compete
         # against each other
-        self.global_batch = np.zeros((self.bs, 2,
+        self.global_batch = np.zeros((self.bs, 3,
                                      self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
         self.global_label_batch = np.zeros((self.bs, 1,
                                             self.global_el, self.global_el),
                                            dtype=theano.config.floatX)
+
+        self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
 
         # get indices for global batches in raw/ label cubes
         ind_b = np.random.permutation(self.n_slices)[:self.bs]
@@ -146,7 +150,7 @@ class BatchManV0:
             i = -1      # ids within slice
             for seed, id in zip(seeds, ids):
                 i += 1
-                q.put((-0.1, seed, id))
+                q.put((0, seed, id))
             self.priority_queue.append(q)
 
     def get_adjacent_gts(self, seed, batch, id):
@@ -181,6 +185,13 @@ class BatchManV0:
         claimed[labels == 0] = 0
         return claimed
 
+    def crop_height(self, seed, batch_counter):
+        h = self.global_heightmap_batch[batch_counter, :,
+                                seed[0] - self.pad:seed[0] + self.pad,
+                                seed[1] - self.pad:seed[1] + self.pad]
+        return h
+
+
     def init_train_batch(self):
         # extract slices and ids within raw and label cubes
         global_ids = self.prepare_global_batch()
@@ -194,17 +205,50 @@ class BatchManV0:
                                      dtype=int)
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
+
+
     def get_batches(self):
         seeds, ids = self.get_seeds_from_queue()
-        raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
+        raw_batch = np.zeros((self.bs, 3, self.pl, self.pl),
                              dtype=theano.config.floatX)
-
+        height_batch = np.zeros((self.bs, 1, self.pl, self.pl),
+                             dtype=theano.config.floatX)
+        
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
+
             raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
             gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
+
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
+            # add height input
+            raw_batch[b, 2, :, :] = self.crop_height(seeds[b], b)
+# DEBUG
+
+        # net_name = 'cnn_v0_test'
+        # save_net_path = './data/nets/' + net_name + '/'
+        # u.save_5_images(
+        # self.global_claims[4, :,:],
+        # self.global_batch[4, 0, :,:],
+        # self.global_batch[4, 1, :,:],
+        # self.global_batch[4, 2, :,:],
+        # self.global_heightmap_batch[4, 0, :,:],
+        # save_net_path + '/images/',
+        # iteration=self.debug_counter, name='debug_bm_')
+        # u.save_5_images(
+        # self.global_claims[4, seeds[b][0] - self.pad:seeds[b][0] + self.pad,
+        #                             seeds[b][1] - self.pad:seeds[b][1] + self.pad],
+        # raw_batch[4, 0, :,:],
+        # raw_batch[4, 1, :,:],
+        # raw_batch[4, 2, :,:],
+        # self.global_heightmap_batch[4, 0, seeds[b][0] - self.pad:seeds[b][0] + self.pad,
+        #                             seeds[b][1] - self.pad:seeds[b][1] + self.pad],
+        # save_net_path + '/images/',
+        # iteration=self.debug_counter, name='raw_debug_')
+        # self.debug_counter += 1
+# DEBUG
+
         return raw_batch, gts, seeds, ids
 
     def get_seeds_from_queue(self):
@@ -226,18 +270,36 @@ class BatchManV0:
 
         return seeds, ids
 
-    def update_priority_queue(self, probabilities, seeds, ids):
-        assert(len(probabilities) == len(seeds))
-        assert(len(probabilities) == self.bs)
+    def update_priority_queue(self, NN_d, origin_coords, ids):
+        assert(len(NN_d) == len(origin_coords))
+        assert(len(NN_d) == self.bs)
 
         for b in range(self.bs):
-            counter = -1
-            for x, y in zip([-1, 0, 1, 0], [0, -1, 0, 1]):
-                counter += 1
-                coords = [seeds[b][0] + x, seeds[b][1] + y]
-                if self.global_claims[b, coords[0], coords[1]] == 0:
-                    self.priority_queue[b].put((1 - probabilities[b][counter],
-                                                [coords[0], coords[1]], ids[b]))
+            for counter,(x, y) in enumerate(zip([-1, 0, 1, 0], [0, -1, 0, 1])):
+                prediction_coords = [origin_coords[b][0] + x, origin_coords[b][1] + y]
+
+                if self.global_claims[b, prediction_coords[0], prediction_coords[1]] == 0:
+                    # print self.global_heightmap_batch.shape
+                    # print b,counter,origin_coords[b][0],origin_coords[b][1],prediction_coords[0],prediction_coords[1]
+
+                    # print "origin_heightmap_batch",self.global_heightmap_batch[b,0,origin_coords[b][0],origin_coords[b][1]]
+                    # print "pred_heightmap_batch",self.global_heightmap_batch[b,0,prediction_coords[0],prediction_coords[1]]
+                    # print "NN",NN_d[b][counter]
+
+                    d_j = max(NN_d[b][counter],self.global_heightmap_batch[b,0,origin_coords[b][0],origin_coords[b][1]])
+
+                    d_prev = self.global_heightmap_batch[b,0,prediction_coords[0],prediction_coords[1]]
+                    if (d_prev > 0):
+                        d_j = min(d_j,d_prev)
+
+                    self.global_heightmap_batch[b,0,prediction_coords[0],prediction_coords[1]] = d_j
+                    # print d_j,NN_d[b][counter]
+                    # self.global_heightmap_batch[b,0,prediction_coords[0],prediction_coords[1]] = 1
+
+                    self.priority_queue[b].put((d_j,
+                                                [prediction_coords[0],
+                                                prediction_coords[1]],
+                                                ids[b]))
 
 
 if __name__ == '__main__':

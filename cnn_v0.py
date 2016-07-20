@@ -17,7 +17,7 @@ c.use('gpu0')
 def run_cnn_v0():
     # network params
     save_net_b = True
-    load_net_b = True
+    load_net_b = False
 
     # data params
     label_path = './data/labels_as.h5'
@@ -25,7 +25,7 @@ def run_cnn_v0():
     net_name = 'cnn_v0_test'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/cnn_v0/net_300000'
-    tmp_path = '/media/liory/ladata/bla'
+    tmp_path = './data/nets/bla'
     batch_size = 32
     patch_len = 40
     global_edge_len = 100
@@ -74,19 +74,22 @@ def run_cnn_v0():
         if global_field_counter % global_field_change == 0:
             if save_net_b:
                 # plot train images
-                u.save_2_images(
-                    bm.global_claims[4, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
-                    bm.global_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
-                    save_net_path + '/images/',
-                    iteration=global_field_counter, name='train')
-                # # # plot valid images
-                u.save_2_images(
-                    bm_val.global_claims[4, bm_val.pad:-bm_val.pad - 1,
-                                         bm_val.pad:-bm_val.pad - 1],
-                    bm_val.global_batch[4, 0, bm_val.pad:-bm_val    .pad - 1,
-                                        bm_val.pad:-bm_val.pad - 1],
-                    save_net_path + '/images/',
-                    iteration=global_field_counter, name='val')
+                # u.save_5_images(
+                #     bm.global_claims[4, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                #     bm.global_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                #     bm.global_batch[4, 1, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                #     bm.global_batch[4, 2, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                #     save_net_path + '/images/',
+                #     iteration=global_field_counter, name='train')
+                # # # # plot valid images
+                # u.save_5_images(
+                #     bm_val.global_claims[4, bm_val.pad:-bm_val.pad-1, bm_val.pad:-bm_val.pad-1],
+                #     bm_val.global_batch[4, 0, bm_val.pad:-bm_val.pad-1, bm_val.pad:-bm_val.pad-1],
+                #     bm_val.global_batch[4, 1, bm_val.pad:-bm_val.pad-1, bm_val.pad:-bm_val.pad-1],
+                #     bm_val.global_batch[4, 2, bm_val.pad:-bm_val.pad-1, bm_val.pad:-bm_val.pad-1],
+                #     bm_val.global_heightmap_batch[4, bm_val.pad:-bm_val.pad-1, bm_val.pad:-bm_val.pad-1],
+                #     save_net_path + '/images/',
+                #     iteration=global_field_counter, name='val')
                 global_field_change = \
                     u.linear_growth(iteration,
                                     maximum=(global_edge_len - patch_len)**2-100,
@@ -106,13 +109,13 @@ def run_cnn_v0():
         # train da thing
         raw, gt, seeds, ids = bm.get_batches()
         probs = probs_f(raw)
-        loss_train = float(loss_train_f(raw, gt))
+        loss_train = loss_train_f(raw, gt)
         bm.update_priority_queue(probs, seeds, ids)
 
-        # monitor growing on validation set
-        raw_val, gt_val, seeds_val, ids_val = bm_val.get_batches()
+        raw_val, gt_val, seeds, ids = bm_val.get_batches()
+
         probs_val = probs_f(raw_val)
-        bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
+        bm_val.update_priority_queue(probs_val, seeds, ids)
 
         if iteration % 100 == 0:
             loss_valid = float(loss_valid_f(raw_val, gt_val))
@@ -125,25 +128,35 @@ def run_cnn_v0():
             losses[0].append(loss_train)
             losses[1].append(loss_train_no_reg)
             losses[2].append(loss_valid)
-            u.plot_train_val_errors(losses,
-                                    iterations,
-                                    save_net_path + 'training.png',
-                                    names=['loss train', 'loss train no reg',
-                                           'loss valid'])
+            # print losses
+            print bm.global_heightmap_batch.shape
+            print ""
+            u.save_5_images(
+                    bm.global_claims[4, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                    raw[4, 0, :,:],
+                    raw[4, 1, :,:],
+                    raw[4, 2, :,:],
+                    bm.global_heightmap_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                    save_net_path + '/images/',
+                    iteration=iteration, name='debug_'+str(global_field_counter)+'_')
+            # u.plot_train_val_errors(losses,
+            #                         iterations,
+            #                         save_net_path + 'training.png',
+            #                         names=['loss train', 'loss train no reg',
+            #                                'loss valid'])
 
-            # debug
-            f, ax = plt.subplots(1, 2)
-            ax[0].imshow(bm.global_claims[4, bm.pad:-bm.pad], interpolation='none')
-            ax[1].imshow(bm.global_batch[4, 0, bm.pad:-bm.pad], cmap='gray')
-            plt.savefig(tmp_path)
-            plt.close()
+            # # debug
+            # f, ax = plt.subplots(1, 2)
+            # ax[0].imshow(bm.global_claims[4, bm.pad:-bm.pad], interpolation='none')
+            # ax[1].imshow(bm.global_batch[4, 0, bm.pad:-bm.pad], cmap='gray')
+            # plt.savefig(tmp_path)
+            # plt.close()
 
-            f, ax = plt.subplots(1, 2)
-            ax[0].imshow(raw[4, 0], cmap='gray')
-            ax[1].imshow(raw[4, 1], cmap=u.random_color_map(), interpolation='none')
-            plt.savefig(tmp_path + str(2))
-            plt.close()
-
+            # f, ax = plt.subplots(1, 2)
+            # ax[0].imshow(raw[4, 0], cmap='gray')
+            # ax[1].imshow(raw[4, 1], cmap=u.random_color_map(), interpolation='none')
+            # plt.savefig(tmp_path + str(2))
+            # plt.close()
 
 if __name__ == '__main__':
 

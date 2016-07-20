@@ -1,4 +1,5 @@
 import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import numpy as np
 import lasagne as las
@@ -29,6 +30,43 @@ def save_3_images(im_x, im_y, im_z, path, name='iteration', iteration=''):
     ax1[2].imshow(im_z, interpolation='none', cmap=random_color_map())
 
     f.savefig(path + name + '_%s' % str(iteration))
+    plt.close()
+
+def save_4_images(im_x, im_y, im_z, im_a, path, name='iteration', iteration=''):
+    f, ax1 = plt.subplots(ncols=4)
+    ax1[0].imshow(im_x, interpolation='none', cmap=random_color_map())
+    ax1[1].imshow(im_y, cmap='gray')
+    ax1[2].imshow(im_z, interpolation='none', cmap=random_color_map())
+    ax1[2].imshow(im_a, interpolation='none', cmap='gray')
+
+    f.savefig(path + name + '_%s' % str(iteration))
+    plt.close()
+
+def save_5_images(im_x, im_y, im_z, im_a, im_b, path, name='iteration', iteration=''):
+    f, ax1 = plt.subplots(ncols=5)
+    ax1[0].imshow(im_x, interpolation='none', cmap=random_color_map())
+    ax1[1].imshow(im_y, interpolation='none', cmap='gray')
+    ax1[2].imshow(im_z, interpolation='none', cmap='gray')
+    ax1[3].imshow(im_a, interpolation='none', cmap='gray')
+    ax1[4].imshow(im_b, interpolation='none', cmap='gray')
+
+    f.savefig(path + name + '_%s' % str(iteration))
+    plt.close()
+
+
+def save_state_images(NN_input, gt, path, name='iteration', iteration=''):
+    num_img = NN_input.shape[1]
+    f, ax = plt.subplots(ncols=num_img+1)
+    for i in range(num_img):
+        ax[i].imshow(NN_input[0,i,:,:], cmap='gray')
+
+    # ax[num_img].imshow(gt, interpolation='none',
+    #              cmap=random_color_map())
+
+    if iteration == '':
+        plt.savefig(path + name )
+    else:
+        plt.savefig(path + name + '_%s' % str(iteration))
     plt.close()
 
 
