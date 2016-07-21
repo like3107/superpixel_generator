@@ -8,7 +8,7 @@ import nets
 import dataset_utils as du
 import numpy as np
 from theano.sandbox import cuda as c
-c.use('gpu1')
+c.use('gpu0')
 
 
 def run_cnn_v0():
@@ -19,13 +19,13 @@ def run_cnn_v0():
     # data params
     label_path = './data/volumes/labels_a.h5'
     raw_path = './data/volumes/membranes_a.h5'
-    net_name = 'cnn_v1_test'
+    net_name = 'cnn_v1_test1000'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/cnn_v1/net_10000'
     tmp_path = '/media/liory/ladata/bla'
     batch_size = 64
     patch_len = 100
-    global_edge_len = 300
+    global_edge_len = 1000
 
     # initialize the net
     print 'initializing network graph'
