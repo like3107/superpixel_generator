@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('TkAgg')    # Agg GPU cluster hast no display....
 import os
 from theano import tensor as T
 import utils as u
@@ -8,29 +8,43 @@ import nets
 import dataset_utils as du
 import numpy as np
 from theano.sandbox import cuda as c
-c.use('gpu0')
 
 
-def run_cnn_v0():
-    # network params
+def train_script_v0():
+
+    # data params:
+    # for each net a new folder is created. Here intermediate pred-
+    # dictions and train, val... are saved
     save_net_b = True
     load_net_b = False
 
-    # data params
-    label_path = './data/volumes/labels_a.h5'
+    net_name = 'cnn_v1_trash'
+    label_path = './data/volumes/label_a.h5'
     raw_path = './data/volumes/membranes_a.h5'
-    net_name = 'cnn_v1_test1000'
     save_net_path = './data/nets/' + net_name + '/'
-    load_net_path = './data/nets/cnn_v1/net_10000'
-    tmp_path = '/media/liory/ladata/bla'
-    batch_size = 64
-    patch_len = 100
-    global_edge_len = 1000
+    load_net_path = './data/nets/cnn_v1/net_10000'      # if load true
+    tmp_path = '/media/liory/ladata/bla'        # debugging
+    batch_size = 16         # > 4
+    global_edge_len = 100
+
+    # training parameter
+    c.use('gpu0')
+    max_iter = 10000000
+    save_counter = 10000        # save every n iterations
+    # iterations until all pixels on image predicted before that stops early
+    # grows linear until n_pixels of field starting at global field change
+    global_field_change = 100
+    iterations_to_max = 10000
+
+    # choose your network from nets.py
+    network = nets.build_net_v0
+
+    # all params entered.......................
 
     # initialize the net
-    print 'initializing network graph'
+    print 'initializing network graph for net ', net_name
     target_t = T.ftensor4()
-    l_in, l_out = nets.build_net_v1()
+    l_in, l_out, patch_len = network()
 
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
@@ -54,12 +68,10 @@ def run_cnn_v0():
     if load_net_b:
         u.load_network(load_net_path, l_out)
 
-    converged = False
-    max_iter = 10000000
-    iteration = -1
-    global_field_change = 100
+    # everything is initialized now train and predict every once in a while....
+    converged = False       # placeholder, this is not yet implemented
     global_field_counter = 0
-    save_counter = 10000     # save every n iterations
+    iteration = -1
     losses = [[], [], []]
     iterations = []
 
@@ -73,8 +85,8 @@ def run_cnn_v0():
                 # plot train images
                 u.save_3_images(
                     bm.global_claims[4, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
-                    bm.global_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
-                    bm.global_label_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                    bm.global_batch[4, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                    bm.global_label_batch[4, :, :],
                     save_net_path + '/images/',
                     iterations_per_image=global_field_counter, name='train',
                     iteration=iteration)
@@ -82,16 +94,17 @@ def run_cnn_v0():
                 u.save_3_images(
                     bm_val.global_claims[4, bm_val.pad:-bm_val.pad - 1,
                                          bm_val.pad:-bm_val.pad - 1],
-                    bm_val.global_batch[4, 0, bm_val.pad:-bm_val    .pad - 1,
+                    bm_val.global_batch[4, bm_val.pad:-bm_val.pad - 1,
                                         bm_val.pad:-bm_val.pad - 1],
-                    bm_val.global_label_batch[4, 0, bm.pad:-bm.pad-1, bm.pad:-bm.pad-1],
+                    bm_val.global_label_batch[4, :, :],
                     save_net_path + '/images/',
                     iterations_per_image=global_field_counter, name='valid',
                     iteration=iteration)
                 global_field_change = \
                     u.linear_growth(iteration,
                                     maximum=(global_edge_len - patch_len)**2-100,
-                                    y_intercept=20, iterations_to_max=10000)
+                                    y_intercept=global_field_change,
+                                    iterations_to_max=iterations_to_max)
 
                 # print '\n global field change', global_field_change
 
@@ -159,8 +172,7 @@ def run_cnn_v0():
 
 
 if __name__ == '__main__':
-
-    run_cnn_v0()
+    train_script_v0()
 
 
 

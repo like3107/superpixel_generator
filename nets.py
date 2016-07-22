@@ -3,16 +3,18 @@ import theano
 import lasagne as las
 from theano import tensor as T
 from lasagne import layers as L
-from theano.sandbox import cuda as c
 
 
 def build_net_v0():
+    fov = 40    # field of view = patch length
+    n_channels = 2
+    n_classes = 4
     filt = [7, 6, 6]
-    n_filt = [20, 25, 60, 30, 4]
+    n_filt = [20, 25, 60, 30, n_classes]
     pool = [2, 2]
     dropout = [0.2, 0.2]
 
-    l_in = L.InputLayer((None, 2, 40, 40))
+    l_in = L.InputLayer((None, n_channels, fov, fov))
     l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
     l_2 = L.DropoutLayer(l_1, p=dropout[0])
     l_3 = L.MaxPool2DLayer(l_2, pool[0])
@@ -23,7 +25,7 @@ def build_net_v0():
     l_8 = L.Conv2DLayer(l_7, n_filt[3], 1)
     l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
                         nonlinearity=las.nonlinearities.sigmoid)
-    return l_in, l_9
+    return l_in, l_9, fov
 
 
 def build_net_v1():
@@ -31,12 +33,14 @@ def build_net_v1():
     cnn with 100 x 100 input and 4 classes out
     :return:
     '''
+    fov = 100   # field of view = patch length
+    n_channels = 2
     filt = [15, 10, 6, 6]
     n_filt = [20, 25, 60, 30, 15, 4]
     pool = [2, 2, 2]
     dropout = [0.2, 0.2, 0.2]
 
-    l_in = L.InputLayer((None, 2, 100, 100))
+    l_in = L.InputLayer((None, n_channels, fov, 100))
 
     l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
     l_2 = L.DropoutLayer(l_1, p=dropout[0])
@@ -55,7 +59,7 @@ def build_net_v1():
 
     l_12 = L.Conv2DLayer(l_11, n_filt[5], 1,
                         nonlinearity=las.nonlinearities.sigmoid)
-    return l_in, l_12
+    return l_in, l_12, fov
 
 
 def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
@@ -83,5 +87,11 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
     probs_f = theano.function([l_in.input_var], l_out_valid)
 
     return loss_train_f, loss_valid_f, probs_f
+
+
+def prob_funcs(l_in, last_layer):
+    l_out_valid = L.get_output(last_layer, deterministic=True)
+    probs_f = theano.function([l_in.input_var], l_out_valid)
+    return probs_f
 
 
