@@ -47,7 +47,8 @@ def save_h5(path, h5_key, data, overwrite='w-'):
 
 def mirror_cube(array, pad_length):
     assert (len(array.shape) == 3)
-    mirrored_array = np.pad(array, pad_length, mode='reflect')
+    mirrored_array = np.pad(array, ((0, 0), (pad_length, pad_length),
+                                    (pad_length, pad_length)), mode='reflect')
     return mirrored_array
 
 
