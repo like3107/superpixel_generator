@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Qt4Agg')
+matplotlib.use('Agg')
 import os
 from theano import tensor as T
 import utils as u
@@ -185,9 +185,13 @@ def train_script_v1():
     load_net_b = False
 
     net_name = 'cnn_ID_trash'
-    label_path = './data/volumes/label_b.h5'
+    label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
-    raw_path = './data/volumes/raw_b.h5'
+    height_gt_path = './data/volumes/height_a.h5'
+    height_gt_key = 'height'
+    height_gt_path_val = './data/volumes/height_b.h5'
+    height_gt_key_val = 'height'
+    raw_path = './data/volumes/raw_a.h5'
     raw_path_val = './data/volumes/raw_b.h5'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/cnn_v1/net_10000'      # if load true
@@ -220,11 +224,12 @@ def train_script_v1():
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path, batch_size=batch_size,
-                       height_gt=raw_path_val,
+                       height_gt=height_gt_path, height_gt_key=height_gt_key,
                        patch_len=patch_len, global_edge_len=global_edge_len,
                        padding_b=True)
     bm.init_train_heightmap_batch()
-    bm_val = du.BatchManV0(raw_path_val, label_path_val, height_gt=raw_path_val,
+    bm_val = du.BatchManV0(raw_path_val, label_path_val, height_gt=height_gt_path_val,
+                           height_gt_key=height_gt_key_val,
                            batch_size=batch_size,
                            patch_len=patch_len, global_edge_len=global_edge_len,
                            padding_b=True)

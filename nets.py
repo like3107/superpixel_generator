@@ -123,10 +123,10 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
 
     updates = las.updates.adam(loss_train, all_params)
 
-    # loss_train_f = theano.function([l_in.input_var, target], loss_train,
-    #                                updates=updates)
+    loss_train_f = theano.function([l_in.input_var, target], loss_train,
+                                   updates=updates)
 
-    loss_train_f = theano.function([l_in.input_var, target], loss_train)
+    # loss_train_f = theano.function([l_in.input_var, target], loss_train)
     loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
     probs_f = theano.function([l_in.input_var], l_out_valid)
 

@@ -85,7 +85,7 @@ def segmentation_to_membrane(input_path,output_path):
 
 
 class BatchManV0:
-    def __init__(self, raw, label, height_gt=None,
+    def __init__(self, raw, label, height_gt=None, height_gt_key=None,
                  raw_key=None, label_key=None, batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False):
         """
@@ -111,7 +111,7 @@ class BatchManV0:
         else:
             self.labels = label
         if isinstance(height_gt, str):
-            self.height_gt = 255. - load_h5(height_gt, h5_key=label_key)[0]
+            self.height_gt = 255. - load_h5(height_gt, h5_key=height_gt_key)
         else:
             self.height_gt = height_gt
 
