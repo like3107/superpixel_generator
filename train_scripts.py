@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('TkAgg')    # Agg GPU cluster hast no display....
+matplotlib.use('Agg')
 import os
 from theano import tensor as T
 import utils as u
@@ -18,26 +18,28 @@ def train_script_v0():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'cnn_v1_trash'
+    net_name = 'cnn_ID_trash'
     label_path = './data/volumes/label_a.h5'
+    label_path_val = './data/volumes/label_b.h5'
     raw_path = './data/volumes/membranes_a.h5'
+    raw_path_val = './data/volumes/membranes_b.h5'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/cnn_v1/net_10000'      # if load true
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
-    global_edge_len = 100
+    global_edge_len = 1249
 
     # training parameter
     c.use('gpu0')
-    max_iter = 10000000
-    save_counter = 10000        # save every n iterations
+    max_iter = 1000000000
+    save_counter = 100000        # save every n iterations
     # iterations until all pixels on image predicted before that stops early
     # grows linear until n_pixels of field starting at global field change
-    global_field_change = 100
-    iterations_to_max = 10000
+    global_field_change = 300
+    iterations_to_max = 10000000
 
     # choose your network from nets.py
-    network = nets.build_net_v0
+    network = nets.build_ID_v0
 
     # all params entered.......................
 
@@ -52,10 +54,12 @@ def train_script_v0():
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path, batch_size=batch_size,
-                       patch_len=patch_len, global_edge_len=global_edge_len)
+                       patch_len=patch_len, global_edge_len=global_edge_len,
+                       padding_b=True)
     bm.init_train_batch()
-    bm_val = du.BatchManV0(raw_path, label_path, batch_size=batch_size,
-                           patch_len=patch_len, global_edge_len=global_edge_len)
+    bm_val = du.BatchManV0(raw_path_val, label_path_val, batch_size=batch_size,
+                           patch_len=patch_len, global_edge_len=global_edge_len,
+                           padding_b=True)
 
     bm_val.init_train_batch()  # Training
 

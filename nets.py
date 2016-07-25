@@ -3,6 +3,7 @@ import theano
 import lasagne as las
 from theano import tensor as T
 from lasagne import layers as L
+import custom_layer as cs
 
 
 def build_net_v0():
@@ -14,7 +15,9 @@ def build_net_v0():
     pool = [2, 2]
     dropout = [0.2, 0.2]
 
+    # 40
     l_in = L.InputLayer((None, n_channels, fov, fov))
+
     l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
     l_2 = L.DropoutLayer(l_1, p=dropout[0])
     l_3 = L.MaxPool2DLayer(l_2, pool[0])
@@ -58,8 +61,44 @@ def build_net_v1():
     l_11 = L.Conv2DLayer(l_10, n_filt[4], 1)
 
     l_12 = L.Conv2DLayer(l_11, n_filt[5], 1,
-                        nonlinearity=las.nonlinearities.sigmoid)
+                         nonlinearity=las.nonlinearities.sigmoid)
     return l_in, l_12, fov
+
+
+def build_ID_v0():
+    fov = 40  # field of view = patch length
+    n_channels = 2
+    n_classes = 4
+    filt = [7, 6, 6]
+    n_filt = [20, 25, 60, 30, n_classes]
+    pool = [2, 2]
+    dropout = [0.2, 0.2]
+
+    # init weights =
+
+    # 40
+    l_in = L.InputLayer((None, n_channels, fov, fov))
+
+    # parralel 1
+    l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
+    l_2 = L.DropoutLayer(l_1, p=dropout[0])
+    l_3 = L.MaxPool2DLayer(l_2, pool[0])
+    # 17
+    l_4 = L.Conv2DLayer(l_3, n_filt[1], filt[1])
+    l_5 = L.DropoutLayer(l_4, p=dropout[1])
+    l_6 = L.MaxPool2DLayer(l_5, pool[1])
+    # 6
+    l_7 = L.Conv2DLayer(l_6, n_filt[2], 5, filt[2])
+    # 1
+
+    l_slice = cs.SliceLayer(l_in)
+    l_resh = las.layers.reshape(l_slice, (16, 9, 1, 1))
+
+    l_merge = las.layers.ConcatLayer([l_resh, l_7], axis=1)
+    l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, )
+    l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
+                        nonlinearity=las.nonlinearities.sigmoid)
+    return l_in, l_9, fov
 
 
 def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
@@ -95,3 +134,12 @@ def prob_funcs(l_in, last_layer):
     return probs_f
 
 
+def gen_identity_filter(shape):
+    indices = [1, 3, 5, 7]
+    W = np.zeros((shape), dtype=theano.config.floatX)
+    W[range(len(indices)), indices, :, :] = 1.
+    return W
+
+
+if __name__ == '__main__':
+    print gen_identity_filter((34, 60, 1, 1))

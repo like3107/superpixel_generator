@@ -3,25 +3,51 @@ import scipy.sparse as sparse
 import dataset_utils as du
 
 
+
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
-                          pred_key=None, gt_key=None):
+                          pred_key=None, gt_key=None, slice_by_slice=True):
     assert (gt_path != gt)  # specify either gt path or gt as np array
     assert (pred_path != pred)    # specify either raw path or raw as np array
 
     if isinstance(gt_path, str):
-        gt = du.load_h5(gt_path, h5_key=gt_key)
+        gt = du.load_h5(gt_path, h5_key=gt_key)[0]
     if isinstance(pred_path, str):
-        pred = du.load_h5(pred_path, h5_key=pred_key)
+        pred = du.load_h5(pred_path, h5_key=pred_key)[0]
+    print gt.shape, pred.shape
+    assert(gt.shape == pred.shape)
 
-    # variational information of split and merge error,  i.e., H(X|Y) and H(Y|X)
-    split, merge = voi(pred.copy(), gt.copy())
-    # are: adapted rand error, rand precision, rand recall
-    are, precision, recall = adapted_rand(pred, gt, all_stats=True)
-    print 'Variational information split:       ', split
-    print 'Variational information merge:       ', merge
-    print 'Adapted Rand error           :       ', are
-    print 'Adapted Rand error precision :       ', are
-    print 'Adapted Rand error recall    :       ', are
+    if slice_by_slice:
+        splits, merges, ares, precisions, recalls = [], [], [], [], []
+        # all_measures = [splits, merges, ares, precisions, recalls]
+        all_measures = [splits, merges]
+        for i in range(pred.shape[0]):
+            split, merge = voi(pred[i].copy(), gt[i].copy())
+            # are, precision, recall = adapted_rand(pred[i][:, :, None],
+            #                                       gt[i][:, :, None],
+            #                                       all_stats=True)
+            # vals = [split, merge, are, precision, recall]
+            vals = [split, merge]
+            for val, meas in zip(vals, all_measures):
+                meas.append(val)
+        all_measures = np.array(all_measures)
+        all_vars = np.var(all_measures, 1)
+        all_means = np.mean(all_measures, 1)
+        print 'Variational information split:       ', all_means[0], all_vars[0]
+        print 'Variational information merge:       ', all_means[1], all_vars[1]
+        # print 'Adapted Rand error           :       ', all_means[2], all_vars[2]
+        # print 'Adapted Rand error precision :       ', all_means[3], all_vars[3]
+        # print 'Adapted Rand error recall    :       ', all_means[4], all_vars[4]
+    else:
+
+        # variational information of split and merge error,  i.e., H(X|Y) and H(Y|X)
+        split, merge = voi(pred.copy(), gt.copy())
+        # are: adapted rand error, rand precision, rand recall
+        # are, precision, recall = adapted_rand(pred, gt, all_stats=True)
+        print 'Variational information split:       ', split
+        print 'Variational information merge:       ', merge
+        # print 'Adapted Rand error           :       ', are
+        # print 'Adapted Rand error precision :       ', precision
+        # print 'Adapted Rand error recall    :       ', recall
 
 
 # Evaluation code courtesy of Juan Nunez-Iglesias, taken from
@@ -371,4 +397,7 @@ def xlogx(x, out=None, in_place=False):
     return y
 
 if __name__ == '__main__':
-    validate_segmentation()
+    validate_segmentation(
+        pred_path='/home/liory/src/superpixel_generator/data/pred.h5',
+        gt_path='/home/liory/src/superpixel_generator/data/volumes/label_as.h5',
+        slice_by_slice=True)

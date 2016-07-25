@@ -112,8 +112,9 @@ class BatchManV0:
         self.global_batch = None            # includes padding
         self.global_label_batch = None      # no padding
         self.global_claims = None           # includes padding
-
         self.priority_queue = None
+
+
 
     def prepare_global_batch(self):
         # initialize two global batches = region where CNNs compete
@@ -248,6 +249,14 @@ class BatchManV0:
             gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
+
+    def get_EP_batches(self):
+        """
+
+        :return:
+        """
+
+
 
     def get_seeds_from_queue(self):
         seeds = []
