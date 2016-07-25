@@ -21,7 +21,7 @@ def load_h5(path, h5_key=None, group=None, group2=None):
     if h5_key is None:     # no h5 key specified
         output = list()
         for key in g.keys():
-            output.append(np.array(g[key]))
+            output.append(np.array(g[key], dtype=theano.config.floatX))
 
     elif isinstance(h5_key, basestring):   # string
         print g.keys()
@@ -30,10 +30,9 @@ def load_h5(path, h5_key=None, group=None, group2=None):
     elif isinstance(h5_key, list):          # list
         output = list()
         for key in h5_key:
-            output.append(np.array(g[key]))
+            output.append(np.array(g[key], dtype=theano.config.floatX))
     else:
         raise Exception('h5 key type is not supported')
-    f.close()
 
     return output
 
@@ -62,6 +61,7 @@ def make_array_cumulative(array):
         print '\r %f %%' % (100. * i / len(ids)),
         cumulative_array[array == ids[i]] = i
     return cumulative_array
+
 
 def segmentation_to_membrane(input_path,output_path):
     """
@@ -102,7 +102,8 @@ class BatchManV0:
         :param padding_b:
         """
         if isinstance(raw, str):
-            self.raw = - load_h5(raw, h5_key=raw_key)[0] + 255.
+            self.raw = 255. - load_h5(raw, h5_key=raw_key)[0]
+
         else:
             self.raw = raw
         if isinstance(label, str):
@@ -110,7 +111,7 @@ class BatchManV0:
         else:
             self.labels = label
         if isinstance(height_gt, str):
-            self.height_gt = - load_h5(height_gt, h5_key=label_key)[0] + 255.
+            self.height_gt = 255. - load_h5(height_gt, h5_key=label_key)[0]
         else:
             self.height_gt = height_gt
 
@@ -338,7 +339,6 @@ class BatchManV0:
             gts[b, :, 0, 0] = self.get_adjacent_heights(seeds[b], b)
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
-
 
     def get_seeds_from_queue(self):
         seeds = []

@@ -79,7 +79,7 @@ def build_ID_v0():
     # 40
     l_in = L.InputLayer((None, n_channels, fov, fov))
 
-    # parralel 1
+    # parallel 1
     l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
     l_2 = L.DropoutLayer(l_1, p=dropout[0])
     l_3 = L.MaxPool2DLayer(l_2, pool[0])
@@ -91,11 +91,12 @@ def build_ID_v0():
     l_7 = L.Conv2DLayer(l_6, n_filt[2], 5, filt[2])
     # 1
 
+    # parallel 2
     l_slice = cs.SliceLayer(l_in)
     l_resh = las.layers.reshape(l_slice, (16, 9, 1, 1))
 
     l_merge = las.layers.ConcatLayer([l_resh, l_7], axis=1)
-    l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, W=gen_identity_filter([1,3,4,7]),
+    l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, W=gen_identity_filter([1,3,7,5]),
                         nonlinearity=las.nonlinearities.elu)
     l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
                         nonlinearity=las.nonlinearities.elu,
@@ -118,12 +119,14 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
         las.objectives.squared_error(l_out_train, target)) + \
                         L1_weight * L1_norm
     loss_valid = T.mean(
-        las.objectives.binary_crossentropy(l_out_valid, target))
+        las.objectives.squared_error(l_out_valid, target))
 
     updates = las.updates.adam(loss_train, all_params)
 
-    loss_train_f = theano.function([l_in.input_var, target], loss_train,
-                                   updates=updates)
+    # loss_train_f = theano.function([l_in.input_var, target], loss_train,
+    #                                updates=updates)
+
+    loss_train_f = theano.function([l_in.input_var, target], loss_train)
     loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
     probs_f = theano.function([l_in.input_var], l_out_valid)
 
@@ -145,3 +148,4 @@ def gen_identity_filter(indices):
 
 if __name__ == '__main__':
     print gen_identity_filter((34, 60, 1, 1)).tolist()
+

@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
 import utils as u
@@ -185,9 +185,9 @@ def train_script_v1():
     load_net_b = False
 
     net_name = 'cnn_ID_trash'
-    label_path = './data/volumes/label_a.h5'
+    label_path = './data/volumes/label_b.h5'
     label_path_val = './data/volumes/label_b.h5'
-    raw_path = './data/volumes/raw_a.h5'
+    raw_path = './data/volumes/raw_b.h5'
     raw_path_val = './data/volumes/raw_b.h5'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/cnn_v1/net_10000'      # if load true
@@ -201,8 +201,8 @@ def train_script_v1():
     save_counter = 100000        # save every n iterations
     # iterations until all pixels on image predicted before that stops early
     # grows linear until n_pixels of field starting at global field change
-    global_field_change = 89000
-    iterations_to_max = 10000000
+    global_field_change = 300
+    iterations_to_max = 10000
 
     # choose your network from nets.py
     network = nets.build_ID_v0
@@ -292,13 +292,30 @@ def train_script_v1():
         # train da thing
         raw, gt, seeds, ids = bm.get_heightmap_batches()
         probs = probs_f(raw)
+        # print 'probs train', probs[4]
+        # print 'gts train', gt[4]
         if iteration % 10 == 0:
             loss_train = float(loss_train_f(raw, gt))
+            # loss_train = 1.
         bm.update_priority_queue(probs, seeds, ids)
 
         # monitor growing on validation set
         raw_val, gt_val, seeds_val, ids_val = bm_val.get_heightmap_batches()
         probs_val = probs_f(raw_val)
+        # print 'bprobs val', probs_val[4]
+        # print 'gts val', gt_val[4]
+        # fig, ax = plt.subplots(2)
+        # ax[0].imshow(raw_val[4, 0], interpolation='none', cmap='gray')
+        # ax[1].imshow(gt_val[4, :, 0, :])
+        # print seeds_val[4]
+        # print ids[4]
+        # print 'raw val'
+        # print raw_val[4, 0, 19:22, 19:22]
+        # print 'gt val'
+        # print gt_val[4]
+
+        plt.show()
+
         bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
         if iteration % 100 == 0:
