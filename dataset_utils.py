@@ -62,7 +62,7 @@ def make_array_cumulative(array):
 
 
 class BatchManV0:
-    def __init__(self, raw, label,
+    def __init__(self, raw, label, height_gt=None,
                  raw_key=None, label_key=None, batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False):
         """
@@ -79,13 +79,17 @@ class BatchManV0:
         :param padding_b:
         """
         if isinstance(raw, str):
-            self.raw = load_h5(raw, h5_key=raw_key)[0]
+            self.raw = - load_h5(raw, h5_key=raw_key)[0] + 255.
         else:
             self.raw = raw
         if isinstance(label, str):
             self.labels = load_h5(label, h5_key=label_key)[0]
         else:
             self.labels = label
+        if isinstance(height_gt, str):
+            self.height_gt = - load_h5(height_gt, h5_key=label_key)[0] + 255.
+        else:
+            self.height_gt = height_gt
 
         self.padding_b = padding_b
         self.pad = patch_len / 2
@@ -94,6 +98,8 @@ class BatchManV0:
         else:
             # crop label
             self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]
+            self.height_gt = self.height_gt[:, self.pad:-self.pad,
+                                            self.pad:-self.pad]
 
         self.rl = self.raw.shape[1]     # includes padding
         self.n_slices = len(self.raw)
@@ -112,9 +118,9 @@ class BatchManV0:
         self.global_batch = None            # includes padding
         self.global_label_batch = None      # no padding
         self.global_claims = None           # includes padding
+        self.global_height_gt_batch = None   # no padding
+        self.global_heightmap_batch = None
         self.priority_queue = None
-
-
 
     def prepare_global_batch(self):
         # initialize two global batches = region where CNNs compete
@@ -138,6 +144,12 @@ class BatchManV0:
                          ind_x[b]:ind_x[b] + self.global_el,
                          ind_y[b]:ind_y[b] + self.global_el]
             # ind_x[b], ind_y[b] = (ind_x[b] - self.pl, ind_y[b] - self.pl)
+            if self.height_gt is not None:
+                self.global_height_gt_batch[b, :, :] = \
+                    self.height_gt[ind_b[b],
+                                   ind_x[b]:ind_x[b] + self.global_el - self.pl,
+                                   ind_y[b]:ind_y[b] + self.global_el - self.pl]
+
             self.global_label_batch[b, :, :] = \
                 self.labels[ind_b[b],
                             ind_x[b]:ind_x[b] + self.global_el - self.pl,
@@ -203,11 +215,31 @@ class BatchManV0:
                      dtype=theano.config.floatX)
         return ground_truth
 
+    def get_adjacent_heights(self, seed, batch):
+        seeds_x, seeds_y = self.get_cross_coords(seed)
+
+        seeds_x, seeds_y = (np.array(seeds_x) - self.pad,
+                            np.array(seeds_y) - self.pad)
+        assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
+        assert (np.any(self.rl - self.pl > seeds_x) or
+                np.any(self.rl - self.pl > seeds_y))
+
+        # boundary conditions
+        ground_truth = \
+            self.global_height_gt_batch[batch, seeds_x, seeds_y].flatten()
+        return ground_truth
+
     def crop_raw(self, seed, batch_counter):
         raw = self.global_batch[batch_counter,
                                 seed[0] - self.pad:seed[0] + self.pad,
                                 seed[1] - self.pad:seed[1] + self.pad]
         return raw
+
+    def crop_height(self, seed, batch_counter):
+        h = self.global_heightmap_batch[batch_counter, :,
+                                        seed[0] - self.pad:seed[0] + self.pad,
+                                        seed[1] - self.pad:seed[1] + self.pad]
+        return h
 
     def crop_mask_claimed(self, seed, b, id):
         labels = self.global_claims[b,
@@ -224,10 +256,30 @@ class BatchManV0:
 
         self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
                                             self.global_el - self.pl))
-
         # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
+
+        # extract slices and ids within raw and label cubes
+        global_ids = self.prepare_global_batch()
+        # extract starting points
+        global_seeds = self.get_seeds(global_ids)
+        # put seeds and ids in priority queue. All info to load batch is in pq
+        self.initialize_priority_queue(global_seeds, global_ids)
+
+    def init_train_heightmap_batch(self):
+
+        self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
+                                     dtype=theano.config.floatX)
+
+        self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
+                                            self.global_el - self.pl))
+        # remember where territory has been claimed before. !=0 claimed, 0 free
+        self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
+        self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
+
+        self.global_heightmap_batch = np.zeros_like(self.global_claims)
+        self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
 
         # extract slices and ids within raw and label cubes
         global_ids = self.prepare_global_batch()
@@ -250,12 +302,19 @@ class BatchManV0:
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
 
-    def get_EP_batches(self):
-        """
+    def get_heightmap_batches(self):
+        seeds, ids = self.get_seeds_from_queue()
 
-        :return:
-        """
+        raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
+                             dtype=theano.config.floatX)
+        gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
 
+        for b in range(self.bs):
+            raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
+            raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
+            gts[b, :, 0, 0] = self.get_adjacent_heights(seeds[b], b)
+            self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
+        return raw_batch, gts, seeds, ids
 
 
     def get_seeds_from_queue(self):
@@ -275,18 +334,26 @@ class BatchManV0:
 
         return seeds, ids
 
-    def update_priority_queue(self, probabilities, seeds, ids):
-        assert(len(probabilities) == len(seeds))
-        assert(len(probabilities) == self.bs)
+    def update_priority_queue(self, height, seeds, ids):
+        assert(len(height) == len(seeds))
+        assert(len(height) == self.bs)
 
         for b in range(self.bs):
             counter = -1
             seeds_x, seeds_y = self.get_cross_coords(seeds[b])
             for x, y in zip(seeds_x, seeds_y):
                 counter += 1
+
+                d_prev = self.global_heightmap_batch[b, x, y]
+                d_j = max(height[b][counter], d_prev)
+
+                if (d_prev > 0):
+                    d_j = min(d_j, d_prev)
+
+                self.global_heightmap_batch[b, x, y] = d_j
+
                 if self.global_claims[b, x, y] == 0:
-                    self.priority_queue[b].put((1 - probabilities[b][counter],
-                                                [x, y], ids[b]))
+                    self.priority_queue[b].put((d_j, [x, y], ids[b]))
 
     # validation of cube slice by slice
     def init_prediction(self, start, stop):

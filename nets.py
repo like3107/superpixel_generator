@@ -95,9 +95,11 @@ def build_ID_v0():
     l_resh = las.layers.reshape(l_slice, (16, 9, 1, 1))
 
     l_merge = las.layers.ConcatLayer([l_resh, l_7], axis=1)
-    l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, )
+    l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, W=gen_identity_filter([1,3,4,7]),
+                        nonlinearity=las.nonlinearities.elu)
     l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
-                        nonlinearity=las.nonlinearities.sigmoid)
+                        nonlinearity=las.nonlinearities.elu,
+                        W=gen_identity_filter([0, 1, 2, 3]))
     return l_in, l_9, fov
 
 
@@ -113,7 +115,7 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
         las.regularization.l1)
 
     loss_train = T.mean(
-        las.objectives.binary_crossentropy(l_out_train, target)) + \
+        las.objectives.squared_error(l_out_train, target)) + \
                         L1_weight * L1_norm
     loss_valid = T.mean(
         las.objectives.binary_crossentropy(l_out_valid, target))
@@ -133,13 +135,13 @@ def prob_funcs(l_in, last_layer):
     probs_f = theano.function([l_in.input_var], l_out_valid)
     return probs_f
 
-
-def gen_identity_filter(shape):
-    indices = [1, 3, 5, 7]
-    W = np.zeros((shape), dtype=theano.config.floatX)
-    W[range(len(indices)), indices, :, :] = 1.
-    return W
+def gen_identity_filter(indices):
+    def initializer(shape):
+        W = np.zeros((shape), dtype=theano.config.floatX)
+        W[range(len(indices)), indices, :, :] = 1.
+        return W
+    return initializer
 
 
 if __name__ == '__main__':
-    print gen_identity_filter((34, 60, 1, 1))
+    print gen_identity_filter((34, 60, 1, 1)).tolist()

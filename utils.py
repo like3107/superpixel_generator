@@ -30,7 +30,7 @@ def save_3_images(im_x, im_y, im_z, path, name='iteration', iteration=0,
     ax1[0].imshow(im_x, interpolation='none', cmap=random_color_map())
     ax1[1].imshow(im_y, cmap='gray')
     im_z[0,0] = 0
-    ax1[2].imshow(im_z, interpolation='none', cmap=random_color_map())
+    ax1[2].imshow(im_z, interpolation='none', cmap='gray')
 
     f.savefig(path + name + '_it%07d_im%07d' % (iteration, iterations_per_image))
     plt.close()

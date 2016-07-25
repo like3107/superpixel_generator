@@ -16,13 +16,13 @@ def pred_script_v0():
     load_net_b = True
 
     pred_name = 'predv1'
-    label_path = './data/volumes/label_as.h5'
-    raw_path = './data/volumes/membranes_as.h5'
+    label_path = './data/volumes/label_a.h5'
+    raw_path = './data/volumes/membranes_a.h5'
     load_net_path = './data/nets/cnn_v0_test/net_50000'      # if load true
     tmp_path = '/media/liory/ladata/bla'        # debugging
 
     batch_size = 64         # > 4
-    global_edge_len = 340
+    global_edge_len = 1250
 
     # pred parameter
     c.use('gpu0')
