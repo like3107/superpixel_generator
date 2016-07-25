@@ -4,6 +4,9 @@ from matplotlib import pyplot as plt
 import theano
 from Queue import PriorityQueue
 import utils as u
+from scipy.ndimage import convolve
+from scipy.ndimage.morphology import distance_transform_edt 
+import h5py
 
 
 def load_h5(path, h5_key=None, group=None, group2=None):
@@ -59,6 +62,26 @@ def make_array_cumulative(array):
         print '\r %f %%' % (100. * i / len(ids)),
         cumulative_array[array == ids[i]] = i
     return cumulative_array
+
+def segmentation_to_membrane(input_path,output_path):
+    """
+    compute a binary mask that indicates the boundary of two touching labels
+    input_path: path to h5 label file
+    output_path: path to output h5 file (will be created) 
+    Uses threshold of edge filter maps
+    """
+    with h5py.File(input_path, 'r') as label_h5:
+        with h5py.File(output_path, 'w') as height_h5:
+            boundary_stack = np.empty_like(label_h5['label']).astype(np.float32)
+            height_stack = np.empty_like(label_h5['label']).astype(np.float32)
+            for i in range(height_stack.shape[0]):
+                im = np.float32(label_h5['label'][i])
+                gx = convolve(im, np.array([-1., 0., 1.]).reshape(1, 3))
+                gy = convolve(im, np.array([-1., 0., 1.]).reshape(3, 1))
+                boundary_stack[i] =  np.float32((gx**2 + gy**2) > 0)
+                height_stack[i] = distance_transform_edt(boundary_stack[i] == 0)
+            height_h5.create_dataset("boundary",data=boundary_stack, dtype=np.float32)
+            height_h5.create_dataset("height",data=height_stack, dtype=np.float32)
 
 
 class BatchManV0:
@@ -417,9 +440,12 @@ if __name__ == '__main__':
     # plt.show()
 
     # loading from BM
-    label_path = './data/labels_as.h5'
-    raw_path = './data/raw_as.h5'
+    label_path = './data/volumes/labels_as.h5'
+    raw_path = './data/volumes/raw_as.h5'
 
+    # segmentation_to_membrane('./data/volumes/label_a.h5',"./data/volumes/height_a.h5")
+    # segmentation_to_membrane('./data/volumes/label_b.h5',"./data/volumes/height_b.h5")
+    
     bm = BatchManV0(raw_path, label_path, batch_size=10, patch_len=60,
                     global_edge_len=95)
     bm.init_train_batch()

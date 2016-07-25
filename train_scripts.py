@@ -292,8 +292,8 @@ def train_script_v1():
         # train da thing
         raw, gt, seeds, ids = bm.get_heightmap_batches()
         probs = probs_f(raw)
-        # if iteration % 10 == 0:
-        #     loss_train = float(loss_train_f(raw, gt))
+        if iteration % 10 == 0:
+            loss_train = float(loss_train_f(raw, gt))
         bm.update_priority_queue(probs, seeds, ids)
 
         # monitor growing on validation set
@@ -304,19 +304,19 @@ def train_script_v1():
         if iteration % 100 == 0:
             loss_valid = float(loss_valid_f(raw_val, gt_val))
             loss_train_no_reg = float(loss_valid_f(raw, gt))
-            # print '\r loss train %.4f, loss train_noreg %.4f, ' \
-            #       'loss_validation %.4f, iteration %i' % \
-            #       (loss_train, loss_train_no_reg, loss_valid, iteration),
+            print '\r loss train %.4f, loss train_noreg %.4f, ' \
+                   'loss_validation %.4f, iteration %i' % \
+                   (loss_train, loss_train_no_reg, loss_valid, iteration),
 
             iterations.append(iteration)
-            # losses[0].append(loss_train)
+            losses[0].append(loss_train)
             losses[1].append(loss_train_no_reg)
             losses[2].append(loss_valid)
-            # u.plot_train_val_errors(losses,
-            #                         iterations,
-            #                         save_net_path + 'training.png',
-            #                         names=['loss train', 'loss train no reg',
-            #                                'loss valid'])
+            u.plot_train_val_errors(losses,
+                                     iterations,
+                                     save_net_path + 'training.png',
+                                     names=['loss train', 'loss train no reg',
+                                            'loss valid'])
 
 
 
