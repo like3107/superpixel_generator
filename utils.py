@@ -36,6 +36,19 @@ def save_3_images(im_x, im_y, im_z, path, name='iteration', iteration=0,
     plt.close()
 
 
+def save_4_images(im_x, im_y, im_z, im_zz, path, name='iteration', iteration=0,
+                  iterations_per_image=0):
+    f, ax = plt.subplots(ncols=4)
+    ax[0].imshow(im_x, interpolation='none', cmap=random_color_map())
+    ax[1].imshow(im_y, cmap='gray', interpolation='none')
+    im_z[0,0] = 0
+    ax[2].imshow(im_z, interpolation='none', cmap='gray')
+    ax[3].imshow(im_zz, interpolation='none', cmap='gray')
+    f.savefig(path + name + '_it%07d_im%07d' % (iteration, iterations_per_image))
+    plt.close()
+
+
+
 def decay_func(iteration, edge_len, safty_margin=300, decay_factor=0.4):
     return int((1. - 1. / (iteration + 2) ** decay_factor) *
                (edge_len ** 2 - safty_margin))

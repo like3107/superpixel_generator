@@ -24,8 +24,7 @@ def load_h5(path, h5_key=None, group=None, group2=None):
             output.append(np.array(g[key], dtype=theano.config.floatX))
 
     elif isinstance(h5_key, basestring):   # string
-        print g.keys()
-        output = np.array(g[h5_key])
+        output = [np.array(g[h5_key], dtype=theano.config.floatX)]
 
     elif isinstance(h5_key, list):          # list
         output = list()
@@ -102,7 +101,7 @@ class BatchManV0:
         :param padding_b:
         """
         if isinstance(raw, str):
-            self.raw = 255. - load_h5(raw, h5_key=raw_key)[0]
+            self.raw = load_h5(raw, h5_key=raw_key)[0]
 
         else:
             self.raw = raw
@@ -111,7 +110,8 @@ class BatchManV0:
         else:
             self.labels = label
         if isinstance(height_gt, str):
-            self.height_gt = 255. - load_h5(height_gt, h5_key=height_gt_key)
+            self.height_gt = 255. - load_h5(height_gt, h5_key=height_gt_key)[0]
+
         else:
             self.height_gt = height_gt
 

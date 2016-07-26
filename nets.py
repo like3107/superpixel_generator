@@ -72,7 +72,7 @@ def build_ID_v0():
     filt = [7, 6, 6]
     n_filt = [20, 25, 60, 30, n_classes]
     pool = [2, 2]
-    dropout = [0.2, 0.2]
+    dropout = [0.5, 0.5]
 
     # init weights =
 
@@ -81,12 +81,12 @@ def build_ID_v0():
 
     # parallel 1
     l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
-    l_2 = L.DropoutLayer(l_1, p=dropout[0])
-    l_3 = L.MaxPool2DLayer(l_2, pool[0])
+    l_2 = L.MaxPool2DLayer(l_1, pool[0])
+    l_3 = L.DropoutLayer(l_2, p=dropout[0])
     # 17
     l_4 = L.Conv2DLayer(l_3, n_filt[1], filt[1])
-    l_5 = L.DropoutLayer(l_4, p=dropout[1])
-    l_6 = L.MaxPool2DLayer(l_5, pool[1])
+    l_5 = L.MaxPool2DLayer(l_4, pool[1])
+    l_6 = L.DropoutLayer(l_5, p=dropout[1])
     # 6
     l_7 = L.Conv2DLayer(l_6, n_filt[2], 5, filt[2])
     # 1
@@ -126,7 +126,6 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
     loss_train_f = theano.function([l_in.input_var, target], loss_train,
                                    updates=updates)
 
-    # loss_train_f = theano.function([l_in.input_var, target], loss_train)
     loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
     probs_f = theano.function([l_in.input_var], l_out_valid)
 
@@ -138,9 +137,10 @@ def prob_funcs(l_in, last_layer):
     probs_f = theano.function([l_in.input_var], l_out_valid)
     return probs_f
 
+
 def gen_identity_filter(indices):
     def initializer(shape):
-        W = np.zeros((shape), dtype=theano.config.floatX)
+        W = np.random.normal(0, size=shape).astype(dtype=theano.config.floatX)
         W[range(len(indices)), indices, :, :] = 1.
         return W
     return initializer
