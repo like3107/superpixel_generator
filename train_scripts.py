@@ -184,7 +184,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'cnn_ID2_trash'
+    net_name = 'cnn_ID_hybrid_trash'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -209,7 +209,8 @@ def train_script_v1():
     iterations_to_max = 100000
 
     # choose your network from nets.py
-    network = nets.build_ID_v0
+    network = nets.build_ID_v0_hybrid
+    loss = nets.loss_updates_probs_v1_hybrid
 
     # all params entered.......................
 
@@ -220,7 +221,7 @@ def train_script_v1():
 
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
-        nets.loss_updates_probs_v0(l_in, target_t, l_out)
+        loss(l_in, target_t, l_out)
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
@@ -291,14 +292,18 @@ def train_script_v1():
         if iteration % save_counter == 0 and save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
-        raw_val, gt_val, seeds_val, ids_val = bm_val.get_heightmap_batches()
+        raw_val, gt_val, seeds_val, ids_val = \
+            bm_val.get_heightmap_hybrid_batches()
         probs_val = probs_f(raw_val)
-        bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
+        bm_val.update_priority_queue_hybrid_loss(probs_val[:, :4],
+                                                 probs_val[:, 4:],
+                                                 seeds_val, ids_val)
 
         # train da thing
-        raw, gt, seeds, ids = bm.get_heightmap_batches()
+        raw, gt, seeds, ids = bm.get_heightmap_hybrid_batches()
         probs = probs_f(raw)
-        bm.update_priority_queue(probs, seeds, ids)
+        bm.update_priority_queue_hybrid_loss(probs[:, :4], probs[:, 4:], seeds,
+                                            ids)
         if iteration % 10 == 0:
             loss_train = float(loss_train_f(raw, gt))
 
@@ -320,8 +325,6 @@ def train_script_v1():
                                          save_net_path + 'training.png',
                                          names=['loss train', 'loss train no reg',
                                                 'loss valid'])
-
-
 
             # debug
             print 'probs', probs_val[4]

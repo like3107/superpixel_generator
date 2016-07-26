@@ -104,6 +104,45 @@ def build_ID_v0():
     return l_in, l_9, fov
 
 
+def build_ID_v0_hybrid():
+    fov = 40  # field of view = patch length
+    n_channels = 2
+    n_classes = 8
+    filt = [7, 6, 6]
+    n_filt = [20, 25, 60, 30, n_classes]
+    pool = [2, 2]
+    dropout = [0.5, 0.5]
+
+    # init weights =
+
+    # 40
+    l_in = L.InputLayer((None, n_channels, fov, fov))
+
+    # parallel 1
+    l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
+    l_2 = L.MaxPool2DLayer(l_1, pool[0])
+    l_3 = L.DropoutLayer(l_2, p=dropout[0])
+    # 17
+    l_4 = L.Conv2DLayer(l_3, n_filt[1], filt[1])
+    l_5 = L.MaxPool2DLayer(l_4, pool[1])
+    l_6 = L.DropoutLayer(l_5, p=dropout[1])
+    # 6
+    l_7 = L.Conv2DLayer(l_6, n_filt[2], 5, filt[2])
+    # 1
+
+    # parallel 2
+    l_slice = cs.SliceLayer(l_in)
+    l_resh = las.layers.reshape(l_slice, (16, 9, 1, 1))
+
+    l_merge = las.layers.ConcatLayer([l_resh, l_7], axis=1)
+    l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, W=gen_identity_filter([1,3,7,5]),
+                        nonlinearity=las.nonlinearities.elu)
+    l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
+                        nonlinearity=las.nonlinearities.rectify,
+                        W=gen_identity_filter([0, 1, 2, 3]))
+    return l_in, l_9, fov
+
+
 def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
 
     all_params = L.get_all_params(last_layer)
@@ -120,6 +159,40 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
                         L1_weight * L1_norm
     loss_valid = T.mean(
         las.objectives.squared_error(l_out_valid, target))
+
+    updates = las.updates.adam(loss_train, all_params)
+
+    loss_train_f = theano.function([l_in.input_var, target], loss_train,
+                                   updates=updates)
+
+    loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
+    probs_f = theano.function([l_in.input_var], l_out_valid)
+
+    return loss_train_f, loss_valid_f, probs_f
+
+
+def loss_updates_probs_v1_hybrid(l_in, target, last_layer, L1_weight=10**-5):
+
+    all_params = L.get_all_params(last_layer)
+
+    l_out_train = L.get_output(last_layer, deterministic=False)
+    l_out_valid = L.get_output(last_layer, deterministic=True)
+
+    L1_norm = las.regularization.regularize_network_params(
+        last_layer,
+        las.regularization.l1)
+
+
+    loss_train = \
+        T.mean(0.01 * las.objectives.squared_error(
+                            l_out_train[:, :4], target[:, :4]) + \
+                las.objectives.squared_error(
+                            l_out_train[:, 4:], target[:, 4:])) + \
+                L1_weight * L1_norm
+    loss_valid = T.mean(0.01 * las.objectives.squared_error(
+                            l_out_train[:, :4], target[:, :4]) + \
+                las.objectives.squared_error(
+                            l_out_train[:, 4:], target[:, 4:]))
 
     updates = las.updates.adam(loss_train, all_params)
 

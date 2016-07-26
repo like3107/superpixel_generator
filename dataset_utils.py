@@ -102,7 +102,6 @@ class BatchManV0:
         """
         if isinstance(raw, str):
             self.raw = load_h5(raw, h5_key=raw_key)[0]
-
         else:
             self.raw = raw
         if isinstance(label, str):
@@ -110,7 +109,9 @@ class BatchManV0:
         else:
             self.labels = label
         if isinstance(height_gt, str):
-            self.height_gt = 255. - load_h5(height_gt, h5_key=height_gt_key)[0]
+            self.height_gt = load_h5(height_gt, h5_key=height_gt_key)[0]
+            max_height = np.max(self.height_gt)
+            self.height_gt = max_height - self.height_gt
 
         else:
             self.height_gt = height_gt
@@ -318,7 +319,6 @@ class BatchManV0:
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
-
         for b in range(self.bs):
             raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
@@ -332,11 +332,24 @@ class BatchManV0:
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
-
         for b in range(self.bs):
             raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
             gts[b, :, 0, 0] = self.get_adjacent_heights(seeds[b], b)
+            self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
+        return raw_batch, gts, seeds, ids
+
+    def get_heightmap_hybrid_batches(self):
+        seeds, ids = self.get_seeds_from_queue()
+
+        raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
+                             dtype=theano.config.floatX)
+        gts = np.zeros((self.bs, 8, 1, 1), dtype=theano.config.floatX)
+        for b in range(self.bs):
+            raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
+            raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
+            gts[b, :4, 0, 0] = self.get_adjacent_heights(seeds[b], b)
+            gts[b, 4:, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
 
@@ -351,15 +364,37 @@ class BatchManV0:
                 prob, seed, id = self.priority_queue[b].get()
                 if self.global_claims[b, seed[0], seed[1]] == 0:
                     already_claimed = False
-
             seeds.append(seed)
             ids.append(id)
 
         return seeds, ids
 
-    def update_priority_queue(self, height, seeds, ids):
+    def update_priority_queue_hybrid_loss(self, height,
+                                          neighbor_p, seeds, ids):
         assert(len(height) == len(seeds))
         assert(len(height) == self.bs)
+
+        for b in range(self.bs):
+            counter = -1
+            seeds_x, seeds_y = self.get_cross_coords(seeds[b])
+            for x, y in zip(seeds_x, seeds_y):
+                counter += 1
+
+                d_prev = self.global_heightmap_batch[b, x, y]
+                d_j = max((1 - neighbor_p[b][counter]) * height[b][counter],
+                          d_prev)
+
+                if (d_prev > 0):
+                    d_j = min(d_j, d_prev)
+
+                self.global_heightmap_batch[b, x, y] = d_j
+
+                if self.global_claims[b, x, y] == 0:
+                    self.priority_queue[b].put((d_j, [x, y], ids[b]))
+
+    def update_priority_queue(self, height, seeds, ids):
+        assert (len(height) == len(seeds))
+        assert (len(height) == self.bs)
 
         for b in range(self.bs):
             counter = -1
@@ -376,7 +411,8 @@ class BatchManV0:
                 self.global_heightmap_batch[b, x, y] = d_j
 
                 if self.global_claims[b, x, y] == 0:
-                    self.priority_queue[b].put((d_j, [x, y], ids[b]))
+                    self.priority_queue[b].put(
+                        (d_j, [x, y], ids[b]))
 
     # validation of cube slice by slice
     def init_prediction(self, start, stop):
