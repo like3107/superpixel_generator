@@ -144,6 +144,7 @@ class BatchManV0:
         self.global_claims = None           # includes padding
         self.global_height_gt_batch = None   # no padding
         self.global_heightmap_batch = None
+        self.global_directionmap_batch = None
         self.priority_queue = None
 
     def prepare_global_batch(self):
@@ -190,9 +191,9 @@ class BatchManV0:
         for ids in global_ids:    # iterates over batches
             batch += 1
             seeds = []
-            for id in ids:
+            for Id in ids:
                 regions = np.where(
-                    self.global_label_batch[batch, :, :] == id)
+                    self.global_label_batch[batch, :, :] == Id)
                 rand_seed = np.random.randint(0, len(regions[0]))
                 seeds.append([regions[0][rand_seed] + self.pad,
                               regions[1][rand_seed] + self.pad])
@@ -206,28 +207,29 @@ class BatchManV0:
             b += 1
             q = PriorityQueue()
             i = -1      # ids within slice
-            for seed, id in zip(seeds, ids):
+            for seed, Id in zip(seeds, ids):
                 i += 1
-                q.put((-0.1, seed, id))
+                q.put((-0.1, seed, Id, -1))
             self.priority_queue.append(q)
 
-    def get_cross_coords(self, seed):
-        seeds_x = [max(self.pad, seed[0] - 1),
-                   seed[0],
-                   min(seed[0] + 1, self.global_el - self.pad - 1),
-                   seed[0]]
+    def walk_cross_coords(self, seed):
+        offsets = [0,-1,0,1,0]
+        for direction,[offset_x,offset_y] in enumerate(zip([-1,0,1,0],[0,-1,0,1])):
+            # check boundary conditions
+            if ((self.pad < seed[0] + offset_x < self.global_el - self.pad - 1) and
+                (self.pad < seed[1] + offset_y < self.global_el - self.pad - 1)):
+                yield seed[0] + offset_x , seed[1] + offset_y, direction
 
-        seeds_y = [seed[1],
-                   max(self.pad, seed[1] - 1),
-                   seed[1],
-                   min(seed[1] + 1, self.global_el - self.pad - 1)]
-        return seeds_x, seeds_y
+    def get_cross_coords(self, seed, global_offset=0):
+        seeds_x , seeds_y = [], []
+        for seed_x, seed_y, _ in self.walk_cross_coords(seed):
+            seeds_x.append(seed_x+global_offset)
+            seeds_y.append(seed_y+global_offset)
+        return np.array(seeds_x), np.array(seeds_y)
 
     def get_adjacent_gts(self, seed, batch, id):
-        seeds_x, seeds_y = self.get_cross_coords(seed)
+        seeds_x, seeds_y = self.get_cross_coords(seed,global_offset = -self.pad)
 
-        seeds_x, seeds_y = (np.array(seeds_x) - self.pad,
-                            np.array(seeds_y) - self.pad)
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         assert (np.any(self.rl - self.pl > seeds_x) or
                 np.any(self.rl - self.pl > seeds_y))
@@ -240,10 +242,8 @@ class BatchManV0:
         return ground_truth
 
     def get_adjacent_heights(self, seed, batch):
-        seeds_x, seeds_y = self.get_cross_coords(seed)
-
-        seeds_x, seeds_y = (np.array(seeds_x) - self.pad,
-                            np.array(seeds_y) - self.pad)
+        seeds_x, seeds_y = self.get_cross_coords(seed,global_offset = -self.pad)
+        
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         assert (np.any(self.rl - self.pl > seeds_x) or
                 np.any(self.rl - self.pl > seeds_y))
@@ -303,6 +303,8 @@ class BatchManV0:
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
         self.global_heightmap_batch = np.zeros_like(self.global_claims)
+        self.global_directionmap_batch = np.ones_like(self.global_claims)
+        self.global_directionmap_batch *= -1
         self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
 
         # extract slices and ids within raw and label cubes
@@ -348,10 +350,11 @@ class BatchManV0:
             while already_claimed:
                 if self.priority_queue[b].empty():
                     raise Exception('priority queue empty. All pixels labeled')
-                prob, seed, id = self.priority_queue[b].get()
+                prob, seed, id, direction = self.priority_queue[b].get()
                 if self.global_claims[b, seed[0], seed[1]] == 0:
                     already_claimed = False
 
+            self.global_directionmap_batch[b, seed[0], seed[1]] = direction
             seeds.append(seed)
             ids.append(id)
 
@@ -362,13 +365,10 @@ class BatchManV0:
         assert(len(height) == self.bs)
 
         for b in range(self.bs):
-            counter = -1
-            seeds_x, seeds_y = self.get_cross_coords(seeds[b])
-            for x, y in zip(seeds_x, seeds_y):
-                counter += 1
+            for x, y, direction in  walk_cross_coords(seeds[b]):
 
                 d_prev = self.global_heightmap_batch[b, x, y]
-                d_j = max(height[b][counter], d_prev)
+                d_j = max(height[b][direction], d_prev)
 
                 if (d_prev > 0):
                     d_j = min(d_j, d_prev)
@@ -376,7 +376,7 @@ class BatchManV0:
                 self.global_heightmap_batch[b, x, y] = d_j
 
                 if self.global_claims[b, x, y] == 0:
-                    self.priority_queue[b].put((d_j, [x, y], ids[b]))
+                    self.priority_queue[b].put((d_j, [x, y], ids[b], direction))
 
     # validation of cube slice by slice
     def init_prediction(self, start, stop):
@@ -440,16 +440,33 @@ if __name__ == '__main__':
     # plt.show()
 
     # loading from BM
-    label_path = './data/volumes/labels_as.h5'
-    raw_path = './data/volumes/raw_as.h5'
+    net_name = 'cnn_ID2_trash'
+    label_path = './data/volumes/label_a.h5'
+    label_path_val = './data/volumes/label_b.h5'
+    height_gt_path = './data/volumes/height_a.h5'
+    height_gt_key = 'height'
+    height_gt_path_val = './data/volumes/height_b.h5'
+    height_gt_key_val = 'height'
+    raw_path = './data/volumes/membranes_a.h5'
+    raw_path_val = './data/volumes/membranes_b.h5'
+    save_net_path = './data/nets/' + net_name + '/'
+    load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
+    tmp_path = '/media/liory/ladata/bla'        # debugging
+    batch_size = 16         # > 4
+    global_edge_len = 300
 
     # segmentation_to_membrane('./data/volumes/label_a.h5',"./data/volumes/height_a.h5")
     # segmentation_to_membrane('./data/volumes/label_b.h5',"./data/volumes/height_b.h5")
     
-    bm = BatchManV0(raw_path, label_path, batch_size=10, patch_len=60,
-                    global_edge_len=95)
-    bm.init_train_batch()
-
+    bm = BatchManV0(raw_path, label_path,
+                       height_gt=height_gt_path,
+                       height_gt_key=height_gt_key,
+                       batch_size=batch_size,
+                       patch_len=40, global_edge_len=global_edge_len,
+                       padding_b=False)
+    bm.init_train_heightmap_batch()
+    print [x for x in bm.walk_cross_coords([200,200])]
+    print bm.get_cross_coords([200,200])
     # print bm.get_batches(10*[[45, 46]])
 
 
