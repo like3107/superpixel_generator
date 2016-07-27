@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Qt4Agg')
+matplotlib.use('Agg')
 import os
 from theano import tensor as T
 import utils as u
@@ -265,14 +265,24 @@ def train_script_v1():
                 # plot train images
                 bms, names = [bm, bm_val], ['train', 'val']
                 for b, name in zip(bms, names):
-                    u.save_4_images(
-                        b.global_claims[4, b.pad:-b.pad-1, b.pad:-b.pad-1],
-                        b.global_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1],
-                        b.global_heightmap_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1],
-                        b.global_height_gt_batch[4, :, :],
-                        save_net_path + '/images/',
-                        iterations_per_image=global_field_counter, name=name,
-                        iteration=iteration)
+
+
+                    plot_images = []
+                    plot_images.append({"title":"Claims",
+                                        'cmap':"rand",
+                                        'im':b.global_claims[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
+                    plot_images.append({"title":"Raw Input",
+                                        'im':b.global_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
+                    plot_images.append({"title":"Heightmap Prediciton",
+                                        'im':b.global_heightmap_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
+                    plot_images.append({"title":"Heightmap Ground Truth",
+                                        'im':b.global_height_gt_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
+                    plot_images.append({"title":"Direction Map",
+                                        "cmap":"rand",
+                                        'im':b.global_directionmap_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
+                    u.save_images(plot_images,
+                                  path=save_net_path + '/images/',
+                                  name="iteration"+'_it%07d_im%07d' % (iteration, global_field_counter))
 
                 global_field_change = \
                     u.linear_growth(iteration,
@@ -322,10 +332,6 @@ def train_script_v1():
                                                 'loss valid'])
 
 
-
-            # debug
-            print 'probs', probs_val[4]
-            print 'gt', gt_val[4]
 
             # f, ax = plt.subplots(1, 3)
             # ax[0].imshow(bm.global_claims[4, bm.pad:-bm.pad, bm.pad:-bm.pad],

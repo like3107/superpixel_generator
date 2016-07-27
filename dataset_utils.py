@@ -216,19 +216,23 @@ class BatchManV0:
         offsets = [0,-1,0,1,0]
         for direction,[offset_x,offset_y] in enumerate(zip([-1,0,1,0],[0,-1,0,1])):
             # check boundary conditions
-            if ((self.pad < seed[0] + offset_x < self.global_el - self.pad - 1) and
-                (self.pad < seed[1] + offset_y < self.global_el - self.pad - 1)):
+            if ((self.pad <= seed[0] + offset_x < self.global_el - self.pad) and
+                (self.pad <= seed[1] + offset_y < self.global_el - self.pad)):
                 yield seed[0] + offset_x , seed[1] + offset_y, direction
+            else:
+                yield seed[0], seed[1], direction
 
     def get_cross_coords(self, seed, global_offset=0):
-        seeds_x , seeds_y = [], []
-        for seed_x, seed_y, _ in self.walk_cross_coords(seed):
+        seeds_x , seeds_y, dirs = [], [] ,[]
+        for seed_x, seed_y, d in self.walk_cross_coords(seed):
             seeds_x.append(seed_x+global_offset)
             seeds_y.append(seed_y+global_offset)
-        return np.array(seeds_x), np.array(seeds_y)
+            dirs.append(d)
+
+        return np.array(seeds_x), np.array(seeds_y), np.array(d)
 
     def get_adjacent_gts(self, seed, batch, id):
-        seeds_x, seeds_y = self.get_cross_coords(seed,global_offset = -self.pad)
+        seeds_x, seeds_y, _ = self.get_cross_coords(seed,global_offset = -self.pad)
 
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         assert (np.any(self.rl - self.pl > seeds_x) or
@@ -242,7 +246,7 @@ class BatchManV0:
         return ground_truth
 
     def get_adjacent_heights(self, seed, batch):
-        seeds_x, seeds_y = self.get_cross_coords(seed,global_offset = -self.pad)
+        seeds_x, seeds_y, _ = self.get_cross_coords(seed,global_offset = -self.pad)
         
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         assert (np.any(self.rl - self.pl > seeds_x) or
@@ -365,7 +369,7 @@ class BatchManV0:
         assert(len(height) == self.bs)
 
         for b in range(self.bs):
-            for x, y, direction in  walk_cross_coords(seeds[b]):
+            for x, y, direction in  self.walk_cross_coords(seeds[b]):
 
                 d_prev = self.global_heightmap_batch[b, x, y]
                 d_j = max(height[b][direction], d_prev)

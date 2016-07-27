@@ -5,7 +5,7 @@ import lasagne as las
 import dataset_utils as du
 np.random.seed(1234)
 fixed_rand = np.random.rand(256, 3)
-
+import multiprocessing
 
 
 # A random colormap for matplotlib, https://gist.github.com/jgomezdans/402500
@@ -47,6 +47,24 @@ def save_4_images(im_x, im_y, im_z, im_zz, path, name='iteration', iteration=0,
     f.savefig(path + name + '_it%07d_im%07d' % (iteration, iterations_per_image))
     plt.close()
 
+def save_images(image_dicts,path,name):
+    f, ax = plt.subplots(ncols=3,nrows=(len(image_dicts)/3)+1)
+    for i,image_info in enumerate(image_dicts):
+
+        interp = 'none'
+        if "interpolation" in image_info:
+            interp = image_info["interpolation"]
+        color_map = 'gray'
+        if "cmap" in image_info:
+            if image_info["cmap"] == "rand":
+                color_map = random_color_map()
+        if "title" in image_info:
+            ax[i/3,i%3].set_title(image_info["title"])
+
+        ax[i/3,i%3].imshow(image_info["im"], interpolation=interp, cmap=color_map)
+
+    f.savefig(path + name, dpi=400)
+    plt.close()
 
 
 def decay_func(iteration, edge_len, safty_margin=300, decay_factor=0.4):
