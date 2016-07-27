@@ -145,6 +145,10 @@ class BatchManV0:
         self.global_height_gt_batch = None   # no padding
         self.global_heightmap_batch = None
         self.global_directionmap_batch = None
+        self.global_time = 0
+        self.global_timemap = None
+        self.global_errormap = None
+        self.global_error_list = None
         self.priority_queue = None
 
     def prepare_global_batch(self):
@@ -326,9 +330,16 @@ class BatchManV0:
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
         self.global_heightmap_batch = np.zeros_like(self.global_claims)
+        self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
+
+        self.global_timemap = np.empty_like(self.global_claims)
+        self.global_timemap.fill(np.inf)
+
+        self.global_errormap = np.zeros_like(self.global_claims)
+        global_error_list = [[] for b in range(self.bs)]
+
         self.global_directionmap_batch = np.ones_like(self.global_claims)
         self.global_directionmap_batch *= -1
-        self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
 
         # extract slices and ids within raw and label cubes
         global_ids = self.prepare_global_batch()
@@ -368,16 +379,38 @@ class BatchManV0:
     def get_seeds_from_queue(self):
         seeds = []
         ids = []
+        self.global_time += 1
         for b in range(self.bs):
             already_claimed = True
             while already_claimed:
                 if self.priority_queue[b].empty():
                     raise Exception('priority queue empty. All pixels labeled')
-                prob, seed, id, direction = self.priority_queue[b].get()
+                prob, seed, id, id_gt, direction, error_ind, time_put = self.priority_queue[b].get()
                 if self.global_claims[b, seed[0], seed[1]] == 0:
                     already_claimed = False
 
             self.global_directionmap_batch[b, seed[0], seed[1]] = direction
+            self.global_timemap[b, seed[0], seed[1]] = time_put
+
+            # check for errors in boundary crossing
+            if(error_ind):
+                self.global_errormap[b, seeds[0], seed[1]] = 1
+
+            # check for errors in touching regions
+            for x, y, direction in  self.walk_cross_coords(seeds[b]):
+                n_label = self.id2gt[b][self.global_label_batch[b, x, y]]
+                if (self.global_claims[b, x, y] == 1 # neighbor is claimed
+                    # and check if claimed by other label
+                    and n_label != id_gt):
+
+                    # check for slow intrusion( neighbor is intruder )
+                    if(n_label != self.global_label_batch[b, x, y]):
+                        global_error_list[b].append((self.global_timemap[b, x, y], seed[0]-x, y-seed[1]))
+
+                    # check for fast intrusion( current is intruder )
+                    if(id_gt != self.global_label_batch[b, x, y]):
+                        global_error_list[b].append((self.global_timemap[b, x, y], x-seed[0], y-seed[1]))
+
             seeds.append(seed)
             ids.append(id)
 
