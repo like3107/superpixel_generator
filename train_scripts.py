@@ -280,7 +280,7 @@ def train_script_v1():
                     plot_images.append({"title":"Direction Map",
                                         "cmap":"rand",
                                         'im':b.global_directionmap_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
-                    u.save_images(plot_images,
+                    u.save_image_sub(plot_images,
                                   path=save_net_path + '/images/',
                                   name="iteration"+'_it%07d_im%07d' % (iteration, global_field_counter))
 

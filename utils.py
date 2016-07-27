@@ -7,7 +7,6 @@ np.random.seed(1234)
 fixed_rand = np.random.rand(256, 3)
 import multiprocessing
 
-
 # A random colormap for matplotlib, https://gist.github.com/jgomezdans/402500
 def random_color_map():
     fixed_rand[0, :] = 0
@@ -47,25 +46,30 @@ def save_4_images(im_x, im_y, im_z, im_zz, path, name='iteration', iteration=0,
     f.savefig(path + name + '_it%07d_im%07d' % (iteration, iterations_per_image))
     plt.close()
 
-def save_images(image_dicts,path,name):
+def show_image(image_info,target):
+    interp = 'none'
+    if "interpolation" in image_info:
+        interp = image_info["interpolation"]
+    color_map = 'gray'
+    if "cmap" in image_info:
+        if image_info["cmap"] == "rand":
+            color_map = random_color_map()
+    if "title" in image_info:
+        target.set_title(image_info["title"])
+    target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
+
+def save_images(image_dicts,path,name,terminate=False):
     f, ax = plt.subplots(ncols=3,nrows=(len(image_dicts)/3)+1)
     for i,image_info in enumerate(image_dicts):
-
-        interp = 'none'
-        if "interpolation" in image_info:
-            interp = image_info["interpolation"]
-        color_map = 'gray'
-        if "cmap" in image_info:
-            if image_info["cmap"] == "rand":
-                color_map = random_color_map()
-        if "title" in image_info:
-            ax[i/3,i%3].set_title(image_info["title"])
-
-        ax[i/3,i%3].imshow(image_info["im"], interpolation=interp, cmap=color_map)
-
+        show_image(image_info,ax[i/3,i%3])
     f.savefig(path + name, dpi=400)
     plt.close()
+    if terminate:
+        exit()
 
+def save_image_sub(image_dicts,path,name):
+    p = multiprocessing.Process(target=save_images, args=(image_dicts,path,name,True))
+    p.start()
 
 def decay_func(iteration, edge_len, safty_margin=300, decay_factor=0.4):
     return int((1. - 1. / (iteration + 2) ** decay_factor) *
