@@ -222,6 +222,25 @@ class BatchManV0:
             else:
                 yield seed[0], seed[1], direction
 
+
+    def get_path_to_root(self, start_position, batch):
+        def update_postion(pos, direction):
+            offsets = zip([-1,0,1,0],[0,-1,0,1])[int(direction)]
+            new_pos = [pos[0]-offsets[0],pos[1]-offsets[1]]
+            return new_pos
+
+        counter = 0
+        current_position = start_position
+        current_direction = self.global_directionmap_batch[batch, current_position[0], current_position[1]]
+        path = [start_position]
+        while (current_direction != -1):
+            current_position = update_postion(current_position, current_direction)
+            current_direction = self.global_directionmap_batch[batch, current_position[0], current_position[1]]
+            path.append(current_position)
+            counter += 1
+        return path
+
+
     def get_cross_coords(self, seed, global_offset=0):
         seeds_x , seeds_y, dirs = [], [] ,[]
         for seed_x, seed_y, d in self.walk_cross_coords(seed):
