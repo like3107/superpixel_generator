@@ -4,8 +4,10 @@ from matplotlib import pyplot as plt
 import theano
 from Queue import PriorityQueue
 import utils as u
-from scipy.ndimage import convolve
-from scipy.ndimage.morphology import distance_transform_edt 
+from scipy.ndimage import convolve, gaussian_filter
+from scipy.ndimage.morphology import distance_transform_edt
+from skimage.feature import peak_local_max
+
 import h5py
 
 
@@ -151,7 +153,7 @@ class BatchManV0:
         self.global_error_list = None
         self.priority_queue = None
 
-    def prepare_global_batch(self):
+    def prepare_global_batch(self, return_gt_ids=True):
         # initialize two global batches = region where CNNs compete
         # against each other
 
@@ -183,10 +185,11 @@ class BatchManV0:
                 self.labels[ind_b[b],
                             ind_x[b]:ind_x[b] + self.global_el - self.pl,
                             ind_y[b]:ind_y[b] + self.global_el - self.pl]
-            global_ids.append(
-                np.unique(
-                    self.global_label_batch[b, :, :]).astype(int))
-        return global_ids
+            if return_gt_ids:
+                global_ids.append(
+                    np.unique(
+                        self.global_label_batch[b, :, :]).astype(int))
+                return global_ids
 
     def get_seeds(self, global_ids):    # seed coords relative to global batch
         batch = -1
@@ -203,6 +206,35 @@ class BatchManV0:
                               regions[1][rand_seed] + self.pad])
             global_seeds.append(seeds)
         return global_seeds
+
+    def get_seeds_by_minimum(self):
+        """
+        Seeds by minima of dist trf of thresh of memb prob
+        :return:
+        """
+        self.global_id2gt = []
+        bin_membrane = np.ones(self.global_label_batch.shape, dtype=np.bool)
+        dist_trf = np.zeros_like(self.global_label_batch)
+        global_seeds = []
+        global_seed_ids = []
+        for b in range(self.bs):
+            bin_membrane[b, :, :][self.global_batch[b,
+                                                    self.pad:-self.pad,
+                                                    self.pad:-self.pad] > 0.3]\
+                = 0
+            dist_trf[b, :, :] = gaussian_filter(
+                distance_transform_edt(bin_membrane[b, :, :]), 1)
+            seeds = peak_local_max(dist_trf[b, :, :], exclude_border=0,
+                                   threshold_abs=1, min_distance=10)
+            global_seeds.append(seeds)
+            global_seed_ids.append(range(len(seeds)))
+            id2gt = {}
+            id_counter = -1
+            for seed in seeds:
+                id_counter += 1
+                id2gt[id_counter] = self.global_label_batch[b, seed[0], seed[1]]
+            self.global_id2gt.append(id2gt)
+        return global_seeds, global_seed_ids
 
     def initialize_priority_queue(self, global_seeds, global_ids):
         b = -1  # batch counter
@@ -225,6 +257,35 @@ class BatchManV0:
                 yield seed[0] + offset_x , seed[1] + offset_y, direction
             else:
                 yield seed[0], seed[1], direction
+
+    def initialize_path_priority_queue(self, global_seeds, global_ids):
+        """
+        Initialize one PQ per batch:
+            PQ: ((priority, seed_x, seedy, seed_id, gt_id, direction,
+                 error_indicator, time_put)
+            Init: e.g. (-0.1, seed_x, seed_y, seed_id, 5958, None, 0
+        :param global_seeds:
+        :param global_ids:
+        :param global_ids_gt:
+        :return: [PQ_batch_0, PQ_batch_1,..., PQ_batch_N)
+        """
+        self.priority_queue = []
+        b = -1
+        for seeds, ids in zip(global_seeds, global_ids):
+            b += 1
+            q = PriorityQueue()
+            i = -1      # ids within slice
+            for seed, id in zip(seeds, ids):
+                i += 1
+                q.put((-0.1, seed[0], seed[1], id, self.global_id2gt[b][id],
+                       None, 0))
+            self.priority_queue.append(q)
+
+    def get_cross_coords(self, seed):
+        seeds_x = [max(self.pad, seed[0] - 1),
+                   seed[0],
+                   min(seed[0] + 1, self.global_el - self.pad - 1),
+                   seed[0]]
 
 
     def get_path_to_root(self, start_position, batch):
@@ -270,7 +331,7 @@ class BatchManV0:
 
     def get_adjacent_heights(self, seed, batch):
         seeds_x, seeds_y, _ = self.get_cross_coords(seed,global_offset = -self.pad)
-        
+
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         assert (np.any(self.rl - self.pl > seeds_x) or
                 np.any(self.rl - self.pl > seeds_y))
@@ -332,6 +393,25 @@ class BatchManV0:
         self.global_heightmap_batch = np.zeros_like(self.global_claims)
         self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
 
+        # extract slices and ids within raw and label cubes
+        global_ids = self.prepare_global_batch()
+        # extract starting points
+        global_seeds = self.get_seeds(global_ids)
+        # put seeds and ids in priority queue. All info to load batch is in pq
+        self.initialize_priority_queue(global_seeds, global_ids)
+
+    def init_train_path_batch(self):
+        self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
+                                     dtype=theano.config.floatX)
+
+        self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
+                                            self.global_el - self.pl))
+        # remember where territory has been claimed before. !=0 claimed, 0 free
+        self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
+        self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
+
+        self.global_heightmap_batch = np.zeros_like(self.global_claims)
+        self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
         self.global_timemap = np.empty_like(self.global_claims)
         self.global_timemap.fill(np.inf)
 
@@ -341,12 +421,10 @@ class BatchManV0:
         self.global_directionmap_batch = np.ones_like(self.global_claims)
         self.global_directionmap_batch *= -1
 
-        # extract slices and ids within raw and label cubes
-        global_ids = self.prepare_global_batch()
-        # extract starting points
-        global_seeds = self.get_seeds(global_ids)
-        # put seeds and ids in priority queue. All info to load batch is in pq
-        self.initialize_priority_queue(global_seeds, global_ids)
+        self.prepare_global_batch(return_gt_ids=False)
+        global_seeds, global_seed_ids = self.get_seeds_by_minimum()
+        self.initialize_path_priority_queue(global_seeds, global_seed_ids)
+
 
     def get_batches(self):
         seeds, ids = self.get_seeds_from_queue()
@@ -434,6 +512,26 @@ class BatchManV0:
                 if self.global_claims[b, x, y] == 0:
                     self.priority_queue[b].put((d_j, [x, y], ids[b], direction))
 
+    def update_priority_path_queue(self, heights_batch, seeds, ids):
+        directions = [0,1,2,3]
+        for b, seed, id, heights in zip(range(self.bs), seeds, ids,
+                                        heights_batch):
+            # if possibly wrong
+            new_seeds_x, new_seeds_y = self.get_cross_coords(seed)
+            for x, y, height, direction in \
+                    zip(new_seeds_x, new_seeds_y, heights, directions):
+                error_indicator = False
+                # check whether crossing into other gt id region
+                if self.global_label_batch[b, x, y] != self.global_id2gt[b][id]\
+                        and self.global_label_batch[b, seed[0], seed[1]] == \
+                    self.global_id2gt[b][id]:
+                    error_indicator = True
+                    # Init: e.g.(-0.1, seed_x, seed_y, seed_id, None, 0
+
+                self.priority_queue[b].put(height, x, y, id, direction,
+                                           self.global_time)
+
+
     # validation of cube slice by slice
     def init_prediction(self, start, stop):
         self.global_batch = np.zeros((self.bs, self.rl, self.rl),
@@ -496,6 +594,14 @@ if __name__ == '__main__':
     # plt.show()
 
     # loading from BM
+
+    # segmentation_to_membrane('./data/volumes/label_a.h5',"./data/volumes/height_a.h5")
+    # segmentation_to_membrane('./data/volumes/label_b.h5',"./data/volumes/height_b.h5")
+    
+    # bm = BatchManV0(raw_path, label_path, batch_size=10, patch_len=60,
+    #                 global_edge_len=95)
+    # bm.init_train_batch()
+
     net_name = 'cnn_ID2_trash'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
@@ -510,19 +616,16 @@ if __name__ == '__main__':
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     global_edge_len = 300
+    patch_len= 40
 
-    # segmentation_to_membrane('./data/volumes/label_a.h5',"./data/volumes/height_a.h5")
-    # segmentation_to_membrane('./data/volumes/label_b.h5',"./data/volumes/height_b.h5")
-    
     bm = BatchManV0(raw_path, label_path,
                        height_gt=height_gt_path,
                        height_gt_key=height_gt_key,
                        batch_size=batch_size,
-                       patch_len=40, global_edge_len=global_edge_len,
+                       patch_len=patch_len, global_edge_len=global_edge_len,
                        padding_b=False)
-    bm.init_train_heightmap_batch()
-    print [x for x in bm.walk_cross_coords([200,200])]
-    print bm.get_cross_coords([200,200])
+    bm.init_train_path_batch()
+
     # print bm.get_batches(10*[[45, 46]])
 
 

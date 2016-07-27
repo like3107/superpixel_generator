@@ -175,7 +175,6 @@ def train_script_v0():
             # plt.close()
 
 
-
 def train_script_v1():
     print 'train script v1'
     # data params:
@@ -209,7 +208,9 @@ def train_script_v1():
     iterations_to_max = 100000
 
     # choose your network from nets.py
+    regularization = 10**-4
     network = nets.build_ID_v0
+    loss = nets.loss_updates_probs_v0
 
     # all params entered.......................
 
@@ -220,7 +221,7 @@ def train_script_v1():
 
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
-        nets.loss_updates_probs_v0(l_in, target_t, l_out)
+        loss(l_in, target_t, l_out, L1_weight=regularization)
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
