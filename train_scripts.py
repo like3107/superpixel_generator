@@ -297,8 +297,8 @@ def train_script_v1():
 
             print '\r new global batch loaded', global_field_counter, \
                 global_field_change,
-            bm.init_train_heightmap_batch()
-            bm_val.init_train_heightmap_batch()
+            bm.init_train_path_batch()
+            bm_val.init_train_path_batch()
             global_field_counter = 0
 
         if iteration % save_counter == 0 and save_net_b:
