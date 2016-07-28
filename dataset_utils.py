@@ -423,18 +423,18 @@ class BatchManV0:
         self.initialize_path_priority_queue(global_seeds, global_seed_ids)
 
     def get_batches(self):
-        seeds, ids = self.get_seeds_from_queue()
+        centers, ids = self.get_centers_from_queue()
 
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
 
         for b in range(self.bs):
-            raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
-            raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
-            gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
-            self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
-        return raw_batch, gts, seeds, ids
+            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
+            gts[b, :, 0, 0] = self.get_adjacent_gts(centers[b], b, ids[b])
+            self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
+        return raw_batch, gts, centers, ids
 
     def get_path_batches(self):
         centers, ids = self.get_centers_from_queue()
@@ -451,20 +451,24 @@ class BatchManV0:
     def get_path_error_batch(self):
         centers, ids = self.get_centers_from_queue()
         total_number_of_errors = np.sum([len(a) for a in self.global_error_list])
-        if 
+        print "total_number_of_errors",total_number_of_errors
+        if total_number_of_errors > 0:
+            print "FOUND ONE"
+            print "ERRORLIST ",self.global_error_list
+            exit()
         return raw_batch, gts, centers, ids
 
     def get_heightmap_batches(self):
-        seeds, ids = self.get_seeds_from_queue()
+        centers, ids = self.get_centers_from_queue()
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
-            raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
-            raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
-            gts[b, :, 0, 0] = self.get_adjacent_heights(seeds[b], b)
-            self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
-        return raw_batch, gts, seeds, ids
+            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
+            gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
+        return raw_batch, gts, centers, ids
 
     def get_centers_from_queue(self):
         centers = []
@@ -477,6 +481,7 @@ class BatchManV0:
                     raise Exception('priority queue empty. All pixels labeled')
                 height, center_x, center_y, Id, direction, error_ind, time_put = \
                     self.priority_queue[b].get()
+                print "height, center_x, center_y, Id, direction, error_ind, time_put\n",height, center_x, center_y, Id, direction, error_ind, time_put
                 if self.global_claims[b, center_y, center_x] == 0:
                     already_claimed = False
 
@@ -523,7 +528,6 @@ class BatchManV0:
 
                 d_prev = self.global_heightmap_batch[b, x, y]
                 d_j = max(height[b][direction], d_prev)
-
                 if (d_prev > 0):
                     d_j = min(d_j, d_prev)
 
@@ -535,7 +539,7 @@ class BatchManV0:
     def update_priority_path_queue(self, heights_batch, seeds, ids):
         directions = [0, 1, 2, 3]
         for b, seed, Id, heights in zip(range(self.bs), seeds, ids,
-                                        heights_batch):
+                                        heights_batch[:,:,0,0]):
             # if possibly wrong
             new_seeds_x, new_seeds_y, _ = self.get_cross_coords(seed)
             for x, y, height, direction in \
@@ -549,7 +553,6 @@ class BatchManV0:
 
             if self.global_claims[b, x, y] == 0:
                 height_prev = self.global_heightmap_batch[b, x, y]
-                print height_prev.shape, height.shape, direction, b
                 height_j = max(heights[direction], height_prev)
                 if height_prev > 0:
                     height_j = min(height_j, height_prev)
@@ -595,7 +598,7 @@ class BatchManV0:
         self.initialize_priority_queue(global_seeds, global_ids)
 
     def get_pred_batch(self):
-        seeds, ids = self.get_seeds_from_queue()
+        seeds, ids = self.get_centers_from_queue()
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
 

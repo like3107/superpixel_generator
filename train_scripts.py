@@ -230,7 +230,7 @@ def train_script_v1():
                        batch_size=batch_size,
                        patch_len=patch_len, global_edge_len=global_edge_len,
                        padding_b=False)
-    bm.init_train_heightmap_batch()
+    bm.init_train_path_batch()
     bm_val = du.BatchManV0(raw_path_val, label_path_val,
                            height_gt=height_gt_path_val,
                            height_gt_key=height_gt_key_val,
@@ -238,7 +238,7 @@ def train_script_v1():
                            patch_len=patch_len, global_edge_len=global_edge_len,
                            padding_b=False)
 
-    bm_val.init_train_heightmap_batch()  # Training
+    bm_val.init_train_path_batch()  # Training
 
     # init a network folder where all images, models and hyper params are stored
     if save_net_b:
@@ -304,14 +304,14 @@ def train_script_v1():
         if iteration % save_counter == 0 and save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
-        raw_val, gt_val, seeds_val, ids_val = bm_val.get_heightmap_batches()
+        raw_val, gt_val, seeds_val, ids_val = bm_val.get_path_batches()
         probs_val = probs_f(raw_val)
-        bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
+        bm_val.update_priority_path_queue(probs_val, seeds_val, ids_val)
 
         # train da thing
-        raw, gt, seeds, ids = bm.get_heightmap_batches()
+        raw, gt, seeds, ids = bm.get_path_batches()
         probs = probs_f(raw)
-        bm.update_priority_queue(probs, seeds, ids)
+        bm.update_priority_path_queue(probs, seeds, ids)
         if iteration % 10 == 0:
             loss_train = float(loss_train_f(raw, gt))
 
@@ -334,30 +334,6 @@ def train_script_v1():
                                          names=['loss train', 'loss train no reg',
                                                 'loss valid'])
 
-
-
-            # f, ax = plt.subplots(1, 3)
-            # ax[0].imshow(bm.global_claims[4, bm.pad:-bm.pad, bm.pad:-bm.pad],
-            #              interpolation='none', cmap=u.random_color_map())
-            # ax[1].imshow(bm.global_batch[4, 0, bm.pad:-bm.pad, bm.pad:-bm.pad],
-            #              cmap='gray')
-            # print bm.global_label_batch.shape
-            # ax[2].imshow(bm.global_label_batch[4, 0, bm.pad:-bm.pad, bm.pad:-bm.pad],
-            #              interpolation='none', cmap=u.random_color_map())
-            #
-            # print 'gt', gt[4]
-            # plt.savefig(tmp_path)
-            # plt.close()
-            #
-            #
-            # f, ax = plt.subplots(1, 3)
-            # ax[0].imshow(raw[4, 0], cmap='gray')
-            # ax[1].imshow(raw[4, 1], cmap=u.random_color_map(),
-            #              interpolation='none')
-            # ax[2].imshow(gt[4, :, :, 0], cmap=u.random_color_map(),
-            #              interpolation='none')
-            # plt.savefig(tmp_path + str(2))
-            # plt.close()
 
 
 if __name__ == '__main__':
