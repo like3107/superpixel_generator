@@ -489,11 +489,11 @@ class BatchManV0:
                     raise Exception('priority queue empty. All pixels labeled')
                 height, center_x, center_y, Id, direction, error_ind, time_put = \
                     self.priority_queue[b].get()
-                print "height, center_x, center_y, Id, direction, error_ind, time_put\n",height, center_x, center_y, Id, direction, error_ind, time_put
                 if self.global_claims[b, center_y, center_x] == 0:
                     already_claimed = False
             # tmp debug
             if b == 4:
+                print 'pulling....'
                 print 'height', height, 'centerx', center_x, 'y', center_y, 'id', Id, \
                     'direction', direction, 'error ind', error_ind, 'tput', time_put
 
@@ -563,6 +563,7 @@ class BatchManV0:
             # if possibly wrong
             new_seeds_x, new_seeds_y, _ = \
                 self.get_cross_coords(seed)
+            print 'shapes', new_seeds_y.shape, new_seeds_x.shape, heights.shape, len(directions)
             for x, y, height, direction in \
                     zip(new_seeds_x, new_seeds_y, heights, directions):
                 error_indicator = False
@@ -574,18 +575,21 @@ class BatchManV0:
                                                 seed[1]-self.pad] == \
                         self.global_id2gt[b][Id]:
                         error_indicator = True
-
-            if self.global_claims[b, x, y] == 0:
-                height_prev = self.global_heightmap_batch[b, x-self.pad,
-                                                          y-self.pad]
-                height_j = max(heights[direction], height_prev)
-                if height_prev > 0:
-                    height_j = min(height_j, height_prev)
-                self.global_heightmap_batch[b, x-self.pad, y-self.pad] = height_j
-                # (height, seed_x, seedy, seed_id, direction,
-                # error_indicator, time_put)
-                self.priority_queue[b].put((height, x, y, Id, direction,
-                                           error_indicator, self.global_time))
+                if self.global_claims[b, x, y] == 0:
+                    height_prev = self.global_heightmap_batch[b, x-self.pad,
+                                                              y-self.pad]
+                    height_j = max(heights[direction], height_prev)
+                    if height_prev > 0:
+                        height_j = min(height_j, height_prev)
+                    self.global_heightmap_batch[b, x-self.pad, y-self.pad] = height_j
+                    # (height, seed_x, seedy, seed_id, direction,
+                    # error_indicator, time_put)
+                    # tmp
+                    if b == 4:
+                        print 'pusing'
+                        print 'x', x, 'y', y
+                    self.priority_queue[b].put((height, x, y, Id, direction,
+                                               error_indicator, self.global_time))
 
     # validation of cube slice by slice
     def init_prediction(self, start, stop):
@@ -681,9 +685,9 @@ if __name__ == '__main__':
     seeds = np.array(seeds[4])
     heights = np.random.random(size=batch_size)
     b = 4
-    for i in range(50000):
+    for i in range(500000):
         raw_batch, gts, centers, ids = bm.get_path_batches()
-        if i % 200 == 0:
+        if i % 10000 == 0:
             fig, ax = plt.subplots(1, 6)
 
             ax[0].imshow(raw_batch[b, 0, :, :], interpolation='none', cmap='gray')
