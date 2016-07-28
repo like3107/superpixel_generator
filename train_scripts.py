@@ -271,9 +271,11 @@ def train_script_v1():
                     plot_images = []
                     plot_images.append({"title":"Claims",
                                         'cmap':"rand",
-                                        'im':b.global_claims[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
+                                        'im':b.global_claims[4, b.pad:-b.pad-1,
+                                             b.pad:-b.pad-1]})
                     plot_images.append({"title":"Raw Input",
-                                        'im':b.global_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
+                                        'im':b.global_batch[4, b.pad:-b.pad-1,
+                                             b.pad:-b.pad-1]})
                     plot_images.append({"title":"Heightmap Prediciton",
                                         'im':b.global_heightmap_batch[4, b.pad:-b.pad-1, b.pad:-b.pad-1]})
                     plot_images.append({"title":"Heightmap Ground Truth",

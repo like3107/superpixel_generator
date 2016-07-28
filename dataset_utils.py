@@ -108,7 +108,7 @@ class BatchManV0:
             self.labels = label
         if isinstance(height_gt, str):
             self.height_gt = load_h5(height_gt, h5_key=height_gt_key)[0]
-            maximum = np.max(self.height_gt, axis=0)
+            maximum = np.max(self.height_gt)
             self.height_gt = maximum - self.height_gt
         else:
             self.height_gt = height_gt
@@ -520,30 +520,30 @@ class BatchManV0:
                                      center_y-self.pad] = 1
             # tmp uncomment
             # check for errors in neighbor regions
-            # for x, y, direction in self.walk_cross_coords([center_x, center_y]):
-            #     neighbor_label = [self.global_label_batch[b, x-self.pad,
-            #                                               y-self.pad]]
-            #     if (self.global_claims[b, x, y] != 0 and  # neighbor is claimed
-            #        neighbor_label != self.global_id2gt[b][Id]):
-            #         # and check if claimed by other gt label (over-segmenting is
-            #         # ok)
-            #
-            #         # check for slow intrusion( neighbor is intruder )
-            #         if neighbor_label != self.global_label_batch[b,
-            #                                                      x-self.pad,
-            #                                                      y-self.pad]:
-            #             self.global_error_list[b].append(
-            #                 (self.global_timemap[b, x-self.pad, y-self.pad],
-            #                  x-center_x,
-            #                  y-center_y))
-            #         # check for fast intrusion( current is intruder )
-            #         if neighbor_label != self.global_label_batch[b,
-            #                                                      x-self.pad,
-            #                                                      y-self.pad]:
-            #             self.global_error_list[b].append(
-            #                 (self.global_timemap[b, x-self.pad, y-self.pad],
-            #                  x-center_x,
-            #                  y-center_y))
+            for x, y, direction in self.walk_cross_coords([center_x, center_y]):
+                neighbor_label = [self.global_label_batch[b, x-self.pad,
+                                                          y-self.pad]]
+                if (self.global_claims[b, x, y] != 0 and  # neighbor is claimed
+                   neighbor_label != self.global_id2gt[b][Id]):
+                    # and check if claimed by other gt label (over-segmenting is
+                    # ok)
+
+                    # check for slow intrusion( neighbor is intruder )
+                    if neighbor_label != self.global_label_batch[b,
+                                                                 x-self.pad,
+                                                                 y-self.pad]:
+                        self.global_error_list[b].append(
+                            (self.global_timemap[b, x-self.pad, y-self.pad],
+                             x-center_x,
+                             y-center_y))
+                    # check for fast intrusion( current is intruder )
+                    if neighbor_label != self.global_label_batch[b,
+                                                                 x-self.pad,
+                                                                 y-self.pad]:
+                        self.global_error_list[b].append(
+                            (self.global_timemap[b, x-self.pad, y-self.pad],
+                             x-center_x,
+                             y-center_y))
             centers.append((center_x, center_y))
             ids.append(Id)
         return centers, ids
@@ -694,11 +694,15 @@ if __name__ == '__main__':
     seeds = np.array(seeds[4])
     heights = np.random.random(size=batch_size)
     b = 4
+    raw_batch, gts, centers, ids = bm.get_path_batches()
+
     for i in range(500000):
-        raw_batch, gts, centers, ids = bm.get_path_batches()
         print i
-        if i % 67598 == 0:
+
+        if i % 5000 == 0:
+
             print i
+
             fig, ax = plt.subplots(1, 6)
 
             ax[0].imshow(raw_batch[b, 0, :, :], interpolation='none', cmap='gray')
@@ -712,13 +716,18 @@ if __name__ == '__main__':
             ax[5].scatter(seeds[:, 1]-bm.pad, seeds[:, 0]-bm.pad)
 
             plt.show()
+        if i%1001 == 0:
+            print 're inint'
+            bm.init_train_path_batch()
+        raw_batch, gts, centers, ids = bm.get_path_batches()
+
         probs = np.zeros((batch_size, 4, 1,1))
         for c in range(batch_size):
             d = 0
             for x, y, _ in bm.walk_cross_coords(centers[b]):
                 x -= bm.pad
                 y -= bm.pad
-                probs[c, d] = bm.global_height_gt_batch[b, x-bm.pad, y-bm.pad]
+                probs[c, d] = bm.global_height_gt_batch[b, x, y]
                 d += 1
         bm.update_priority_path_queue(probs, centers, ids)
 
