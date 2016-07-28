@@ -18,7 +18,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'cnn_ID2_trash3'
+    net_name = 'cnn_WS_1'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -128,6 +128,13 @@ def train_script_v1():
         if iteration % 10 == 0:
             loss_train = float(loss_train_f(raw, gt))
 
+        if iteration % 100 == 0:
+            loss_train_no_reg = float(loss_valid_f(raw, gt))
+            loss_valid = float(loss_valid_f(raw_val, gt_val))
+            print '\r loss train %.4f, loss train_noreg %.4f, ' \
+                  'loss_validation %.4f, iteration %i' % \
+                  (loss_train, loss_train_no_reg, loss_valid, iteration),
+
         # monitor growing on validation set
         if iteration % 30000 == 0:
             print "free_voxel ",free_voxel
@@ -135,11 +142,6 @@ def train_script_v1():
             bm.draw_debug_image("val_iteration_%i_freevoxel_%i" %
                                 (iteration, free_voxel),
                                 path=save_net_path + '/images/')
-            loss_valid = float(loss_valid_f(raw_val, gt_val))
-            loss_train_no_reg = float(loss_valid_f(raw, gt))
-            print '\r loss train %.4f, loss train_noreg %.4f, ' \
-                   'loss_validation %.4f, iteration %i' % \
-                   (loss_train, loss_train_no_reg, loss_valid, iteration),
 
             if save_net_b:
                 iterations.append(iteration)
