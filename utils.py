@@ -69,7 +69,6 @@ def save_images(image_dicts, path,name, terminate=False):
     if terminate:
         exit()
 
-
 def save_image_sub(image_dicts,path,name):
     p = multiprocessing.Process(target=save_images, args=(image_dicts,path,name,True))
     p.start()

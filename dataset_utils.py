@@ -268,8 +268,7 @@ class BatchManV0:
             i = -1      # ids within slice
             for seed, Id in zip(seeds, ids):
                 i += 1
-                q.put((0, seed[0]+self.pad, seed[1]+self.pad, Id, -1, False, 0))
-
+                q.put((0, seed[0], seed[1], Id, -1, False, 0))
             self.priority_queue.append(q)
 
     def walk_cross_coords(self, center):
@@ -365,6 +364,14 @@ class BatchManV0:
         claimed[labels == 0] = 0       # me
         return claimed
 
+    def crop_time_mask(self, center, timepoint, batches):
+        time_crop = self.global_timemap[batches,
+                                        center[0]-self.pad:center[0]+self.pad,
+                                        center[1]-self.pad:center[1]+self.pad]
+        mask = np.zeros_like(time_crop)
+        mask[time_crop<=timepoint] = 1
+        return mask
+
     def init_train_batch(self):
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
@@ -416,6 +423,7 @@ class BatchManV0:
         self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
         self.global_timemap = np.empty_like(self.global_label_batch)
         self.global_timemap.fill(np.inf)
+        self.global_time = 0
 
         self.global_errormap = np.zeros(self.global_label_batch.shape,
                                         dtype=np.bool)
@@ -468,6 +476,7 @@ class BatchManV0:
         if total_number_of_errors > 0:
             print "FOUND ONE"
             print "ERRORLIST ",self.global_error_list
+            # self.draw_debug_image("error_list_found"+str(self.global_time))
             exit()
         return raw_batch, gts, centers, ids
 
@@ -600,6 +609,17 @@ class BatchManV0:
                                                 Id, direction,
                                                error_indicator, self.global_time))
 
+    def reconstruct_input_at_timepoint(self, timepoint, centers, id, batches):
+
+        raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
+                             dtype=theano.config.floatX)
+        raw_batch[range(len(batches)), 0, :, :] = self.crop_raw(centers, batches)
+        raw_batch[range(len(batches)), 1, :, :] = self.crop_mask_claimed(centers, batches, id)
+        
+        self.crop_time_mask()
+
+        return raw_batch, gts, centers, ids
+
     # validation of cube slice by slice
     def init_prediction(self, start, stop):
         self.global_batch = np.zeros((self.bs, self.rl, self.rl),
@@ -647,6 +667,26 @@ class BatchManV0:
             gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
+
+    def draw_debug_image(self, image_name):
+        plot_images = []
+        plot_images.append({"title":"Claims",
+                            'cmap':"rand",
+                            'im':self.global_claims[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+        plot_images.append({"title":"Raw Input",
+                            'im':self.global_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+        plot_images.append({"title":"Heightmap Prediciton",
+                            'im':self.global_heightmap_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+        plot_images.append({"title":"Heightmap Ground Truth",
+                            'im':self.global_height_gt_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+        plot_images.append({"title":"Direction Map",
+                            "cmap":"rand",
+                            'im':self.global_directionmap_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+        plot_images.append({"title":"Error Map",
+                            'im':self.global_errormap[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+        u.save_images(plot_images,
+                      path='./data/nets/debug/images/',
+                      name=image_name)
 
 
 if __name__ == '__main__':
