@@ -137,12 +137,12 @@ class BatchManV0:
             raise Exception('try setting padding to True')
 
         # private
-        self.global_batch = None            # includes padding
-        self.global_label_batch = None      # no padding
-        self.global_claims = None           # includes padding
-        self.global_height_gt_batch = None   # no padding
-        self.global_heightmap_batch = None
-        self.global_directionmap_batch = None
+        self.global_batch = None                # includes padding
+        self.global_label_batch = None          # no padding
+        self.global_claims = None               # includes padding
+        self.global_height_gt_batch = None      # no padding
+        self.global_heightmap_batch = None      # no padding
+        self.global_directionmap_batch = None   # includes padding
         self.global_time = 0
         self.global_timemap = None
         self.global_errormap = None
@@ -414,7 +414,8 @@ class BatchManV0:
         self.global_errormap = np.zeros_like(self.global_claims)
         global_error_list = [[] for b in range(self.bs)]
 
-        self.global_directionmap_batch = np.zeros_like(self.global_claims) - 1
+        self.global_directionmap_batch = np.zeros_like(self.global_label_batch)\
+                                                                            - 1
 
         self.prepare_global_batch(return_gt_ids=False)
         # also initializes id_2_gt lookup
@@ -473,8 +474,10 @@ class BatchManV0:
                 if self.global_claims[b, center_y, center_x] == 0:
                     already_claimed = False
 
-            self.global_directionmap_batch[b, center_x, center_x] = direction
-            self.global_timemap[b, center_x, center_y] = time_put
+            self.global_directionmap_batch[b, center_x - self.pad,
+                                           center_x-self.pad] = direction
+            self.global_timemap[b, center_x-self.pad,
+                                center_y-self.pad] = time_put
 
             # check for errors in boundary crossing
             if error_ind:
@@ -491,11 +494,15 @@ class BatchManV0:
                     # check for slow intrusion( neighbor is intruder )
                     if neighbor_label != self.global_label_batch[b, x, y]:
                         self.global_error_list[b].append(
-                            (self.global_timemap[b, x, y], x-center_x, y-center_y))
+                            (self.global_timemap[b, x, y],
+                             x-center_x,
+                             y-center_y))
                     # check for fast intrusion( current is intruder )
                     if neighbor_label != self.global_label_batch[b, x, y]:
                         self.global_error_list[b].append(
-                            (self.global_timemap[b, x, y], x-center_x, y-center_y))
+                            (self.global_timemap[b, x, y],
+                             x-center_x,
+                             y-center_y))
             centers.append((center_x, center_y))
             ids.append(Id)
 
