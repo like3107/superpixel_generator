@@ -226,7 +226,7 @@ class BatchManV0:
             seeds = peak_local_max(dist_trf[b, :, :], exclude_border=0,
                                    threshold_abs=1, min_distance=min_dist)
             global_seeds.append(seeds)
-            global_seed_ids.append(range(len(seeds)))
+            global_seed_ids.append(range(1, len(seeds)+1))
             id2gt = {}
             id_counter = -1
             for seed in seeds:
@@ -514,7 +514,7 @@ class BatchManV0:
             for x, y, direction in self.walk_cross_coords([center_x, center_y]):
                 neighbor_label = [self.global_label_batch[b, x-self.pad,
                                                           y-self.pad]]
-                if (self.global_claims[b, x, y] == 1 and  # neighbor is claimed
+                if (self.global_claims[b, x, y] != 0 and  # neighbor is claimed
                    neighbor_label != self.global_id2gt[b][Id]):
                     # and check if claimed by other gt label (over-segmenting is
                     # ok)
@@ -552,7 +552,6 @@ class BatchManV0:
                     d_j = min(d_j, d_prev)
 
                 self.global_heightmap_batch[b, x, y] = d_j
-
                 if self.global_claims[b, x, y] == 0:
                     self.priority_queue[b].put((d_j, x, y, ids[b], direction))
 
@@ -563,7 +562,6 @@ class BatchManV0:
             # if possibly wrong
             new_seeds_x, new_seeds_y, _ = \
                 self.get_cross_coords(seed)
-            print 'shapes', new_seeds_y.shape, new_seeds_x.shape, heights.shape, len(directions)
             for x, y, height, direction in \
                     zip(new_seeds_x, new_seeds_y, heights, directions):
                 error_indicator = False
@@ -576,15 +574,14 @@ class BatchManV0:
                         self.global_id2gt[b][Id]:
                         error_indicator = True
                 if self.global_claims[b, x, y] == 0:
+                    print 'put', 'x', x, 'y', y
+
                     height_prev = self.global_heightmap_batch[b, x-self.pad,
                                                               y-self.pad]
                     height_j = max(heights[direction], height_prev)
                     if height_prev > 0:
                         height_j = min(height_j, height_prev)
                     self.global_heightmap_batch[b, x-self.pad, y-self.pad] = height_j
-                    # (height, seed_x, seedy, seed_id, direction,
-                    # error_indicator, time_put)
-                    # tmp
                     if b == 4:
                         print 'pusing'
                         print 'x', x, 'y', y
