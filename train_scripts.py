@@ -102,8 +102,10 @@ def train_script_v1():
             free_voxel = free_voxel_emtpy
             if save_net_b:
                 # plot train images
-                bm.draw_debug_image("train_iteration_"+str(iteration))
-                bm_val.draw_debug_image("val_iteration_"+str(iteration))
+                bm.draw_debug_image("train_iteration_"+str(iteration),
+                                    path=save_net_path + '/images/')
+                bm_val.draw_debug_image("val_iteration_"+str(iteration),
+                                        path=save_net_path + '/images/')
 
                 global_field_change = \
                     u.linear_growth(iteration,
