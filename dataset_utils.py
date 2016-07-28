@@ -526,9 +526,11 @@ class BatchManV0:
 
             # check for errors in boundary crossing
             if error_ind:
+                print "error at ",center_x-self.pad,center_y-self.pad,b,np.sum(self.global_errormap),np.sum(self.global_errormap[b])
                 self.global_errormap[b,
                                      center_x-self.pad,
                                      center_y-self.pad] = 1
+
             # tmp uncomment
             # check for errors in neighbor regions
             for x, y, direction in self.walk_cross_coords([center_x, center_y]):
@@ -670,7 +672,7 @@ class BatchManV0:
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
 
-    def draw_debug_image(self, image_name, save=True):
+    def draw_debug_image(self, image_name, path='./data/nets/debug/images/', save=True):
         plot_images = []
         plot_images.append({"title":"Claims",
                             'cmap':"rand",
@@ -684,11 +686,18 @@ class BatchManV0:
         plot_images.append({"title":"Heightmap Ground Truth",
                             'im':self.global_height_gt_batch[4, :, :],
                             'scatter':np.array(self.global_seeds[4])-self.pad})
-        plot_images.append({"title":"Direction Map",
+        plot_images.append({"title":"Ground Truth Label",
                             "cmap":"rand",
-                            'im':self.global_directionmap_batch[4, :, :]})
+                            'im':self.global_label_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
         plot_images.append({"title":"Error Map",
                             'im':self.global_errormap[4, :, :]})
+
+        plot_images.append({"title":"Direction Map",
+                            'im':self.global_directionmap_batch[4, :, :]})
+
+        plot_images.append({"title":"Time Map ",
+                    'im':self.global_timemap[4, :, :]})
+
         if save:
             u.save_images(plot_images,
                           path='./data/nets/debug/images/',

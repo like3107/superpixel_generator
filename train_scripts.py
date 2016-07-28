@@ -11,7 +11,6 @@ from theano.sandbox import cuda as c
 
 
 
-
 def train_script_v1():
     print 'train script v1'
     # data params:
@@ -42,7 +41,7 @@ def train_script_v1():
     # iterations until all pixels on image predicted before that stops early
     # grows linear until n_pixels of field starting at global field change
     global_field_change = 300
-    iterations_to_max = 100000
+    iterations_to_max = 1
 
     # choose your network from nets.py
     regularization = 10**-4
@@ -92,42 +91,21 @@ def train_script_v1():
     iteration = -1
     losses = [[], [], []]
     iterations = []
+
+    free_voxel = np.sum(bm.global_claims==0)
+
     print 'training'
     while not converged and (iteration < max_iter):
         iteration += 1
         global_field_counter += 1
+        free_voxel -= bm.bs 
 
         # save image and update global field ground
-        if global_field_counter % global_field_change == 0:
+        if free_voxel < 1000:
             if save_net_b:
                 # plot train images
-                bms, names = [bm, bm_val], ['train', 'val']
-                for b, name in zip(bms, names):
-                    plot_images = []
-                    plot_images.append({"title":"Claims",
-                                        'cmap':"rand",
-                                        'im':b.global_claims[4, b.pad:-b.pad-1,
-                                             b.pad:-b.pad-1]})
-                    plot_images.append({"title":"Raw Input",
-                                        'im':b.global_batch[4, b.pad:-b.pad-1,
-                                             b.pad:-b.pad-1]})
-                    plot_images.append({"title":"Heightmap Prediciton",
-                                        'im':b.global_heightmap_batch[4,
-                                             b.pad:-b.pad-1, b.pad:-b.pad-1]})
-                    plot_images.append({"title":"Heightmap Ground Truth",
-                                        'im':b.global_height_gt_batch[4,
-                                             b.pad:-b.pad-1, b.pad:-b.pad-1]})
-                    plot_images.append({"title":"Direction Map",
-                                        "cmap":"rand",
-                                        'im':b.global_directionmap_batch[4,
-                                             b.pad:-b.pad-1, b.pad:-b.pad-1]})
-                    plot_images.append({"title":"Error Map",
-                                        'im':b.global_errormap[4,
-                                             b.pad:-b.pad-1, b.pad:-b.pad-1]})
-                    u.save_images(plot_images,
-                                  path=save_net_path + '/images/',
-                                  name="iteration"+'_it%07d_im%07d' %
-                                            (iteration, global_field_counter))
+                bm.draw_debug_image("train_iteration_"+str(iteration))
+                bm_val.draw_debug_image("val_iteration_"+str(iteration))
 
                 global_field_change = \
                     u.linear_growth(iteration,
@@ -158,7 +136,10 @@ def train_script_v1():
             loss_train = float(loss_train_f(raw, gt))
 
         # monitor growing on validation set
-        if iteration % 400 == 0:
+        if iteration % 1000 == 0:
+            print "free_voxel ",free_voxel
+            print "errors",np.sum(bm.global_errormap)
+            bm.draw_debug_image("iteration_"+str(iteration))
             loss_valid = float(loss_valid_f(raw_val, gt_val))
             loss_train_no_reg = float(loss_valid_f(raw, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
