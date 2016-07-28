@@ -146,6 +146,7 @@ class BatchManV0:
         self.global_heightmap_batch = None      # no padding
         self.global_timemap = None              # no padding
         self.global_errormap = None             # no padding
+        self.global_seeds = None                # coords include padding
         self.global_time = 0
         self.global_error_list = None
         self.priority_queue = None
@@ -235,6 +236,7 @@ class BatchManV0:
                                                             seed[0]-self.pad,
                                                             seed[1]-self.pad]
             self.global_id2gt.append(id2gt)
+        self.global_seeds = global_seeds
         return global_seeds, global_seed_ids
 
     def initialize_priority_queue(self, global_seeds, global_ids):
@@ -282,7 +284,7 @@ class BatchManV0:
                     (self.pad <= center_y + offset_y < self.global_el - self.pad):
                 yield center_x + offset_x, center_y + offset_y, direction
             else:
-                yield center_x, center_x, direction
+                yield center_x, center_y, direction
 
     def get_path_to_root(self, start_position, batch):
         def update_postion(pos, direction):
@@ -668,25 +670,32 @@ class BatchManV0:
             self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
         return raw_batch, gts, seeds, ids
 
-    def draw_debug_image(self, image_name):
+    def draw_debug_image(self, image_name, save=True):
         plot_images = []
         plot_images.append({"title":"Claims",
                             'cmap':"rand",
-                            'im':self.global_claims[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+                            'im':self.global_claims[4, self.pad:-self.pad-1,
+                                 self.pad:-self.pad-1]})
         plot_images.append({"title":"Raw Input",
-                            'im':self.global_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+                            'im':self.global_batch[4, self.pad:-self.pad-1,
+                                 self.pad:-self.pad-1]})
         plot_images.append({"title":"Heightmap Prediciton",
-                            'im':self.global_heightmap_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+                            'im':self.global_heightmap_batch[4, :, :]})
         plot_images.append({"title":"Heightmap Ground Truth",
-                            'im':self.global_height_gt_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+                            'im':self.global_height_gt_batch[4, :, :],
+                            'scatter':np.array(self.global_seeds[4])-self.pad})
         plot_images.append({"title":"Direction Map",
                             "cmap":"rand",
-                            'im':self.global_directionmap_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+                            'im':self.global_directionmap_batch[4, :, :]})
         plot_images.append({"title":"Error Map",
-                            'im':self.global_errormap[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
-        u.save_images(plot_images,
-                      path='./data/nets/debug/images/',
-                      name=image_name)
+                            'im':self.global_errormap[4, :, :]})
+        if save:
+            u.save_images(plot_images,
+                          path='./data/nets/debug/images/',
+                          name=image_name)
+        else:
+            print 'show'
+            plt.show()
 
 
 if __name__ == '__main__':
@@ -740,25 +749,26 @@ if __name__ == '__main__':
         print i
 
         if i % 5000 == 0:
-
+            bm.draw_debug_image('deb_%i' %i, save=True)
             print i
-
-            fig, ax = plt.subplots(1, 6)
-
-            ax[0].imshow(raw_batch[b, 0, :, :], interpolation='none', cmap='gray')
-            ax[1].imshow(raw_batch[b, 1, :, :], interpolation='none',
-                         cmap=u.random_color_map())
-
-            ax[2].imshow(bm.global_claims[b, :, :], interpolation='none', cmap=u.random_color_map())
-            ax[3].imshow(bm.global_label_batch[b, :, :], interpolation='none', cmap=u.random_color_map())
-            ax[4].imshow(bm.global_batch[b, :, :], interpolation='none', cmap='gray')
-            ax[5].imshow(bm.global_height_gt_batch[b, :, :], interpolation='none', cmap='gray')
-            ax[5].scatter(seeds[:, 1]-bm.pad, seeds[:, 0]-bm.pad)
-
-            plt.show()
-        if i%1001 == 0:
-            print 're inint'
-            bm.init_train_path_batch()
+            # exit()
+            #
+            # fig, ax = plt.subplots(1, 6)
+            #
+            # ax[0].imshow(raw_batch[b, 0, :, :], interpolation='none', cmap='gray')
+            # ax[1].imshow(raw_batch[b, 1, :, :], interpolation='none',
+            #              cmap=u.random_color_map())
+            #
+            # ax[2].imshow(bm.global_claims[b, :, :], interpolation='none', cmap=u.random_color_map())
+            # ax[3].imshow(bm.global_label_batch[b, :, :], interpolation='none', cmap=u.random_color_map())
+            # ax[4].imshow(bm.global_batch[b, :, :], interpolation='none', cmap='gray')
+            # ax[5].imshow(bm.global_height_gt_batch[b, :, :], interpolation='none', cmap='gray')
+            # ax[5].scatter(seeds[:, 1]-bm.pad, seeds[:, 0]-bm.pad)
+            #
+            # plt.show()
+        # if i%1001 == 0:
+        #     print 're inint'
+        #     bm.init_train_path_batch()
         raw_batch, gts, centers, ids = bm.get_path_batches()
 
         probs = np.zeros((batch_size, 4, 1,1))

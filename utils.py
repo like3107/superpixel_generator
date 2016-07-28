@@ -57,10 +57,12 @@ def draw_image(image_info, target):
             color_map = random_color_map()
     if "title" in image_info:
         target.set_title(image_info["title"])
+    if 'scatter' in image_info:
+        centers = np.array(image_info['scatter'])
+        target.scatter(centers[:, 1], centers[:, 0])
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
 
-
-def save_images(image_dicts, path,name, terminate=False):
+def save_images(image_dicts, path, name, terminate=False):
     f, ax = plt.subplots(ncols=3, nrows=((len(image_dicts)-1) / 3) + 1)
     for i, image_info in enumerate(image_dicts):
         draw_image(image_info, ax[i / 3, i % 3])
@@ -69,15 +71,18 @@ def save_images(image_dicts, path,name, terminate=False):
     if terminate:
         exit()
 
+
 def save_image_sub(image_dicts,path,name):
     p = multiprocessing.Process(target=save_images, args=(image_dicts,path,name,True))
     p.start()
+
 
 def show_image(image_dicts):
     f, ax = plt.subplots(ncols=3, nrows=(len(image_dicts) / 3) + 1)
     for i, image_info in enumerate(image_dicts):
         draw_image(image_info, ax[i / 3, i % 3])
     plt.show()
+
 
 def decay_func(iteration, edge_len, safty_margin=300, decay_factor=0.4):
     return int((1. - 1. / (iteration + 2) ** decay_factor) *
