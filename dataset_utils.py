@@ -448,6 +448,12 @@ class BatchManV0:
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
         return raw_batch, gts, centers, ids
 
+    def get_path_error_batch(self):
+        centers, ids = self.get_centers_from_queue()
+        total_number_of_errors = np.sum([len(a) for a in self.global_error_list])
+        if 
+        return raw_batch, gts, centers, ids
+
     def get_heightmap_batches(self):
         seeds, ids = self.get_seeds_from_queue()
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
