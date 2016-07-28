@@ -526,7 +526,7 @@ class BatchManV0:
 
             # check for errors in boundary crossing
             if error_ind:
-                print "error at ",center_x-self.pad,center_y-self.pad,b,np.sum(self.global_errormap),np.sum(self.global_errormap[b])
+                # print "error at ",center_x-self.pad,center_y-self.pad,b,np.sum(self.global_errormap),np.sum(self.global_errormap[b])
                 self.global_errormap[b,
                                      center_x-self.pad,
                                      center_y-self.pad] = 1
@@ -688,20 +688,16 @@ class BatchManV0:
                             'scatter':np.array(self.global_seeds[4])-self.pad})
         plot_images.append({"title":"Ground Truth Label",
                             "cmap":"rand",
-                            'im':self.global_label_batch[4, self.pad:-self.pad-1, self.pad:-self.pad-1]})
+                            'im':self.global_label_batch[4, :, :]})
         plot_images.append({"title":"Error Map",
                             'im':self.global_errormap[4, :, :]})
-
         plot_images.append({"title":"Direction Map",
                             'im':self.global_directionmap_batch[4, :, :]})
-
         plot_images.append({"title":"Time Map ",
                     'im':self.global_timemap[4, :, :]})
 
         if save:
-            u.save_images(plot_images,
-                          path='./data/nets/debug/images/',
-                          name=image_name)
+            u.save_images(plot_images, path=path, name=image_name)
         else:
             print 'show'
             plt.show()
@@ -753,33 +749,20 @@ if __name__ == '__main__':
     heights = np.random.random(size=batch_size)
     b = 4
     raw_batch, gts, centers, ids = bm.get_path_batches()
-
+    name = 'debug'
     for i in range(500000):
-        print i
+        if i % 100 == 0:
+            print i
 
         if i % 5000 == 0:
-            bm.draw_debug_image('deb_%i' %i, save=True)
+            bm.draw_debug_image(name + '_deb_%i' %i, save=True)
             print i
-            # exit()
-            #
-            # fig, ax = plt.subplots(1, 6)
-            #
-            # ax[0].imshow(raw_batch[b, 0, :, :], interpolation='none', cmap='gray')
-            # ax[1].imshow(raw_batch[b, 1, :, :], interpolation='none',
-            #              cmap=u.random_color_map())
-            #
-            # ax[2].imshow(bm.global_claims[b, :, :], interpolation='none', cmap=u.random_color_map())
-            # ax[3].imshow(bm.global_label_batch[b, :, :], interpolation='none', cmap=u.random_color_map())
-            # ax[4].imshow(bm.global_batch[b, :, :], interpolation='none', cmap='gray')
-            # ax[5].imshow(bm.global_height_gt_batch[b, :, :], interpolation='none', cmap='gray')
-            # ax[5].scatter(seeds[:, 1]-bm.pad, seeds[:, 0]-bm.pad)
-            #
-            # plt.show()
-        # if i%1001 == 0:
-        #     print 're inint'
-        #     bm.init_train_path_batch()
         raw_batch, gts, centers, ids = bm.get_path_batches()
 
+        if i % 65000 == 0 and i != 0:
+            bm.init_train_path_batch()
+            raw_batch, gts, centers, ids = bm.get_path_batches()
+            name += 'asdf'
         probs = np.zeros((batch_size, 4, 1,1))
         for c in range(batch_size):
             d = 0

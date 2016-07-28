@@ -10,7 +10,6 @@ import numpy as np
 from theano.sandbox import cuda as c
 
 
-
 def train_script_v1():
     print 'train script v1'
     # data params:
@@ -19,7 +18,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'cnn_ID2_trash2'
+    net_name = 'cnn_ID2_trash3'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -40,8 +39,8 @@ def train_script_v1():
     save_counter = 10000        # save every n iterations
     # iterations until all pixels on image predicted before that stops early
     # grows linear until n_pixels of field starting at global field change
-    global_field_change = 300
-    iterations_to_max = 1
+    global_field_change = 6
+    iterations_to_max = 5
 
     # choose your network from nets.py
     regularization = 10**-4
@@ -92,16 +91,15 @@ def train_script_v1():
     losses = [[], [], []]
     iterations = []
 
-    free_voxel = np.sum(bm.global_claims==0)
-
+    free_voxel_emtpy = (global_edge_len- patch_len)**2
+    free_voxel = free_voxel_emtpy
     print 'training'
     while not converged and (iteration < max_iter):
         iteration += 1
-        global_field_counter += 1
-        free_voxel -= bm.bs 
-
+        free_voxel -= 1
         # save image and update global field ground
-        if free_voxel < 1000:
+        if free_voxel < 5 or (51201 % (iteration+1) == 0):
+            free_voxel = free_voxel_emtpy
             if save_net_b:
                 # plot train images
                 bm.draw_debug_image("train_iteration_"+str(iteration))
@@ -112,19 +110,14 @@ def train_script_v1():
                                     maximum=(global_edge_len - patch_len)**2-100,
                                     y_intercept=global_field_change,
                                     iterations_to_max=iterations_to_max)
-
-                # print '\n global field change', global_field_change
-
-            print '\r new global batch loaded', global_field_counter, \
-                global_field_change,
             bm.init_train_path_batch()
             bm_val.init_train_path_batch()
-            global_field_counter = 0
 
         if iteration % save_counter == 0 and save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
         raw_val, gt_val, seeds_val, ids_val = bm_val.get_path_batches()
+
         probs_val = probs_f(raw_val)
         bm_val.update_priority_path_queue(probs_val, seeds_val, ids_val)
 
@@ -136,10 +129,12 @@ def train_script_v1():
             loss_train = float(loss_train_f(raw, gt))
 
         # monitor growing on validation set
-        if iteration % 1000 == 0:
+        if iteration % 30000 == 0:
             print "free_voxel ",free_voxel
             print "errors",np.sum(bm.global_errormap)
-            bm.draw_debug_image("iteration_"+str(iteration))
+            bm.draw_debug_image("val_iteration_%i_freevoxel_%i" %
+                                (iteration, free_voxel),
+                                path=save_net_path + '/images/')
             loss_valid = float(loss_valid_f(raw_val, gt_val))
             loss_train_no_reg = float(loss_valid_f(raw, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
