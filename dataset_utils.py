@@ -100,7 +100,6 @@ class BatchManV0:
         """
         if isinstance(raw, str):
             self.raw = load_h5(raw, h5_key=raw_key)[0]
-
         else:
             self.raw = raw
         if isinstance(label, str):
@@ -108,11 +107,13 @@ class BatchManV0:
         else:
             self.labels = label
         if isinstance(height_gt, str):
-            self.height_gt = 255. - load_h5(height_gt, h5_key=height_gt_key)[0]
-
+            self.height_gt = load_h5(height_gt, h5_key=height_gt_key)[0]
+            maximum = np.max(self.height_gt, axis=0)
+            self.height_gt = maximum - self.height_gt
         else:
             self.height_gt = height_gt
 
+        # either pad raw or crop labels -> labels are always shifted by self.pad
         self.padding_b = padding_b
         self.pad = patch_len / 2
         if self.padding_b:
@@ -126,26 +127,26 @@ class BatchManV0:
         self.rl = self.raw.shape[1]     # includes padding
         self.n_slices = len(self.raw)
         self.bs = batch_size
-        self.global_el = global_edge_len        # length of field raw (
+        self.global_el = global_edge_len        # length of field, global_batch
         # includes padding)
         self.pl = patch_len
 
         assert(patch_len <= global_edge_len)
-        assert(global_edge_len < self.rl + self.pad)
+        assert(global_edge_len < self.rl)
 
         if self.rl - self.global_el < 0:
             raise Exception('try setting padding to True')
 
         # private
-        self.global_batch = None                # includes padding
+        self.global_batch = None                # includes padding, nn input
+        self.global_claims = None               # includes padding, tri-map, inp
+        self.global_directionmap_batch = None   # no padding
         self.global_label_batch = None          # no padding
-        self.global_claims = None               # includes padding
         self.global_height_gt_batch = None      # no padding
         self.global_heightmap_batch = None      # no padding
-        self.global_directionmap_batch = None   # includes padding
+        self.global_timemap = None              # no padding
+        self.global_errormap = None             # no padding
         self.global_time = 0
-        self.global_timemap = None
-        self.global_errormap = None
         self.global_error_list = None
         self.priority_queue = None
 
@@ -203,7 +204,7 @@ class BatchManV0:
             global_seeds.append(seeds)
         return global_seeds
 
-    def get_seeds_by_minimum(self, sigma=2, min_dist=8):
+    def get_seeds_by_minimum(self, sigma=2, min_dist=8, thresh=0.3):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
@@ -217,10 +218,11 @@ class BatchManV0:
         for b in range(self.bs):
             bin_membrane[b, :, :][self.global_batch[b,
                                                     self.pad:-self.pad,
-                                                    self.pad:-self.pad] > 0.3]\
+                                                    self.pad:-self.pad] > thresh]\
                 = 0
             dist_trf[b, :, :] = gaussian_filter(
                 distance_transform_edt(bin_membrane[b, :, :]), sigma=sigma)
+            # seeds in coord system of labels
             seeds = peak_local_max(dist_trf[b, :, :], exclude_border=0,
                                    threshold_abs=1, min_distance=min_dist)
             global_seeds.append(seeds)
@@ -240,7 +242,7 @@ class BatchManV0:
             b += 1
             q = PriorityQueue()
             i = -1      # ids within slice
-            for seed,Id in zip(seeds, ids):
+            for seed, Id in zip(seeds, ids):
                 i += 1
                 q.put((-0.1, seed, Id, -1))
             self.priority_queue.append(q)
@@ -264,11 +266,13 @@ class BatchManV0:
             i = -1      # ids within slice
             for seed, Id in zip(seeds, ids):
                 i += 1
-                q.put((0, seed[0], seed[1], Id, -1, False, 0))
+                q.put((0, seed[0]+self.pad, seed[1]+self.pad, Id, -1, False, 0))
 
             self.priority_queue.append(q)
 
     def walk_cross_coords(self, center):
+        # walk in coord system of global label batch: x : 0 -> global_el - pl
+        # use center if out of bounds
         center_x, center_y = center
         for direction, [offset_x, offset_y] in \
                 enumerate(zip([-1, 0, 1, 0], [0, -1, 0, 1])):
@@ -386,11 +390,11 @@ class BatchManV0:
         self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
-        self.global_heightmap_batch = np.zeros_like(self.global_claims)
+        self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
         self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
 
         # extract slices and ids within raw and label cubes
-        global_ids = self.prepare_global_batch()
+        global_ids = self.prepare_global_batch()    # seeds in label coord syst
         # extract starting points
         global_seeds = self.get_seeds(global_ids)
         # put seeds and ids in priority queue. All info to load batch is in pq
@@ -399,28 +403,29 @@ class BatchManV0:
     def init_train_path_batch(self):
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
-
         self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
-                                            self.global_el - self.pl))
+                                            self.global_el - self.pl),
+                                           dtype=theano.config.floatX)
         # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
-        self.global_heightmap_batch = np.zeros_like(self.global_claims)
+        self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
         self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
-        self.global_timemap = np.empty_like(self.global_claims)
+        self.global_timemap = np.empty_like(self.global_label_batch)
         self.global_timemap.fill(np.inf)
 
-        self.global_errormap = np.zeros_like(self.global_claims)
-        global_error_list = [[] for b in range(self.bs)]
+        self.global_errormap = np.zeros(self.global_label_batch.shape,
+                                        dtype=np.bool)
+        self.global_error_list = [[] for _ in range(self.bs)]
 
         self.global_directionmap_batch = np.zeros_like(self.global_label_batch)\
-                                                                            - 1
-
+                                         - 1
         self.prepare_global_batch(return_gt_ids=False)
-        # also initializes id_2_gt lookup
+        # also initializes id_2_gt lookup, seeds in coord syst of label
         global_seeds, global_seed_ids = self.get_seeds_by_minimum()
         self.initialize_path_priority_queue(global_seeds, global_seed_ids)
+        return global_seeds # debug only, remove me, tmp
 
     def get_batches(self):
         centers, ids = self.get_centers_from_queue()
@@ -438,6 +443,7 @@ class BatchManV0:
 
     def get_path_batches(self):
         centers, ids = self.get_centers_from_queue()
+
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
@@ -445,6 +451,8 @@ class BatchManV0:
             raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
             gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            if b == 4:
+                print 'claiming', centers[b]
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
         return raw_batch, gts, centers, ids
 
@@ -484,39 +492,51 @@ class BatchManV0:
                 print "height, center_x, center_y, Id, direction, error_ind, time_put\n",height, center_x, center_y, Id, direction, error_ind, time_put
                 if self.global_claims[b, center_y, center_x] == 0:
                     already_claimed = False
+            # tmp debug
+            if b == 4:
+                print 'height', height, 'centerx', center_x, 'y', center_y, 'id', Id, \
+                    'direction', direction, 'error ind', error_ind, 'tput', time_put
 
-            self.global_directionmap_batch[b, center_x - self.pad,
-                                           center_x-self.pad] = direction
-            self.global_timemap[b, center_x-self.pad,
-                                center_y-self.pad] = time_put
+            self.global_directionmap_batch[b,
+                                           center_x - self.pad,
+                                           center_x - self.pad] = direction
+            self.global_timemap[b,
+                                center_x - self.pad,
+                                center_y - self.pad] = time_put
 
             # check for errors in boundary crossing
             if error_ind:
-                self.global_errormap[b, center_x, center_y] = 1
+                self.global_errormap[b,
+                                     center_x-self.pad,
+                                     center_y-self.pad] = 1
 
             # check for errors in neighbor regions
             for x, y, direction in self.walk_cross_coords([center_x, center_y]):
-                neighbor_label = [self.global_label_batch[b, x, y]]
+                neighbor_label = [self.global_label_batch[b, x-self.pad,
+                                                          y-self.pad]]
                 if (self.global_claims[b, x, y] == 1 and  # neighbor is claimed
                    neighbor_label != self.global_id2gt[b][Id]):
                     # and check if claimed by other gt label (over-segmenting is
                     # ok)
 
                     # check for slow intrusion( neighbor is intruder )
-                    if neighbor_label != self.global_label_batch[b, x, y]:
+                    if neighbor_label != self.global_label_batch[b,
+                                                                 x-self.pad,
+                                                                 y-self.pad]:
                         self.global_error_list[b].append(
-                            (self.global_timemap[b, x, y],
+                            (self.global_timemap[b, x-self.pad, y-self.pad],
                              x-center_x,
                              y-center_y))
                     # check for fast intrusion( current is intruder )
-                    if neighbor_label != self.global_label_batch[b, x, y]:
+                    if neighbor_label != self.global_label_batch[b,
+                                                                 x-self.pad,
+                                                                 y-self.pad]:
                         self.global_error_list[b].append(
-                            (self.global_timemap[b, x, y],
+                            (self.global_timemap[b, x-self.pad, y-self.pad],
                              x-center_x,
                              y-center_y))
             centers.append((center_x, center_y))
             ids.append(Id)
-
         return centers, ids
 
     def update_priority_queue(self, height, seeds, ids):
@@ -539,24 +559,29 @@ class BatchManV0:
     def update_priority_path_queue(self, heights_batch, seeds, ids):
         directions = [0, 1, 2, 3]
         for b, seed, Id, heights in zip(range(self.bs), seeds, ids,
-                                        heights_batch[:,:,0,0]):
+                                        heights_batch[:, :, 0, 0]):
             # if possibly wrong
-            new_seeds_x, new_seeds_y, _ = self.get_cross_coords(seed)
+            new_seeds_x, new_seeds_y, _ = \
+                self.get_cross_coords(seed)
             for x, y, height, direction in \
                     zip(new_seeds_x, new_seeds_y, heights, directions):
                 error_indicator = False
                 # check whether crossing into other gt id region
-                if self.global_label_batch[b, x, y] != self.global_id2gt[b][Id]\
-                    and self.global_label_batch[b, seed[0], seed[1]] == \
+                if self.global_label_batch[b, x-self.pad, y-self.pad]\
+                        != self.global_id2gt[b][Id]\
+                    and self.global_label_batch[b,
+                                                seed[0]-self.pad,
+                                                seed[1]-self.pad] == \
                         self.global_id2gt[b][Id]:
                         error_indicator = True
 
             if self.global_claims[b, x, y] == 0:
-                height_prev = self.global_heightmap_batch[b, x, y]
+                height_prev = self.global_heightmap_batch[b, x-self.pad,
+                                                          y-self.pad]
                 height_j = max(heights[direction], height_prev)
                 if height_prev > 0:
                     height_j = min(height_j, height_prev)
-                self.global_heightmap_batch[b, x, y] = height_j
+                self.global_heightmap_batch[b, x-self.pad, y-self.pad] = height_j
                 # (height, seed_x, seedy, seed_id, direction,
                 # error_indicator, time_put)
                 self.priority_queue[b].put((height, x, y, Id, direction,
@@ -647,18 +672,18 @@ if __name__ == '__main__':
     patch_len= 40
 
     bm = BatchManV0(raw_path, label_path,
-                       height_gt=height_gt_path,
-                       height_gt_key=height_gt_key,
-                       batch_size=batch_size,
-                       patch_len=patch_len, global_edge_len=global_edge_len,
-                       padding_b=False)
-    bm.init_train_path_batch()
+                    height_gt=height_gt_path,
+                    height_gt_key=height_gt_key,
+                    batch_size=batch_size,
+                    patch_len=patch_len, global_edge_len=global_edge_len,
+                    padding_b=False)
+    seeds = bm.init_train_path_batch()
+    seeds = np.array(seeds[4])
     heights = np.random.random(size=batch_size)
-    seeds = np.random.randint(0,1)
-    b= 4
+    b = 4
     for i in range(50000):
         raw_batch, gts, centers, ids = bm.get_path_batches()
-        if i % 100 == 0:
+        if i % 200 == 0:
             fig, ax = plt.subplots(1, 6)
 
             ax[0].imshow(raw_batch[b, 0, :, :], interpolation='none', cmap='gray')
@@ -668,17 +693,16 @@ if __name__ == '__main__':
             ax[2].imshow(bm.global_claims[b, :, :], interpolation='none', cmap=u.random_color_map())
             ax[3].imshow(bm.global_label_batch[b, :, :], interpolation='none', cmap=u.random_color_map())
             ax[4].imshow(bm.global_batch[b, :, :], interpolation='none', cmap='gray')
-            centersx, centersy = [], []
             ax[5].imshow(bm.global_height_gt_batch[b, :, :], interpolation='none', cmap='gray')
-            ax[5].scatter(centersy, centersx)
+            ax[5].scatter(seeds[:, 1], seeds[:, 0])
 
             plt.show()
         probs = np.zeros((batch_size, 4, 1,1))
         for c in range(batch_size):
-            d =0
+            d = 0
             for x, y, _ in bm.walk_cross_coords(centers[b]):
 
-                probs[c, d] = bm.global_height_gt_batch[b, x, y]
+                probs[c, d] = bm.global_height_gt_batch[b, x-bm.pad, y-bm.pad]
                 d += 1
         bm.update_priority_path_queue(probs, centers, ids)
 
