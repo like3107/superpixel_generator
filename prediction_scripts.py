@@ -77,6 +77,67 @@ def pred_script_v0():
 
     du.save_h5('./data/pred.h5', 'pred', data=prediction, overwrite='w')
 
+
+
+
+def pred_script_v1():
+
+    print 'pred script v1'
+    # data params:
+    # for each net a new folder is created. Here intermediate pred-
+    # dictions and train, val... are saved
+    save_net_b = True
+    load_net_b = False
+
+    net_name = 'cnn_WS_2_big'
+    height_gt_path = './data/volumes/height_a.h5'
+    height_gt_key = 'height'
+    raw_path = './data/volumes/membranes_a.h5'
+    load_net_path = './data/nets/cnn_ID_2/net_300000'  # if load true
+    tmp_path = '/media/liory/ladata/bla'  # debugging
+    batch_size = 16  # > 4
+    global_edge_len = 1250
+
+    # training parameter
+    c.use('gpu0')
+
+    # choose your network from nets.py
+    network = nets.build_ID_v0
+
+
+    # all params entered.......................
+
+    # initialize the net
+    print 'initializing network graph for net ', net_name
+    l_in, l_out, patch_len = network()
+    probs_f = nets.prob_funcs(l_in, l_out)
+
+    print 'Loading data and Priority queue init'
+    bm = du.BatchManV0(raw_path, label=None,
+                       height_gt=height_gt_path,
+                       height_gt_key=height_gt_key,
+                       batch_size=batch_size,
+                       patch_len=patch_len, global_edge_len=global_edge_len,
+                       padding_b=True)
+    bm.init_train_path_batch()
+
+    prediction = np.zeros((batch_size, bm.global_el - bm.pl,
+                           bm.global_el - bm.pl),
+                          dtype=np.uint64)
+
+
+    for i in range(0, batch_size, batch_size):
+        bm.init_prediction(i, i + batch_size)
+
+        for j in range((bm.global_el - bm.pl) ** 2):
+            # print j
+            print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
+            raw, gts, seeds, ids = bm.get_pred_batch()
+            probs = probs_f(raw)
+            bm.update_priority_queue(probs, seeds, ids)
+
+
+
 if __name__ == '__main__':
     pred_script_v0()
 
