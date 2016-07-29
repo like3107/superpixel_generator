@@ -366,12 +366,26 @@ class BatchManV0:
         claimed[labels == 0] = 0       # me
         return claimed
 
-    def crop_time_mask(self, center, timepoint, batches):
-        time_crop = self.global_timemap[batches,
-                                        center[0]-self.pad:center[0]+self.pad,
-                                        center[1]-self.pad:center[1]+self.pad]
-        mask = np.zeros_like(time_crop)
-        mask[time_crop<=timepoint] = 1
+    def crop_timemap(self, center, b):
+        return self.global_timemap[b,center[0]-self.pad:center[0]+self.pad,
+                                   center[1]-self.pad:center[1]+self.pad]
+
+
+    def crop_time_mask(self, centers, timepoint, batches):
+        """
+        compute mask that is 1 if a voxel was not accessed before timepoint
+        and zero otherwise
+        """
+        mask = np.zeros((len(batches), self.pl, self.pl),dtype=bool)
+        # fore lists to np.array so we can do array arithmetics
+        centers = np.array(centers)
+        print centers,batches
+        for i,b in enumerate(batches):
+            print i,b
+            print centers[i]
+            print mask.shape
+            print self.crop_timemap(centers[i] - self.pad, b).shape
+            mask[i][self.crop_timemap(centers[i]-self.pad, b)>timepoint] = 1
         return mask
 
     def init_train_batch(self):
@@ -611,16 +625,19 @@ class BatchManV0:
                                                 Id, direction,
                                                error_indicator, self.global_time))
 
-    def reconstruct_input_at_timepoint(self, timepoint, centers, id, batches):
+    def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
 
         raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
-        raw_batch[range(len(batches)), 0, :, :] = self.crop_raw(centers, batches)
-        raw_batch[range(len(batches)), 1, :, :] = self.crop_mask_claimed(centers,
-                                                                         batches,
-                                                                         id)
-        self.crop_time_mask()
-        return raw_batch, gts, centers, ids
+        for i,b in enumerate(batches):
+            raw_batch[i, 0, :, :] = self.crop_raw(centers[i], b)
+            raw_batch[i, 1, :, :] = self.crop_mask_claimed(centers[i], b, ids[i])
+        
+        mask = self.crop_time_mask(centers, timepoint, batches)
+        raw_batch[:, 1, :, :][mask] = 0
+
+
+        return raw_batch
 
     # validation of cube slice by slice
     def init_prediction(self, start, stop):
