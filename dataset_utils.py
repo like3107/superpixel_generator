@@ -1,5 +1,7 @@
 import h5py as h
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import theano
 from Queue import PriorityQueue
@@ -229,6 +231,10 @@ class BatchManV0:
                 peak_local_max(dist_trf[b, :, :], exclude_border=0,
                                    threshold_abs=1, min_distance=min_dist))
             seeds += self.pad
+            if len(seeds) == 0:
+                print 'WARNING no seeds found (no minima in global batch). ' \
+                      'Setting seed to middle'
+                seeds = np.append([self.global_el / 2, self.global_el / 2])
 
             global_seeds.append(seeds)
             global_seed_ids.append(range(1, len(seeds)+1))
@@ -628,8 +634,6 @@ class BatchManV0:
         
         mask = self.crop_time_mask(centers, timepoint, batches)
         raw_batch[:, 1, :, :][mask] = 0
-
-
         return raw_batch
 
     # validation of cube slice by slice
