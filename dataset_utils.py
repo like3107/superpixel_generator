@@ -104,7 +104,8 @@ class BatchManV0:
         """
 
         self.train_b = train_b
-        assert (padding_b and not train_b)     # always pad if pred, easy to fix
+        if not train_b:     # tmp
+            assert (padding_b)
         if isinstance(raw, str):
             self.raw = load_h5(raw, h5_key=raw_key)[0]
         else:

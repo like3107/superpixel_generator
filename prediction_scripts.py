@@ -18,12 +18,12 @@ def pred_script_v1():
     load_net_b = False
 
     net_name = 'cnn_WS_1'
-    raw_path = './data/volumes/membranes_a.h5'
+    raw_path = './data/volumes/membranes_as.h5'
     load_net_path = '/home/liory/mounts/hci_data/src/superpixel_generator' \
                     '/data/nets/cnn_WS_2/net_990000'
 
     batch_size = 16  # > 4
-    global_edge_len = 1290      # 1250  + patch_len for memb
+    global_edge_len = 340      # 1250  + patch_len for memb
 
     # training parameter
     c.use('gpu0')
@@ -65,7 +65,7 @@ def pred_script_v1():
 
                 prediction[i * batch_size:(i + 1) * batch_size, :, :] = \
                     bm.global_claims[:, bm.pad:-bm.pad, bm.pad:-bm.pad]
-                du.save_h5('./data/pred2_%i.h5' % j,
+                du.save_h5('./data/predtrash_%i.h5' % j,
                            'pred', data=prediction, overwrite='w')
 
                 fig, ax = plt.subplots(1, 2)
@@ -74,7 +74,7 @@ def pred_script_v1():
                 ax[1].imshow(bm.global_batch[0, :, :],
                              cmap='gray', interpolation='none')
                 # ax[2].imshow(bm.global_label_batch[0, :, :])
-                plt.savefig('./data/' + 'all' + str(j))
+                plt.savefig('./data/' + 'trash' + str(j))
 
         prediction[i * batch_size:(i + 1) * batch_size, :, :] = \
             bm.global_claims[:, bm.pad:-bm.pad, bm.pad:-bm.pad]
