@@ -86,7 +86,8 @@ def segmentation_to_membrane(input_path,output_path):
 class BatchManV0:
     def __init__(self, raw, label, height_gt=None, height_gt_key=None,
                  raw_key=None, label_key=None, batch_size=10,
-                 global_edge_len=110, patch_len=40, padding_b=False):
+                 global_edge_len=110, patch_len=40, padding_b=False,
+                 train_b=True):
         """
         batch loader. Use either for predict OR train. For valId and train use:
         get batches function.
@@ -100,21 +101,26 @@ class BatchManV0:
         :param patch_len:
         :param padding_b:
         """
+
+        self.train_b = train_b
+        assert (padding_b and not train_b)     # always pad if pred, easy to fix
         if isinstance(raw, str):
             self.raw = load_h5(raw, h5_key=raw_key)[0]
         else:
             self.raw = raw
-        if isinstance(label, str):
-            self.labels = load_h5(label, h5_key=label_key)[0]
+        if self.train_b:
+            if isinstance(label, str):
+                self.labels = load_h5(label, h5_key=label_key)[0]
+            else:
+                self.labels = label
+            if isinstance(height_gt, str):
+                self.height_gt = load_h5(height_gt, h5_key=height_gt_key)[0]
+                maximum = np.max(self.height_gt)
+                self.height_gt = maximum - self.height_gt
+            else:
+                self.height_gt = height_gt
         else:
-            self.labels = label
-        if isinstance(height_gt, str):
-            self.height_gt = load_h5(height_gt, h5_key=height_gt_key)[0]
-            maximum = np.max(self.height_gt)
-            self.height_gt = maximum - self.height_gt
-        else:
-            self.height_gt = height_gt
-
+            self.height_gt = None
         # either pad raw or crop labels -> labels are always shifted by self.pad
         self.padding_b = padding_b
         self.pad = patch_len / 2
@@ -134,7 +140,10 @@ class BatchManV0:
         self.pl = patch_len
 
         assert(patch_len <= global_edge_len)
-        assert(global_edge_len < self.rl)
+        assert(global_edge_len <= self.rl)
+        print 'raw', self.rl, self.global_el
+        if not train_b:
+            assert (self.rl == self.global_el)
 
         if self.rl - self.global_el < 0:
             raise Exception('try setting padding to True')
@@ -154,18 +163,22 @@ class BatchManV0:
         self.priority_queue = None
         self.crossing_errors = None
 
-    def prepare_global_batch(self, return_gt_ids=True):
+    def prepare_global_batch(self, return_gt_ids=True, start=None):
         # initialize two global batches = region where CNNs compete
         # against each other
 
         # get indices for global batches in raw/ label cubes
-        ind_b = np.random.permutation(self.n_slices)[:self.bs]
+        if start is None:
+            ind_b = np.random.permutation(self.n_slices)[:self.bs]
+        else:
+            ind_b = np.arange(start + self.bs)
+
         # indices to raw, correct for label which edge len is -self.pl shorter
         ind_x = np.random.randint(0,
-                                  self.rl - self.global_el,
+                                  self.rl - self.global_el + 1,
                                   size=self.bs)
         ind_y = np.random.randint(0,
-                                  self.rl - self.global_el,
+                                  self.rl - self.global_el + 1,
                                   size=self.bs)
 
         # slice from the data cubes
@@ -181,12 +194,12 @@ class BatchManV0:
                     self.height_gt[ind_b[b],
                                    ind_x[b]:ind_x[b] + self.global_el - self.pl,
                                    ind_y[b]:ind_y[b] + self.global_el - self.pl]
-
-            self.global_label_batch[b, :, :] = \
-                self.labels[ind_b[b],
-                            ind_x[b]:ind_x[b] + self.global_el - self.pl,
-                            ind_y[b]:ind_y[b] + self.global_el - self.pl]
-            if return_gt_ids:
+            if self.train_b:
+                self.global_label_batch[b, :, :] = \
+                    self.labels[ind_b[b],
+                                ind_x[b]:ind_x[b] + self.global_el - self.pl,
+                                ind_y[b]:ind_y[b] + self.global_el - self.pl]
+            if return_gt_ids and self.train_b:
                 global_ids.append(
                     np.unique(
                         self.global_label_batch[b, :, :]).astype(int))
@@ -580,6 +593,28 @@ class BatchManV0:
 
         return centers, ids
 
+    # copy of update priority path priority queue without all path error stuff
+    def get_centers_from_queue_prediction(self):
+
+        centers, ids = [], []
+        for b in range(self.bs):
+            # pull from pq at free pixel position
+            already_claimed = True
+            while already_claimed:
+                if self.priority_queue[b].empty():
+                    raise Exception('priority queue empty. All pixels labeled')
+                height, center_x, center_y, Id, direction, error_indicator, \
+                    time_put = self.priority_queue[b].get()
+                if self.global_claims[b, center_x, center_y] == 0:
+                    already_claimed = False
+            assert (self.global_claims[b, center_x, center_y] == 0)
+            assert(self.pad <= center_x < self.global_el - self.pad)
+            assert(self.pad <= center_y < self.global_el - self.pad)
+
+            centers.append((center_x, center_y))
+            ids.append(Id)
+        return centers, ids
+
     def update_priority_queue(self, height, seeds, ids):
         assert(len(height) == len(seeds))
         assert(len(height) == self.bs)
@@ -624,6 +659,30 @@ class BatchManV0:
                                                 Id, direction,
                                                error_indicator, self.global_time))
 
+    def update_priority_path_queue_prediction(self, heights_batch, centers, ids):
+        directions = [0, 1, 2, 3]
+        for b, center, Id, heights in zip(range(self.bs), centers, ids,
+                                        heights_batch[:, :, 0, 0]):
+            # if possibly wrong
+            new_seeds_x, new_seeds_y, _ = self.get_cross_coords(center)
+
+            # check for touching errors
+            for x, y, height, direction in \
+                    zip(new_seeds_x, new_seeds_y, heights, directions):
+
+                if self.global_claims[b, x, y] == 0:
+
+                    height_prev = self.global_heightmap_batch[b, x-self.pad,
+                                                              y-self.pad]
+                    height_j = max(heights[direction], height_prev)
+                    if height_prev > 0:
+                        height_j = min(height_j, height_prev)
+                    self.global_heightmap_batch[b, x-self.pad, y-self.pad] = \
+                        height_j
+                    self.priority_queue[b].put((height, x, y,
+                                                Id, direction,
+                                               False, self.global_time))
+
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
 
         raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
@@ -640,49 +699,28 @@ class BatchManV0:
     def init_prediction(self, start, stop):
         self.global_batch = np.zeros((self.bs, self.rl, self.rl),
                                      dtype=theano.config.floatX)
-        self.global_label_batch = np.zeros((self.bs, self.rl - self.pl,
-                                            self.rl - self.pl),
-                                           dtype=theano.config.floatX)
         # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims = np.ones((self.bs, self.rl, self.rl))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
-
         self.global_batch[:, :, :] = self.raw[start:stop, :, :]
-        self.global_label_batch[:, :, :] = self.labels[start:stop, :, :]
+        self.prepare_global_batch(return_gt_ids=False, start=start)
 
-        global_ids = []
-        for b in range(start, stop):
-            global_ids.append(
-                np.unique(
-                    self.global_label_batch[b, :, :]).astype(int))
-
-        # get seeds
-        batch = -1
-        global_seeds = []
-        for ids in global_ids:    # iterates over batches
-            batch += 1
-            seeds = []
-            for Id in ids:
-                regions = np.where(self.global_label_batch[batch, :, :] == Id)
-                rand_seed = np.random.randint(0, len(regions[0]))
-                seeds.append([regions[0][rand_seed] + self.pad,
-                              regions[1][rand_seed] + self.pad])
-            global_seeds.append(seeds)
-
-        self.initialize_priority_queue(global_seeds, global_ids)
+        global_seeds, global_seed_ids = self.get_seeds_by_minimum()
+        self.initialize_path_priority_queue(global_seeds, global_seed_ids)
 
     def get_pred_batch(self):
-        seeds, ids = self.get_centers_from_queue()
+        centers, ids = self.get_centers_from_queue_prediction()
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
-
-        gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
-            raw_batch[b, 0, :, :] = self.crop_raw(seeds[b], b)
-            raw_batch[b, 1, :, :] = self.crop_mask_claimed(seeds[b], b, ids[b])
-            gts[b, :, 0, 0] = self.get_adjacent_gts(seeds[b], b, ids[b])
-            self.global_claims[b, seeds[b][0], seeds[b][1]] = ids[b]
-        return raw_batch, gts, seeds, ids
+            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b,
+                                                           ids[b])
+            assert (self.global_claims[b, centers[b][0], centers[b][1]] == 0)
+            self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
+        # check whether already pulled
+        self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
+        return raw_batch, centers, ids
 
     def draw_debug_image(self, image_name, path='./data/nets/debug/images/', save=True):
         plot_images = []
@@ -787,7 +825,6 @@ if __name__ == '__main__':
         bm.update_priority_path_queue(probs, centers, ids)
 
     # print bm.get_batches(10*[[45, 46]])
-
 
 
 

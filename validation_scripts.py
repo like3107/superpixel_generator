@@ -10,7 +10,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
     assert (pred_path != pred)    # specify either raw path or raw as np array
 
     if isinstance(gt_path, str):
-        gt = du.load_h5(gt_path, h5_key=gt_key)[0]
+        gt = du.load_h5(gt_path, h5_key=gt_key)[0][:16]
     if isinstance(pred_path, str):
         pred = du.load_h5(pred_path, h5_key=pred_key)[0]
     print gt.shape, pred.shape
@@ -32,8 +32,13 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         all_measures = np.array(all_measures)
         all_vars = np.var(all_measures, 1)
         all_means = np.mean(all_measures, 1)
+        are, precision, recall = adapted_rand(pred, gt, all_stats=True)
+
         print 'Variational information split:       ', all_means[0], all_vars[0]
         print 'Variational information merge:       ', all_means[1], all_vars[1]
+        print 'Adapted Rand error           :       ', are
+        print 'Adapted Rand error precision :       ', precision
+        print 'Adapted Rand error recall    :       ', recall
         # print 'Adapted Rand error           :       ', all_means[2], all_vars[2]
         # print 'Adapted Rand error precision :       ', all_means[3], all_vars[3]
         # print 'Adapted Rand error recall    :       ', all_means[4], all_vars[4]
@@ -397,7 +402,30 @@ def xlogx(x, out=None, in_place=False):
     return y
 
 if __name__ == '__main__':
+    print
+    pred_path='/home/liory/src/superpixel_generator/data/pred.h5'
+    # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
+
+    print pred_path
     validate_segmentation(
-        pred_path='/home/liory/src/superpixel_generator/data/pred.h5',
+        pred_path=pred_path,
         gt_path='/home/liory/src/superpixel_generator/data/volumes/label_as.h5',
         slice_by_slice=True)
+
+
+
+
+# random
+# Variational information split:        0.416237766011 0.000802599253997
+# Variational information merge:        3.41835093132 0.00406470343312
+# Adapted Rand error           :        0.978219256591
+# Adapted Rand error precision :        0.903836692414
+# Adapted Rand error recall    :        0.0110231906581
+
+
+# us
+# Variational information split:        0.614081036302 0.0113354725205
+# Variational information merge:        0.213166740759 0.00043375180473
+# Adapted Rand error           :        0.646829736923
+# Adapted Rand error precision :        0.537741315797
+# Adapted Rand error recall    :        0.262925363382
