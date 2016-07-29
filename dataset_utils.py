@@ -1,5 +1,6 @@
 import h5py as h
 import numpy as np
+import random
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
@@ -87,7 +88,7 @@ class BatchManV0:
     def __init__(self, raw, label, height_gt=None, height_gt_key=None,
                  raw_key=None, label_key=None, batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
-                 train_b=True):
+                 train_b=True, find_errors=False):
         """
         batch loader. Use either for predict OR train. For valId and train use:
         get batches function.
@@ -162,6 +163,7 @@ class BatchManV0:
         self.global_error_list = None
         self.priority_queue = None
         self.crossing_errors = None
+        self.find_errors = find_errors
 
     def prepare_global_batch(self, return_gt_ids=True, start=None):
         # initialize two global batches = region where CNNs compete
@@ -318,18 +320,44 @@ class BatchManV0:
         current_position = start_position
         current_direction = \
             self.global_directionmap_batch[batch,
-                                           current_position[0],
-                                           current_position[1]]
-        path = [start_position]
+                                           current_position[0]-self.pad,
+                                           current_position[1]-self.pad]
+        yield start_position
+        print "current_direction",current_direction
+
         while (current_direction != -1):
             current_position = update_postion(current_position,
                                               current_direction)
             current_direction = \
                 self.global_directionmap_batch[batch,
-                                               current_position[0],
-                                               current_position[1]]
-            path.append(current_position)
-        return path
+                                               current_position[0]-self.pad,
+                                               current_position[1]-self.pad]
+            yield current_position
+
+    def find_type_I_error(self):
+
+        for b in range(self.bs):
+            for error_I in self.global_error_list[b]:
+                if not "crossing" in error_I:
+                    start_position = error_I["large_pos"]
+                    batch = error_I["batch"]
+                    original_error = np.array(start_position)
+                    print "walking path"
+
+                    for pos in self.get_path_to_root(start_position, batch):
+                        print "walk",pos
+                        
+                        if self.global_errormap[batch, 0, pos[0]-self.pad, pos[1]-self.pad] == True:
+                            original_error = np.array(pos)
+                            print "found error at ", original_error
+                        # debug
+                        self.global_errormap[batch, 2, pos[0]-self.pad,pos[1]-self.pad]=True
+                        # debug
+
+                    error_I["crossing"] = original_error
+                    print "original_error",original_error
+            if b == 4:
+                self.draw_debug_image("walk_"+str(b)+"_"+str(len(self.global_error_list[b])), save=True) 
 
     def get_cross_coords(self, seed, global_offset=0):
         seeds_x, seeds_y, dirs = [], [], []
@@ -820,19 +848,7 @@ if __name__ == '__main__':
                 x -= bm.pad
                 y -= bm.pad
                 # probs[c, d] = bm.global_height_gt_batch[b, x, y]
-                probs[c, d] = i
+                # probs[c, d] = i
+                probs[c, d] = random.random()
                 d += 1
         bm.update_priority_path_queue(probs, centers, ids)
-
-    # print bm.get_batches(10*[[45, 46]])
-
-
-
-
-
-
-
-
-
-
-

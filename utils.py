@@ -58,8 +58,9 @@ def draw_image(image_info, target):
     if "title" in image_info:
         target.set_title(image_info["title"])
     if 'scatter' in image_info:
-        centers = np.array(image_info['scatter'])
-        target.scatter(centers[:, 1], centers[:, 0])
+    	if len(image_info['scatter']) > 0:
+	        centers = np.array(image_info['scatter'])
+	        target.scatter(centers[:, 1], centers[:, 0])
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
 
 def save_images(image_dicts, path, name, terminate=False):
@@ -72,8 +73,9 @@ def save_images(image_dicts, path, name, terminate=False):
         exit()
 
 
-def save_image_sub(image_dicts,path,name):
+def save_images_sub(image_dicts,path,name):
     p = multiprocessing.Process(target=save_images, args=(image_dicts,path,name,True))
+    p.daemon = True
     p.start()
 
 
