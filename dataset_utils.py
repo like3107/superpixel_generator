@@ -208,23 +208,32 @@ class BatchManV0:
                         self.global_label_batch[b, :, :]).astype(int))
                 return global_ids
 
-    def get_seeds(self, global_ids):    # seed coords relative to global batch
+    def get_seeds(self):    # seed coords relative to global batch
         batch = -1
         global_seeds = []   # seeds relative to global_claims, global_batch
+        self.global_id2gt = []
+        global_ids = []
         #  map (- self.pad for global_label_label)
+        for b in range(self.bs):
+            global_ids.append(np.unique(
+                self.global_label_batch[b, :, :]).astype(int))
         for ids in global_ids:    # iterates over batches
             batch += 1
             seeds = []
+            id2gt = {}
             for Id in ids:
+                id2gt[Id] = Id
                 regions = np.where(
                     self.global_label_batch[batch, :, :] == Id)
                 rand_seed = np.random.randint(0, len(regions[0]))
                 seeds.append([regions[0][rand_seed] + self.pad,
                               regions[1][rand_seed] + self.pad])
+            self.global_id2gt.append(id2gt)
             global_seeds.append(seeds)
-        return global_seeds
+        return global_seeds, global_ids
 
-    def get_seeds_by_minimum(self, sigma=2, min_dist=8, thresh=0.3):
+    def get_seeds_by_minimum(self, sigma=2, min_dist=8, thresh=0.3,
+                             ranodm_by_gt=False):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
@@ -500,7 +509,8 @@ class BatchManV0:
                                          - 1
         self.prepare_global_batch(return_gt_ids=False)
         # also initializes id_2_gt lookup, seeds in coord syst of label
-        global_seeds, global_seed_ids = self.get_seeds_by_minimum()
+        # global_seeds, global_seed_ids = self.get_seeds_by_minimum()
+        # global_seeds, global_seed_ids = self.get_seeds()
         self.initialize_path_priority_queue(global_seeds, global_seed_ids)
         return global_seeds # debug only, remove me, tmp
 

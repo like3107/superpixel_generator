@@ -129,7 +129,7 @@ def train_script_v1():
         if iteration % 10 == 0:
             loss_train = float(loss_train_f(raw, gt))
 
-        if iteration % 100 == 0:
+        if iteration % 1000 == 0:
             loss_train_no_reg = float(loss_valid_f(raw, gt))
             loss_valid = float(loss_valid_f(raw_val, gt_val))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
