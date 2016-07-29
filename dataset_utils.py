@@ -605,10 +605,8 @@ class BatchManV0:
                     height_j = max(heights[direction], height_prev)
                     if height_prev > 0:
                         height_j = min(height_j, height_prev)
-                    self.global_heightmap_batch[b, x-self.pad, y-self.pad] = height_j
-                    # if b == 4:
-                    #     print 'pusing'
-                    #     print 'x', x, 'y', y, 'b', b
+                    self.global_heightmap_batch[b, x-self.pad, y-self.pad] = \
+                        height_j
                     self.priority_queue[b].put((height, x, y,
                                                 Id, direction,
                                                error_indicator, self.global_time))
@@ -618,10 +616,10 @@ class BatchManV0:
         raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         raw_batch[range(len(batches)), 0, :, :] = self.crop_raw(centers, batches)
-        raw_batch[range(len(batches)), 1, :, :] = self.crop_mask_claimed(centers, batches, id)
-        
+        raw_batch[range(len(batches)), 1, :, :] = self.crop_mask_claimed(centers,
+                                                                         batches,
+                                                                         id)
         self.crop_time_mask()
-
         return raw_batch, gts, centers, ids
 
     # validation of cube slice by slice

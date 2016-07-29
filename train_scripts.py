@@ -86,12 +86,11 @@ def train_script_v1():
 
     # everything is initialized now train and predict every once in a while....
     converged = False       # placeholder, this is not yet implemented
-    global_field_counter = 0
     iteration = -1
     losses = [[], [], []]
     iterations = []
 
-    free_voxel_emtpy = (global_edge_len- patch_len)**2
+    free_voxel_emtpy = (global_edge_len - patch_len)**2
     free_voxel = free_voxel_emtpy
     print 'training'
     while not converged and (iteration < max_iter):
@@ -136,6 +135,16 @@ def train_script_v1():
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
                   'loss_validation %.4f, iteration %i' % \
                   (loss_train, loss_train_no_reg, loss_valid, iteration),
+            if save_net_b:
+                iterations.append(iteration)
+                losses[0].append(loss_train)
+                losses[1].append(loss_train_no_reg)
+                losses[2].append(loss_valid)
+                u.plot_train_val_errors(
+                    losses,
+                    iterations,
+                    save_net_path + 'training.png',
+                    names=['loss train', 'loss train no reg', 'loss valid'])
 
         # monitor growing on validation set
         if iteration % 30000 == 0:
@@ -145,16 +154,6 @@ def train_script_v1():
                                 (iteration, free_voxel),
                                 path=save_net_path + '/images/')
 
-            if save_net_b:
-                iterations.append(iteration)
-                losses[0].append(loss_train)
-                losses[1].append(loss_train_no_reg)
-                losses[2].append(loss_valid)
-                u.plot_train_val_errors(losses,
-                                         iterations,
-                                         save_net_path + 'training.png',
-                                         names=['loss train', 'loss train no reg',
-                                                'loss valid'])
 
 
 if __name__ == '__main__':
