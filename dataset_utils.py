@@ -1,6 +1,7 @@
 import h5py as h
 import numpy as np
 import random
+from os.path import exists
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
@@ -15,6 +16,9 @@ import h5py
 
 
 def load_h5(path, h5_key=None, group=None, group2=None):
+    if not exists(path):
+        error = 'path: %s does not exist, check' % path
+        raise Exception(error)
     f = h.File(path, 'r')
     if group is not None:
         g = f[group]
@@ -76,12 +80,18 @@ def segmentation_to_membrane(input_path,output_path):
             height_stack = np.empty_like(label_h5['label']).astype(np.float32)
             for i in range(height_stack.shape[0]):
                 im = np.float32(label_h5['label'][i])
-                gx = convolve(im, np.array([-1., 0., 1.]).reshape(1, 3))
-                gy = convolve(im, np.array([-1., 0., 1.]).reshape(3, 1))
-                boundary_stack[i] =  np.float32((gx**2 + gy**2) > 0)
-                height_stack[i] = distance_transform_edt(boundary_stack[i] == 0)
+                boundary_stack[i], height_stack[i] = \
+                    segmenation_to_membrane_core(im)
             height_h5.create_dataset("boundary",data=boundary_stack, dtype=np.float32)
             height_h5.create_dataset("height",data=height_stack, dtype=np.float32)
+
+
+def segmenation_to_membrane_core(label_image):
+    gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
+    gy = convolve(label_image, np.array([-1., 0., 1.]).reshape(3, 1))
+    boundary= np.float32((gx ** 2 + gy ** 2) > 0)
+    height = distance_transform_edt(boundary == 0)
+    return boundary, height
 
 
 class BatchManV0:
@@ -208,33 +218,45 @@ class BatchManV0:
                         self.global_label_batch[b, :, :]).astype(int))
                 return global_ids
 
-    def get_seeds(self):    # seed coords relative to global batch
-        batch = -1
+    def get_gt_seeds(self):    # seed coords relative to global batch
+        """
+        return seeds by minimum of dist trf of thresholded membranes
+        :param sigma: smothing of dist trf
+        :param dist_trf:
+        :return:
+        """
         global_seeds = []   # seeds relative to global_claims, global_batch
         self.global_id2gt = []
+
         global_ids = []
+        dist_trf = np.zeros_like(self.global_label_batch)
         #  map (- self.pad for global_label_label)
         for b in range(self.bs):
             global_ids.append(np.unique(
                 self.global_label_batch[b, :, :]).astype(int))
-        for ids in global_ids:    # iterates over batches
-            batch += 1
+
+            _, dist_trf[b, :, :] = \
+                segmenation_to_membrane_core(self.global_label_batch[b, :, :])
+
+        for b, ids in zip(range(self.bs), global_ids):    # iterates over batches
             seeds = []
             id2gt = {}
-            for Id in ids:
+            for Id in ids:      # ids within each slice
                 id2gt[Id] = Id
                 regions = np.where(
-                    self.global_label_batch[batch, :, :] == Id)
-                rand_seed = np.random.randint(0, len(regions[0]))
-                seeds.append([regions[0][rand_seed] + self.pad,
-                              regions[1][rand_seed] + self.pad])
+                    self.global_label_batch[b, :, :] == Id)
+                seed_ind = np.argmax(dist_trf[b][regions])
+                seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) \
+                       + self.pad
+                print 'seeds', seed
+                seeds.append([seed[0], seed[1]])
             self.global_id2gt.append(id2gt)
             global_seeds.append(seeds)
+
         self.global_seeds = global_seeds
         return global_seeds, global_ids
 
-    def get_seeds_by_minimum(self, sigma=2, min_dist=8, thresh=0.3,
-                             ranodm_by_gt=False):
+    def get_seeds_by_minimum(self, sigma=2, min_dist=8, thresh=0.3):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
@@ -487,7 +509,7 @@ class BatchManV0:
         # put seeds and ids in priority queue. All info to load batch is in pq
         self.initialize_priority_queue(global_seeds, global_ids)
 
-    def init_train_path_batch(self):
+    def init_train_path_batch(self, gt_seeds=False):
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
         self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
@@ -512,8 +534,10 @@ class BatchManV0:
                                          - 1
         self.prepare_global_batch(return_gt_ids=False)
         # also initializes id_2_gt lookup, seeds in coord syst of label
-        # global_seeds, global_seed_ids = self.get_seeds_by_minimum()
-        global_seeds, global_seed_ids = self.get_seeds()
+        if gt_seeds:
+            global_seeds, global_seed_ids = self.get_gt_seeds()
+        else:
+            global_seeds, global_seed_ids = self.get_seeds_by_minimum()
         self.initialize_path_priority_queue(global_seeds, global_seed_ids)
         return global_seeds # debug only, remove me, tmp
 
@@ -743,10 +767,6 @@ class BatchManV0:
         
         mask = self.crop_time_mask(centers, timepoint, batches)
         raw_batch[:, 1, :, :][mask] = 0
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
         return raw_batch
 
     # validation of cube slice by slice
@@ -843,7 +863,7 @@ if __name__ == '__main__':
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
-    global_edge_len = 300
+    global_edge_len = 1290
     patch_len= 40
 
     bm = BatchManV0(raw_path, label_path,
@@ -851,8 +871,9 @@ if __name__ == '__main__':
                     height_gt_key=height_gt_key,
                     batch_size=batch_size,
                     patch_len=patch_len, global_edge_len=global_edge_len,
-                    padding_b=False)
-    seeds = bm.init_train_path_batch()
+                    padding_b=True)
+    gt_seeds_b = True
+    seeds = bm.init_train_path_batch(gt_seeds=gt_seeds_b)
     seeds = np.array(seeds[4])
     heights = np.random.random(size=batch_size)
     b = 4
@@ -862,13 +883,13 @@ if __name__ == '__main__':
         if i % 100 == 0:
             print i
 
-        if i % 5000 == 0:
+        if i % 1000 == 0:
             bm.draw_debug_image(name + '_deb_%i' %i, save=True)
             print i
         raw_batch, gts, centers, ids = bm.get_path_batches()
 
-        if i % 65000 == 0 and i != 0:
-            bm.init_train_path_batch()
+        if i % 5000 == 0 and i != 0:
+            bm.init_train_path_batch(gt_seeds=gt_seeds_b)
             raw_batch, gts, centers, ids = bm.get_path_batches()
             name += 'asdf'
         probs = np.zeros((batch_size, 4, 1,1))

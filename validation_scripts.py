@@ -13,38 +13,32 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         gt = du.load_h5(gt_path, h5_key=gt_key)[0]
     if isinstance(pred_path, str):
         pred = du.load_h5(pred_path, h5_key=pred_key)[0]
-
     print gt.shape, pred.shape
     assert(gt.shape == pred.shape)
 
     if slice_by_slice:
+        print 'slice by slice evaluation'
         splits, merges, ares, precisions, recalls = [], [], [], [], []
         all_measures = [splits, merges, ares, precisions, recalls]
-        # all_measures = [splits, merges]
         for i in range(pred.shape[0]):
             split, merge = voi(pred[i].copy(), gt[i].copy())
             are, precision, recall = adapted_rand(pred[i][:, :, None],
                                                   gt[i][:, :, None],
                                                   all_stats=True)
+
             vals = [split, merge, are, precision, recall]
-            # vals = [split, merge]
             for val, meas in zip(vals, all_measures):
                 meas.append(val)
         all_measures = np.array(all_measures)
         all_vars = np.var(all_measures, 1)
         all_means = np.mean(all_measures, 1)
-        are, precision, recall = adapted_rand(pred, gt, all_stats=True)
 
-        print 'Variational information split:       ', all_means[0], all_vars[0]
-        print 'Variational information merge:       ', all_means[1], all_vars[1]
-        print 'Adapted Rand error           :       ', are
-        print 'Adapted Rand error precision :       ', precision
-        print 'Adapted Rand error recall    :       ', recall
-        print 'Adapted Rand error           :       ', all_means[2], all_vars[2]
-        print 'Adapted Rand error precision :       ', all_means[3], all_vars[3]
-        print 'Adapted Rand error recall    :       ', all_means[4], all_vars[4]
+        print 'Variational information split:, %.3f ,+- %.3f' % (all_means[0], all_vars[0])
+        print 'Variational information merge:, %.3f ,+- %.3f' % (all_means[1], all_vars[1])
+        print 'Adapted Rand error           :, %.3f ,+- %.3f' % (all_means[2], all_vars[2])
+        print 'Adapted Rand error precision :, %.3f ,+- %.3f' % (all_means[3], all_vars[3])
+        print 'Adapted Rand error recall    :, %.3f ,+- %.3f' % (all_means[4], all_vars[4])
     else:
-
         # variational information of split and merge error,  i.e., H(X|Y) and H(Y|X)
         split, merge = voi(pred.copy(), gt.copy())
         # are: adapted rand error, rand precision, rand recall
@@ -402,20 +396,19 @@ def xlogx(x, out=None, in_place=False):
     z[nz] *= np.log2(z[nz])
     return y
 
-
 if __name__ == '__main__':
-    print
-    pred_path='/home/liory/src/superpixel_generator/data/preds/pred2_net_gt_seeds_2D.h5'
+    print   
+    pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
+    # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = '/home/liory/src/superpixel_generator/data/volumes/label_a.h5'
-
+    gt_path = './data/volumes/label_a.h5'
 
 
     print pred_path
     validate_segmentation(
-        pred_path=gt_path,
+        pred_path=pred_path,
         gt_path=gt_path,
-        slice_by_slice=False)
+        slice_by_slice=True)
 
 
 
