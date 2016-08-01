@@ -33,6 +33,7 @@ def train_script_v1():
     batch_size = 16         # > 4
     global_edge_len = 1250
     gt_seeds_b = True
+    find_errors = True
 
     # training parameter
     c.use('gpu0')
@@ -61,7 +62,10 @@ def train_script_v1():
                        height_gt_key=height_gt_key,
                        batch_size=batch_size,
                        patch_len=patch_len, global_edge_len=global_edge_len,
-                       padding_b=False, gt_seeds_b=gt_seeds_b)
+                       padding_b=False,
+                       find_errors=find_errors,
+                       gt_seeds_b=gt_seeds_b)
+    
     bm.init_train_path_batch()
     bm_val = du.BatchManV0(raw_path_val, label_path_val,
                            height_gt=height_gt_path_val,

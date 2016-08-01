@@ -65,8 +65,12 @@ def draw_image(image_info, target):
 
 def save_images(image_dicts, path, name, terminate=False):
     f, ax = plt.subplots(ncols=3, nrows=((len(image_dicts)-1) / 3) + 1)
-    for i, image_info in enumerate(image_dicts):
-        draw_image(image_info, ax[i / 3, i % 3])
+    if ((len(image_dicts)-1) / 3) + 1 > 1:
+        for i, image_info in enumerate(image_dicts):
+            draw_image(image_info, ax[i / 3, i % 3])
+    else:
+        for i, image_info in enumerate(image_dicts):
+            draw_image(image_info, ax[i])
     f.savefig(path + name, dpi=400)
     plt.close()
     if terminate:
