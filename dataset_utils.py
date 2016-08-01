@@ -98,7 +98,8 @@ class BatchManV0:
     def __init__(self, raw, label, height_gt=None, height_gt_key=None,
                  raw_key=None, label_key=None, batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
-                 train_b=True, find_errors=False):
+                 train_b=True, find_errors=False,
+                 gt_seeds_b=False):
         """
         batch loader. Use either for predict OR train. For valId and train use:
         get batches function.
@@ -153,7 +154,6 @@ class BatchManV0:
 
         assert(patch_len <= global_edge_len)
         assert(global_edge_len <= self.rl)
-        print 'raw', self.rl, self.global_el
         if not train_b:
             assert (self.rl == self.global_el)
 
@@ -169,6 +169,7 @@ class BatchManV0:
         self.global_heightmap_batch = None      # no padding
         self.global_timemap = None              # no padding
         self.global_errormap = None             # no padding
+        self.gt_seeds_b = gt_seeds_b
         self.global_seeds = None                # !!ALL!! coords include padding
         self.global_time = 0
         self.global_error_list = None
@@ -248,7 +249,6 @@ class BatchManV0:
                 seed_ind = np.argmax(dist_trf[b][regions])
                 seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) \
                        + self.pad
-                print 'seeds', seed
                 seeds.append([seed[0], seed[1]])
             self.global_id2gt.append(id2gt)
             global_seeds.append(seeds)
@@ -328,7 +328,7 @@ class BatchManV0:
             i = -1      # ids within slice
             for seed, Id in zip(seeds, ids):
                 i += 1
-                q.put((0, seed[0], seed[1], Id, -1, False, 0))
+                q.put((-1., seed[0], seed[1], Id, -1, False, 0))
             self.priority_queue.append(q)
 
     def walk_cross_coords(self, center):
@@ -509,7 +509,7 @@ class BatchManV0:
         # put seeds and ids in priority queue. All info to load batch is in pq
         self.initialize_priority_queue(global_seeds, global_ids)
 
-    def init_train_path_batch(self, gt_seeds=False):
+    def init_train_path_batch(self):
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
         self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
@@ -534,7 +534,7 @@ class BatchManV0:
                                          - 1
         self.prepare_global_batch(return_gt_ids=False)
         # also initializes id_2_gt lookup, seeds in coord syst of label
-        if gt_seeds:
+        if self.gt_seeds_b:
             global_seeds, global_seed_ids = self.get_gt_seeds()
         else:
             global_seeds, global_seed_ids = self.get_seeds_by_minimum()

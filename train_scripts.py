@@ -31,16 +31,13 @@ def train_script_v1():
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
-    global_edge_len = 300
+    global_edge_len = 1250
+    gt_seeds_b = True
 
     # training parameter
     c.use('gpu0')
     max_iter = 1000000000
-    save_counter = 10000        # save every n iterations
-    # iterations until all pixels on image predicted before that stops early
-    # grows linear until n_pixels of field starting at global field change
-    global_field_change = 6
-    iterations_to_max = 5
+    save_counter = 100000        # save every n iterations
 
     # choose your network from nets.py
     regularization = 10**-4
@@ -64,14 +61,14 @@ def train_script_v1():
                        height_gt_key=height_gt_key,
                        batch_size=batch_size,
                        patch_len=patch_len, global_edge_len=global_edge_len,
-                       padding_b=False)
+                       padding_b=False, gt_seeds_b=gt_seeds_b)
     bm.init_train_path_batch()
     bm_val = du.BatchManV0(raw_path_val, label_path_val,
                            height_gt=height_gt_path_val,
                            height_gt_key=height_gt_key_val,
                            batch_size=batch_size,
                            patch_len=patch_len, global_edge_len=global_edge_len,
-                           padding_b=False)
+                           padding_b=False, gt_seeds_b=gt_seeds_b)
 
     bm_val.init_train_path_batch()  # Training
 
@@ -105,14 +102,7 @@ def train_script_v1():
                                     path=save_net_path + '/images/')
                 bm_val.draw_debug_image("val_iteration_"+str(iteration),
                                         path=save_net_path + '/images/')
-                print "finished"
-                exit()
 
-                global_field_change = \
-                    u.linear_growth(iteration,
-                                    maximum=(global_edge_len - patch_len)**2-100,
-                                    y_intercept=global_field_change,
-                                    iterations_to_max=iterations_to_max)
             bm.init_train_path_batch()
             bm_val.init_train_path_batch()
 
@@ -149,7 +139,7 @@ def train_script_v1():
                     names=['loss train', 'loss train no reg', 'loss valid'])
 
         # monitor growing on validation set
-        if iteration % 30000 == 0:
+        if iteration % 50000 == 0:
             print "free_voxel ",free_voxel
             print "errors",np.sum(bm.global_errormap)
             bm.draw_debug_image("val_iteration_%i_freevoxel_%i" %
