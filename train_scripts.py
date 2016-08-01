@@ -97,7 +97,7 @@ def train_script_v1():
         iteration += 1
         free_voxel -= 1
         # save image and update global field ground
-        if free_voxel < 5 or (51201 % (iteration+1) == 0):
+        if free_voxel < 5:
             free_voxel = free_voxel_emtpy
             if save_net_b:
                 # plot train images
@@ -105,6 +105,8 @@ def train_script_v1():
                                     path=save_net_path + '/images/')
                 bm_val.draw_debug_image("val_iteration_"+str(iteration),
                                         path=save_net_path + '/images/')
+                print "finished"
+                exit()
 
                 global_field_change = \
                     u.linear_growth(iteration,

@@ -502,8 +502,10 @@ class BatchManV0:
         self.global_timemap = np.empty_like(self.global_label_batch)
         self.global_timemap.fill(np.inf)
         self.global_time = 0
-        self.global_errormap = np.zeros(self.global_label_batch.shape,
+        self.global_errormap = np.zeros((self.bs, 3,self.global_el - self.pl,
+                                            self.global_el - self.pl),
                                         dtype=np.bool)
+
         self.global_error_list = [[] for _ in range(self.bs)]
 
         self.global_directionmap_batch = np.zeros_like(self.global_label_batch)\
@@ -597,37 +599,45 @@ class BatchManV0:
             # check for errors in boundary crossing (type I)
             if error_indicator:
                 self.error_indicator_pass[b] = True     # remember to pass on
+                self.global_errormap[b, 1, center_x-self.pad, center_y-self.pad] \
+                    = 1
+
             elif self.global_id2gt[b][Id] != \
                     self.global_label_batch[b, center_x-self.pad,
                                             center_y-self.pad]:
-                self.global_errormap[b, center_x-self.pad, center_y-self.pad] \
+                self.global_errormap[b, 0, center_x-self.pad, center_y-self.pad] \
                     = 1
                 self.error_indicator_pass[b] = True
-            # check for errors in neighbor regions
-            for x, y, direction in self.walk_cross_coords([center_x, center_y]):
-                neighbor_label = [self.global_label_batch[b, x-self.pad,
-                                                          y-self.pad]]
-                if (self.global_claims[b, x, y] != 0 and  # neighbor is claimed
-                   neighbor_label != self.global_id2gt[b][Id]):
-                    # and check if claimed by other gt label (over-segmenting is
-                    # ok)
 
-                    # check for slow intrusion( neighbor is intruder )
-                    if neighbor_label != self.global_label_batch[b,
-                                                                 x-self.pad,
-                                                                 y-self.pad]:
-                        self.global_error_list[b].append(
-                            (self.global_timemap[b, x-self.pad, y-self.pad],
-                             x-center_x,
-                             y-center_y))
-                    # check for fast intrusion( current is intruder )
-                    if neighbor_label != self.global_label_batch[b,
-                                                                 x-self.pad,
-                                                                 y-self.pad]:
-                        self.global_error_list[b].append(
-                            (self.global_timemap[b, x-self.pad, y-self.pad],
-                             x-center_x,
-                             y-center_y))
+            # check for errors in neighbor regions
+            if self.find_errors:
+                for x, y, direction in self.walk_cross_coords([center_x, center_y]):
+                    if b == 4:
+                        # print self.global_errormap[b,x-self.pad,y-self.pad]
+                        c = int(self.global_claims[b, x, y])
+                        if c > 0:
+                            claimId = int(self.global_id2gt[b][c])
+                            gtId = int(self.global_id2gt[b][Id])
+                            if claimId > 0 and claimId != gtId:  # neighbor is claimed
+                                # print "neighbor is claimed"
+                                # self.global_errormap[b, 1,center_x-self.pad,center_y-self.pad] = True
+                                #     self.global_errormap[b,x-self.pad,y-self.pad] = True
+                                print "claimed by other gt",Id,claimId,self.global_id2gt[b][Id],x,y,center_x, center_y
+                                if self.global_errormap[b, 1, center_x-self.pad, center_y-self.pad]:
+                                    # print "fast intrusion"
+                                    self.global_error_list[b].append({"batch":b,
+                                      "time":self.global_timemap[b, x-self.pad, y-self.pad],
+                                      "large_pos":[center_x,center_y],
+                                      "small_pos":[x,y]})
+                                else:
+                                    # print "slow intrusion"
+                                    self.global_error_list[b].append({"batch":b,
+                                      "time":self.global_timemap[b, x-self.pad, y-self.pad],
+                                      "large_pos":[x,y],
+                                      "small_pos":[center_x,center_y]})
+                                print self.global_error_list[b]
+                                self.find_type_I_error()
+
             centers.append((center_x, center_y))
             ids.append(Id)
 
@@ -733,6 +743,10 @@ class BatchManV0:
         
         mask = self.crop_time_mask(centers, timepoint, batches)
         raw_batch[:, 1, :, :][mask] = 0
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
         return raw_batch
 
     # validation of cube slice by slice
@@ -777,10 +791,14 @@ class BatchManV0:
                             'im':self.global_height_gt_batch[4, :, :],
                             'scatter':np.array(self.global_seeds[4])-self.pad})
         plot_images.append({"title":"Ground Truth Label",
+                            'scatter':np.array([np.array(e["crossing"])-self.pad for e in self.global_error_list[4] if "crossing" in e]),
                             "cmap":"rand",
                             'im':self.global_label_batch[4, :, :]})
         plot_images.append({"title":"Error Map",
-                            'im':self.global_errormap[4, :, :]})
+                            'im':self.global_errormap[4, 0, :, :]})
+        plot_images.append({"title":"path Map",
+                            'scatter':np.array([np.array(e["large_pos"])-self.pad for e in self.global_error_list[4]]),
+                            'im':self.global_errormap[4, 2, :, :]})
         plot_images.append({"title":"Direction Map",
                             'im':self.global_directionmap_batch[4, :, :]})
         plot_images.append({"title":"Time Map ",
