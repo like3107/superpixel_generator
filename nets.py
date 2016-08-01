@@ -93,7 +93,7 @@ def build_ID_v0():
 
     # parallel 2
     l_slice = cs.SliceLayer(l_in)
-    l_resh = las.layers.reshape(l_slice, (16, 9, 1, 1))
+    l_resh = las.layers.reshape(l_slice, (-1, 9, 1, 1))
 
     l_merge = las.layers.ConcatLayer([l_resh, l_7], axis=1)
     l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, W=gen_identity_filter([1,3,7,5]),

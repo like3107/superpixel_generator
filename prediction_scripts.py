@@ -17,16 +17,17 @@ def pred_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'cnn_WS_1'
-    raw_path = './data/volumes/membranes_as.h5'
-    load_net_path = '/home/liory/mounts/hci_data/src/superpixel_generator' \
-                    '/data/nets/cnn_WS_2/net_990000'
+    net_name = 'gt_seeds_2D'
+    raw_path = './data/volumes/membranes_b.h5'
+    load_net_path = '/mnt/localdata01/lschott/src/superpixel_generator/' \
+                    'data/nets/cnn_PathPredecessor_gtseeds_big/net_4590000'
+    save_path = './data/membranes_real_seeds.h5'
 
-    batch_size = 16  # > 4
-    global_edge_len = 340      # 1250  + patch_len for memb
+    batch_size = 125  # > 4
+    global_edge_len = 1290      # 1250  + patch_len for memb
 
     # training parameter
-    c.use('gpu0')
+    c.use('gpu1')
 
     # choose your network from nets.py
     network = nets.build_ID_v0
@@ -60,13 +61,9 @@ def pred_script_v1():
 
             if j == 100 or j == 40000:
                 # test saving
-                du.save_h5('./data/pred2_net_%s.h5' % net_name, 'pred',
-                           data=prediction, overwrite='w')
-
                 prediction[i * batch_size:(i + 1) * batch_size, :, :] = \
                     bm.global_claims[:, bm.pad:-bm.pad, bm.pad:-bm.pad]
-                du.save_h5('./data/predtrash_%i.h5' % j,
-                           'pred', data=prediction, overwrite='w')
+                du.save_h5(save_path, 'pred', data=prediction, overwrite='w')
 
                 fig, ax = plt.subplots(1, 2)
                 ax[0].imshow(bm.global_claims[0, :, :],
@@ -79,8 +76,7 @@ def pred_script_v1():
         prediction[i * batch_size:(i + 1) * batch_size, :, :] = \
             bm.global_claims[:, bm.pad:-bm.pad, bm.pad:-bm.pad]
 
-    du.save_h5('./data/pred2_net_%s.h5' % net_name, 'pred',
-               data=prediction, overwrite='w')
+    du.save_h5(save_path, 'pred', data=prediction, overwrite='w')
 
 if __name__ == '__main__':
     pred_script_v1()

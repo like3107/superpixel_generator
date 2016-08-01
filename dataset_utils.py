@@ -230,6 +230,7 @@ class BatchManV0:
                               regions[1][rand_seed] + self.pad])
             self.global_id2gt.append(id2gt)
             global_seeds.append(seeds)
+        self.global_seeds = global_seeds
         return global_seeds, global_ids
 
     def get_seeds_by_minimum(self, sigma=2, min_dist=8, thresh=0.3,
@@ -510,7 +511,7 @@ class BatchManV0:
         self.prepare_global_batch(return_gt_ids=False)
         # also initializes id_2_gt lookup, seeds in coord syst of label
         # global_seeds, global_seed_ids = self.get_seeds_by_minimum()
-        # global_seeds, global_seed_ids = self.get_seeds()
+        global_seeds, global_seed_ids = self.get_seeds()
         self.initialize_path_priority_queue(global_seeds, global_seed_ids)
         return global_seeds # debug only, remove me, tmp
 
