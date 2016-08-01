@@ -398,7 +398,8 @@ def xlogx(x, out=None, in_place=False):
 
 if __name__ == '__main__':
     print   
-    pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
+    # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
+    pred_path='./data/preds/ws_3D_timo_a.h5'
     # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
     gt_path = './data/volumes/label_a.h5'
@@ -408,22 +409,6 @@ if __name__ == '__main__':
     validate_segmentation(
         pred_path=pred_path,
         gt_path=gt_path,
-        slice_by_slice=True)
+        slice_by_slice=False)
 
 
-
-
-# random
-# Variational information split:        0.416237766011 0.000802599253997
-# Variational information merge:        3.41835093132 0.00406470343312
-# Adapted Rand error           :        0.978219256591
-# Adapted Rand error precision :        0.903836692414
-# Adapted Rand error recall    :        0.0110231906581
-
-
-# us
-# Variational information split:        0.614081036302 0.0113354725205
-# Variational information merge:        0.213166740759 0.00043375180473
-# Adapted Rand error           :        0.646829736923
-# Adapted Rand error precision :        0.537741315797
-# Adapted Rand error recall    :        0.262925363382
