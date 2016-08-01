@@ -2,6 +2,8 @@ import matplotlib
 matplotlib.use('Agg')
 import os
 from theano import tensor as T
+import theano
+import lasagne
 import utils as u
 from matplotlib import pyplot as plt
 import nets
@@ -19,19 +21,19 @@ def train_script_v1():
     load_net_b = False
 
     net_name = 'cnn_path_v1_trash'
-    label_path = './data/volumes/label_a.h5'
-    label_path_val = './data/volumes/label_b.h5'
-    height_gt_path = './data/volumes/height_a.h5'
+    label_path = './data/volumes/label_as.h5'
+    label_path_val = './data/volumes/label_as.h5'
+    height_gt_path = './data/volumes/height_as.h5'
     height_gt_key = 'height'
-    height_gt_path_val = './data/volumes/height_b.h5'
+    height_gt_path_val = './data/volumes/height_as.h5'
     height_gt_key_val = 'height'
-    raw_path = './data/volumes/membranes_a.h5'
-    raw_path_val = './data/volumes/membranes_b.h5'
+    raw_path = './data/volumes/height_as.h5'
+    raw_path_val = './data/volumes/height_as.h5'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
-    global_edge_len = 1250
+    global_edge_len = 300
     gt_seeds_b = True
     find_errors = True
 
@@ -42,19 +44,27 @@ def train_script_v1():
 
     # choose your network from nets.py
     regularization = 10**-4
-    network = nets.build_ID_v0
+    network = nets.build_ID_v0_hydra
     loss = nets.loss_updates_probs_v0
+    loss_fine = nets.loss_updates_hydra_v0
 
     # all params entered.......................
 
     # initialize the net
     print 'initializing network graph for net ', net_name
     target_t = T.ftensor4()
-    l_in, l_out, patch_len = network()
+
+    l_in, l_in_direction, l_out, l_out_direction, patch_len = network()
 
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
         loss(l_in, target_t, l_out, L1_weight=regularization)
+
+    print 'compiling theano functions'
+    loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
+        loss_fine(l_in, l_in_direction, l_out_direction, L1_weight=regularization)
+
+    debug_f = theano.function([l_in.input_var, l_in_direction.input_var], [lasagne.layers.get_output(l_out), lasagne.layers.get_output(l_out_direction)])
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
@@ -65,7 +75,7 @@ def train_script_v1():
                        padding_b=False,
                        find_errors=find_errors,
                        gt_seeds_b=gt_seeds_b)
-    
+
     bm.init_train_path_batch()
     bm_val = du.BatchManV0(raw_path_val, label_path_val,
                            height_gt=height_gt_path_val,
@@ -113,21 +123,25 @@ def train_script_v1():
         if iteration % save_counter == 0 and save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
-        raw_val, gt_val, seeds_val, ids_val = bm_val.get_path_batches()
-
+        raw_val, gt, seeds_val, ids_val = bm_val.get_path_batches()
         probs_val = probs_f(raw_val)
         bm_val.update_priority_path_queue(probs_val, seeds_val, ids_val)
 
         # train da thing
         raw, gt, seeds, ids = bm.get_path_batches()
+        print debug_f(raw_val, np.zeros((bm.bs, 1),dtype='int32'))
+        exit()
         probs = probs_f(raw)
         bm.update_priority_path_queue(probs, seeds, ids)
         if iteration % 10 == 0:
             loss_train = float(loss_train_f(raw, gt))
+            # loss_train_fine = float(loss_train_fine_f(raw, np.zeros((bm.bs, 1),dtype='int32')))
 
         if iteration % 1000 == 0:
+            # loss_train_no_reg_fine = float(loss_valid_fine_f(raw, np.zeros((bm.bs, 1),dtype='int32')))
+            # loss_valid_fine = float(loss_valid_fine_f(raw_val, np.zeros((bm.bs, 1),dtype='int32')))
             loss_train_no_reg = float(loss_valid_f(raw, gt))
-            loss_valid = float(loss_valid_f(raw_val, gt_val))
+            loss_valid = float(loss_valid_f(raw_val, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
                   'loss_validation %.4f, iteration %i' % \
                   (loss_train, loss_train_no_reg, loss_valid, iteration),

@@ -645,14 +645,17 @@ class BatchManV0:
                                       "touch_time":self.global_timemap[b, x, y],
                                       "large_pos":[center_x,center_y],
                                       "large_id":Id,
-                                      "small_pos":[x,y]})
+                                      "small_pos":[x,y],
+                                      "small_id":c})
+
                                 else:
                                     # print "slow intrusion"
                                     self.global_error_list[b].append({"batch":b,
                                       "touch_time":self.global_timemap[b, x, y],
                                       "large_pos":[x,y],
                                       "large_id":c,
-                                      "small_pos":[center_x,center_y]})
+                                      "small_pos":[center_x,center_y],
+                                      "small_id":Id})
                                 self.find_type_I_error()
 
             centers.append((center_x, center_y))
@@ -791,28 +794,30 @@ class BatchManV0:
 
     def draw_error_reconst(self, image_name, path='./data/nets/debug/images/', save=True):
 
-
         plot_images = []
 
         error_I_timelist = []
         error_I_pos_list = []
         error_I_id_list = []
-        error_I_batch_list = []
+        error_batch_list = []
 
-        # error_II_pos_list = []
-        # error_II_time_list = []
+        error_II_pos_list = []
+        error_II_time_list = []
+        error_II_id_list = []
 
         for error in self.global_error_list[4]:
-            error_I_batch_list.append(error["batch"])
+            error_batch_list.append(error["batch"])
+
             error_I_timelist.append(error["crossing_time"])
             error_I_pos_list.append(error["crossing"])
             error_I_id_list.append(error["large_id"])
 
-      #     error_II_pos_list.append(error["large_pos"])
-            # error_II_time_list.append(error["touch_time"])
-            # error_II_id_list.append(error["large_id"])
-        # reconstruct error I ( boundary crossing )
-        reconst_e1 = self.reconstruct_input_at_timepoint( error_I_timelist, error_I_pos_list, error_I_id_list, error_I_batch_list)
+            error_II_pos_list.append(error["small_pos"])
+            error_II_time_list.append(error["touch_time"])
+            error_II_id_list.append(error["small_id"])
+
+        reconst_e1 = self.reconstruct_input_at_timepoint( error_I_timelist, error_I_pos_list, error_I_id_list, error_batch_list)
+        reconst_e2 = self.reconstruct_input_at_timepoint( error_II_time_list, error_II_pos_list, error_II_id_list, error_batch_list)
 
         for i in range(reconst_e1.shape[0]):
             # plot_images.append({"title":"Raw Input",
@@ -829,9 +834,23 @@ class BatchManV0:
                                 'im':reconst_e1[i, 1, :, :]})
             plot_images.append({"title":"final claims",
                                 'cmap':"rand",
-                                'im':self.global_claims[error_I_batch_list[i],
+                                'im':self.global_claims[error_batch_list[i],
                                     error_I_pos_list[i][0] - self.pad:error_I_pos_list[i][0] + self.pad,
                                     error_I_pos_list[i][1] - self.pad:error_I_pos_list[i][1] + self.pad]})
+
+            plot_images.append({"title":"E2 Ground Truth Label",
+                    # 'scatter':np.array([np.array(e["crossing"])-self.pad for e in self.global_error_list[4] if "crossing" in e]),
+                    "cmap":"rand",
+                    'im':self.global_label_batch[4, error_II_pos_list[i][0] - 2*self.pad:error_II_pos_list[i][0],
+                                    error_II_pos_list[i][1] - 2*self.pad:error_II_pos_list[i][1]]})
+            plot_images.append({"title":"E2 reconst claims at t="+str(error_II_time_list[i]),
+                                'cmap':"rand",
+                                'im':reconst_e2[i, 1, :, :]})
+            plot_images.append({"title":"E2 final claims",
+                                'cmap':"rand",
+                                'im':self.global_claims[error_batch_list[i],
+                                    error_II_pos_list[i][0] - self.pad:error_II_pos_list[i][0] + self.pad,
+                                    error_II_pos_list[i][1] - self.pad:error_II_pos_list[i][1] + self.pad]})
         u.save_images(plot_images, path=path, name=image_name)
 
 
@@ -912,7 +931,7 @@ if __name__ == '__main__':
                     patch_len=patch_len, global_edge_len=global_edge_len,
                     padding_b=True,find_errors=True)
     gt_seeds_b = True
-    seeds = bm.init_train_path_batch(gt_seeds=gt_seeds_b)
+    seeds = bm.init_train_path_batch()
     seeds = np.array(seeds[4])
     heights = np.random.random(size=batch_size)
     b = 4
@@ -928,7 +947,7 @@ if __name__ == '__main__':
         raw_batch, gts, centers, ids = bm.get_path_batches()
 
         if i % 5000 == 0 and i != 0:
-            bm.init_train_path_batch(gt_seeds=gt_seeds_b)
+            bm.init_train_path_batch()
             raw_batch, gts, centers, ids = bm.get_path_batches()
             name += 'asdf'
         probs = np.zeros((batch_size, 4, 1,1))

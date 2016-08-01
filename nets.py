@@ -103,6 +103,12 @@ def build_ID_v0():
                         W=gen_identity_filter([0, 1, 2, 3]))
     return l_in, l_9, fov
 
+def build_ID_v0_hydra():
+    l_in, l_9, fov = build_ID_v0()
+    l_in_direction = L.InputLayer((None, 1), input_var=T.matrix(dtype='int32'))
+    l_10 = L.SliceLayer(l_9, indices=l_in_direction.input_var, axis=1)
+
+    return l_in, l_in_direction, l_9, l_10, fov
 
 def build_ID_v0_hybrid():
     fov = 40  # field of view = patch length
@@ -167,6 +173,38 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
 
     loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
     probs_f = theano.function([l_in.input_var], l_out_valid)
+
+    return loss_train_f, loss_valid_f, probs_f
+
+
+
+def loss_updates_hydra_v0(l_in_data, l_in_direction, last_layer, L1_weight=10**-5):
+
+    all_params = L.get_all_params(last_layer)
+
+    bs = l_in_data.input_var.shape[0]
+
+    l_out_train = L.get_output(last_layer, deterministic=False)
+    l_out_valid = L.get_output(last_layer, deterministic=True)
+
+    L1_norm = las.regularization.regularize_network_params(
+        last_layer,
+        las.regularization.l1)
+
+
+    loss_train = T.mean(
+        las.objectives.squared_error(l_out_train[:bs/2], l_out_train[bs/2:])) + \
+                        L1_weight * L1_norm
+    loss_valid = T.mean(
+        las.objectives.squared_error(l_out_train[:bs/2], l_out_train[bs/2:]))
+
+    updates = las.updates.adam(loss_train, all_params)
+
+    loss_train_f = theano.function([l_in_data.input_var, l_in_direction.input_var], loss_train,
+                                   updates=updates)
+
+    loss_valid_f = theano.function([l_in_data.input_var, l_in_direction.input_var], loss_valid)
+    probs_f = theano.function([l_in_data.input_var, l_in_direction.input_var], l_out_valid)
 
     return loss_train_f, loss_valid_f, probs_f
 
