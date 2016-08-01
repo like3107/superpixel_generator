@@ -64,7 +64,9 @@ def train_script_v1():
     loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
         loss_fine(l_in, l_in_direction, l_out_direction, L1_weight=regularization)
 
-    debug_f = theano.function([l_in.input_var, l_in_direction.input_var], [lasagne.layers.get_output(l_out, deterministic=True), lasagne.layers.get_output(l_out_direction, deterministic=True)])
+    debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
+                [lasagne.layers.get_output(l_out, deterministic=True),
+                lasagne.layers.get_output(l_out_direction, deterministic=True)])
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
@@ -129,9 +131,6 @@ def train_script_v1():
 
         # train da thing
         raw, gt, seeds, ids = bm.get_path_batches()
-        d = debug_f(raw_val, np.zeros((bm.bs,1),dtype='int32'))
-        print "d", d
-        print "[x.shape for x in d]", [x.shape for x in d]
 
         probs = probs_f(raw)
         bm.update_priority_path_queue(probs, seeds, ids)
