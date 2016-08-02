@@ -238,21 +238,23 @@ class BatchManV0:
 
             _, dist_trf[b, :, :] = \
                 segmenation_to_membrane_core(self.global_label_batch[b, :, :])
+        id_old = 0
 
         for b, ids in zip(range(self.bs), global_ids):    # iterates over batches
             seeds = []
             id2gt = {}
             for Id in ids:      # ids within each slice
+                assert (Id != id_old)
+                id_old = Id
                 id2gt[Id] = Id
                 regions = np.where(
                     self.global_label_batch[b, :, :] == Id)
                 seed_ind = np.argmax(dist_trf[b][regions])
                 seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) \
-                       + self.pad
+                                 + self.pad
                 seeds.append([seed[0], seed[1]])
             self.global_id2gt.append(id2gt)
             global_seeds.append(seeds)
-
         self.global_seeds = global_seeds
         return global_seeds, global_ids
 
@@ -277,22 +279,21 @@ class BatchManV0:
             # seeds in coord system of labels
             seeds = np.array(
                 peak_local_max(dist_trf[b, :, :], exclude_border=0,
-                                   threshold_abs=1, min_distance=min_dist))
+                                threshold_abs=1, min_distance=min_dist))
             seeds += self.pad
             if len(seeds) == 0:
                 print 'WARNING no seeds found (no minima in global batch). ' \
                       'Setting seed to middle'
-                seeds = np.append([self.global_el / 2, self.global_el / 2])
+                seeds = np.array([self.global_el / 2, self.global_el / 2])
 
             global_seeds.append(seeds)
             global_seed_ids.append(range(1, len(seeds)+1))
             id2gt = {}
-            id_counter = 0
-            for seed in global_seeds[-1]:
-                id_counter += 1
-                id2gt[id_counter] = self.global_label_batch[b,
-                                                            seed[0]-self.pad,
-                                                            seed[1]-self.pad]
+            for id_counter, seed in enumerate(seeds):
+                id2gt[id_counter+1] = \
+                    self.global_label_batch[b,
+                                            seed[0]-self.pad,
+                                            seed[1]-self.pad]
             self.global_id2gt.append(id2gt)
         self.global_seeds = global_seeds
         return global_seeds, global_seed_ids
@@ -370,16 +371,8 @@ class BatchManV0:
             if not "crossing" in error_I:
                 start_position = error_I["large_pos"]
                 batch = error_I["batch"]
-                print 'start postition', start_position
-                print self.global_directionmap_batch[batch,
-                                                     start_position[0]-self.pad,
-                                                     start_position[1]-self.pad]
-
-                original_error = np.array(start_position)
-                print 'batch', batch
                 self.draw_debug_image('nagut', b=batch)
                 for pos in self.get_path_to_root(start_position, batch):
-                    print 'pos', pos
                     if self.global_errormap[batch, 0, pos[0]-self.pad,
                                             pos[1]-self.pad]:
                         original_error = np.array(pos)
@@ -387,7 +380,6 @@ class BatchManV0:
                         self.global_errormap[batch, 2, pos[0]-self.pad,
                                              pos[1]-self.pad] = True
                         # debug
-                        print 'found crossing'
 
                         error_I["crossing"] = original_error
                         error_I["crossing_time"] = self.global_timemap[batch,
@@ -633,7 +625,8 @@ class BatchManV0:
             elif self.global_id2gt[b][Id] != \
                     self.global_label_batch[b, center_x-self.pad,
                                             center_y-self.pad]:
-                self.global_errormap[b, 0, center_x-self.pad, center_y-self.pad] \
+                self.global_errormap[b, 0, center_x-self.pad,
+                                     center_y-self.pad] \
                     = 1
                 self.error_indicator_pass[b] = True
 
@@ -648,8 +641,13 @@ class BatchManV0:
                         gtId = int(self.global_id2gt[b][Id])
                         if claimId > 0 and claimId != gtId:  # neighbor is claimed
                             # print "neighbor is claimed"
-                            if self.global_errormap[b, 1, center_x-self.pad,
-                                                    center_y-self.pad]:
+                            center_introder_b = \
+                                self.global_errormap[b, 1, center_x-self.pad,
+                                                    center_y-self.pad]
+                            neighbor_introduer_b = \
+                                self.global_errormap[b, 1, x-self.pad,
+                                                     y-self.pad]
+                            if center_introder_b and not neighbor_introduer_b:
                                 # print "fast intrusion"
                                 self.global_error_list.append({"batch":b,
                                   "touch_time":self.global_timemap[b, x, y],
@@ -658,16 +656,18 @@ class BatchManV0:
                                   "small_pos":[x, y],
                                   "small_id":c})
 
-                            else:
+                            elif not center_introder_b and neighbor_introduer_b:
                                 # print "slow intrusion"
                                 self.global_error_list.append({"batch":b,
                                   "touch_time":self.global_timemap[b, x, y],
                                   "large_pos":[x,y],
                                   "large_id":c,
-                                  "small_pos":[center_x,center_y],
+                                  "small_pos":[center_x, center_y],
                                   "small_id":Id})
-                            print "calling find errors"
-                            print 'error map', self.global_error_list
+                            elif center_introder_b and neighbor_introduer_b:
+                                # TODO: TYPE 3 error tmp
+                                raise Exception('error type 3 found')
+                                print 'type 3 error not yet implemented'
                             self.find_type_I_error()
 
             centers.append((center_x, center_y))
@@ -801,7 +801,7 @@ class BatchManV0:
             assert (self.global_claims[b, centers[b][0], centers[b][1]] == 0)
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
         # check whether already pulled
-        self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
+        # self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
         return raw_batch, centers, ids
 
     def reconstruct_path_error_inputs(self):
@@ -845,7 +845,7 @@ class BatchManV0:
         error_II_id_list = lists
 
 
-        print reconst_e1.shape, reconst_e2.shape
+        print 'draw reconstr', reconst_e1.shape, reconst_e2.shape
 
         for i in range(reconst_e1.shape[0]):
             # plot_images.append({"title":"Raw Input",
