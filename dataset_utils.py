@@ -938,7 +938,7 @@ class BatchMemento:
         self.memorize_dir_b = memorize_direction
         self.direction_memory = None
 
-    def add_to_memory(self, mini_b, dir_memory):
+    def add_to_memory(self, mini_b, dir_b):
         if self.memory is None:
             self.memory = np.zeros(([self.ms] + list(mini_b.shape[-3:])),
                                    dtype=theano.config.floatX)
@@ -957,7 +957,7 @@ class BatchMemento:
         self.memory[self.counter:self.counter+slices_to_add, :, :, :] = \
             mini_b
         self.direction_memory[self.counter:self.counter+slices_to_add] = \
-            mini_b
+            dir_b
         self.counter += slices_to_add
 
     def is_ready(self):
