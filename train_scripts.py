@@ -18,9 +18,9 @@ def train_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = False
+    load_net_b = True
 
-    net_name = 'cnn_path_v1_trash'
+    net_name = 'cnn_path_v1_tune'
     label_path = './data/volumes/label_as.h5'
     label_path_val = './data/volumes/label_as.h5'
     height_gt_path = './data/volumes/height_as.h5'
@@ -30,7 +30,7 @@ def train_script_v1():
     raw_path = './data/volumes/height_as.h5'
     raw_path_val = './data/volumes/height_as.h5'
     save_net_path = './data/nets/' + net_name + '/'
-    load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
+    load_net_path = './data/nets/rough/net_2500000'      # if load true
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     global_edge_len = 300
@@ -95,6 +95,7 @@ def train_script_v1():
             os.mkdir(save_net_path + '/images')
 
     if load_net_b:
+        print "loading network parameters from ",load_net_path
         u.load_network(load_net_path, l_out)
 
     # everything is initialized now train and predict every once in a while....
