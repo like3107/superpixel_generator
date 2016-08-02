@@ -72,9 +72,9 @@ def train_script_v1():
                 [lasagne.layers.get_output(l_out, deterministic=True),
                 lasagne.layers.get_output(l_out_direction, deterministic=True)])
 
-
     Memento1 = du.BatchMemento(batch_size_ft, 100)
     Memento2 = du.BatchMemento(batch_size_ft, 100)
+
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
                        height_gt=height_gt_path,
@@ -122,7 +122,7 @@ def train_script_v1():
 
         if iteration % save_counter == 0 and save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
-        #
+
         raw_val, gt, seeds_val, ids_val = bm_val.get_path_batches()
         probs_val = probs_f(raw_val)
         bm_val.update_priority_path_queue(probs_val, seeds_val, ids_val)
@@ -134,7 +134,7 @@ def train_script_v1():
 
         if iteration % 100 == 0:
             if len(bm.global_error_dict) >= batch_size_ft or \
-                            free_voxel < 101:
+                            free_voxel < 1010:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 print error_b_type2.shape
@@ -143,7 +143,6 @@ def train_script_v1():
                 Memento2.add_to_memory(error_b_type2, dir2)
                 bm.init_train_path_batch()
                 bm_val.init_train_path_batch()
-
                 free_voxel = free_voxel_emtpy
                 if save_net_b:
                     # plot train images
@@ -165,13 +164,7 @@ def train_script_v1():
             bm.init_train_path_batch()
             free_voxel = free_voxel_emtpy
 
-
         if iteration % 10 == 0 and iteration < 50000:
-            loss_train = float(loss_train_f(raw, gt))
-
-
-        loss_train_fine = float(loss_train_fine_f(raw, np.zeros((bm.bs, 1),dtype='int32')))
-        if iteration % 10 == 0:
             loss_train = float(loss_train_f(raw, gt))
 
         if iteration % 1000 == 0:
