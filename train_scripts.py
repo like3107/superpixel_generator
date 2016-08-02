@@ -9,7 +9,8 @@ from matplotlib import pyplot as plt
 import nets
 import dataset_utils as du
 import numpy as np
-from theano.sandbox import cuda as c
+from theano.sandbox import cuda as cu
+import random
 
 
 def train_script_v1():
@@ -18,30 +19,28 @@ def train_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = True
+    load_net_b = False
 
     net_name = 'cnn_path_v1_tune_trash'
-    label_path = './data/volumes/label_as.h5'
-    label_path_val = './data/volumes/label_as.h5'
-    height_gt_path = './data/volumes/height_as.h5'
+    label_path = './data/volumes/label_a.h5'
+    label_path_val = './data/volumes/label_b.h5'
+    height_gt_path = './data/volumes/height_a.h5'
     height_gt_key = 'height'
-    height_gt_path_val = './data/volumes/height_as.h5'
+    height_gt_path_val = './data/volumes/height_b.h5'
     height_gt_key_val = 'height'
-    raw_path = './data/volumes/height_as.h5'
-    raw_path_val = './data/volumes/height_as.h5'
+    raw_path = './data/volumes/membranes_a.h5'
+    raw_path_val = './data/volumes/membranes_b.h5'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/rough/net_2500000'      # if load true
-    load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
-    load_net_path = './data/net_2500000'      # if load true
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
-    batch_size = 16         # > 4
-    global_edge_len = 300
-    gt_seeds_b = True
+    batch_size = 1         # > 4
+    global_edge_len = 200
+    gt_seeds_b = False
     find_errors = True
     fine_tuning = True
     # training parameter
-    c.use('gpu0')
+    cu.use('gpu0')
     max_iter = 1000000000
     save_counter = 100000        # save every n iterations
 
@@ -134,16 +133,26 @@ def train_script_v1():
         bm_val.update_priority_path_queue(probs_val, seeds_val, ids_val)
 
         # train da thing
-        print 'j'
-        print bm.global_error_list, len(bm.global_error_list)
         raw, gt, seeds, ids = bm.get_path_batches()
 
         probs = probs_f(raw)
+
+
+        # debug !!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1
+        probs = np.zeros((batch_size, 4, 1,1))
+        for c in range(batch_size):
+            for d in range(4):
+                probs[c, d] = random.random()
+        # debuga!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1!!!!!!!!!!!!!!!!!!!!1
+
+
         bm.update_priority_path_queue(probs, seeds, ids)
         if fine_tuning:
-            if iteration % 100 == 0:
-                print len(bm.global_error_list)
-                r1,r2 = bm.reconstruct_path_error_inputs()
+            if iteration % 1000 == 0:
+                print len(bm.global_error_dict)
+                bm.draw_debug_image("iteration_%i_freevoxel_%i" %
+                                    (iteration, free_voxel))
+                r1, r2, _ = bm.reconstruct_path_error_inputs()
                 print "reconstruction shapes:",r1.shape, r2.shape 
             # loss_train_fine = float(loss_train_fine_f(raw, np.zeros((bm.bs, 1),dtype='int32')))
         else:
