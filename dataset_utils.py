@@ -508,6 +508,7 @@ class BatchManV0:
         self.initialize_priority_queue(global_seeds, global_ids)
 
     def init_train_path_batch(self):
+        print 'init path batch'
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
         self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
@@ -900,9 +901,9 @@ class BatchManV0:
         plot_images.append({"title":"Heightmap Ground Truth",
                             'im':self.global_height_gt_batch[b, :, :],
                             'scatter':np.array(self.global_seeds[b])-self.pad})
-        print self.global_error_dict
-        print [np.array(e["crossing"])-self.pad for e in self.global_error_dict.values() if "crossing" in e]
-        print [np.array(e["crossing"])-self.pad for e in self.global_error_dict.values() if "crossing" in e and e["batch"] == b]
+        # print self.global_error_dict
+        # print [np.array(e["crossing"])-self.pad for e in self.global_error_dict.values() if "crossing" in e]
+        # print [np.array(e["crossing"])-self.pad for e in self.global_error_dict.values() if "crossing" in e and e["batch"] == b]
         plot_images.append({"title":"Ground Truth Label",
                             'scatter':np.array([np.array(e["crossing"])-self.pad for e in self.global_error_dict.values() if "crossing" in e and e["batch"] == 4]),
                             "cmap":"rand",
@@ -942,7 +943,7 @@ class BatchMemento:
         if self.memory is None:
             self.memory = np.zeros(([self.ms] + list(mini_b.shape[-3:])),
                                    dtype=theano.config.floatX)
-            self.direction_memory = np.zeros(self.ms, dtype=theano.config.floatX)
+            self.direction_memory = np.zeros((self.ms, 1), dtype=np.int32)
         if len(mini_b.shape) == 3:  # if single slice
 
             slices_to_add = 1
@@ -956,7 +957,7 @@ class BatchMemento:
 
         self.memory[self.counter:self.counter+slices_to_add, :, :, :] = \
             mini_b
-        self.direction_memory[self.counter:self.counter+slices_to_add] = \
+        self.direction_memory[self.counter:self.counter+slices_to_add, 0] = \
             dir_b
         self.counter += slices_to_add
 
@@ -971,6 +972,7 @@ class BatchMemento:
     def clear_memory(self):
         self.memory = None
         self.direction_memory = None
+        self.counter = 0
 
 
 if __name__ == '__main__':
