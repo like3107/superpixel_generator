@@ -657,7 +657,7 @@ class BatchManV0:
                                   "large_id":Id,
                                   "small_pos":[x, y],
                                   "small_id":c}
-
+                                self.find_type_I_error()
                             elif not center_introder_b and neighbor_introduer_b:
                                 # print "slow intrusion"
                                 self.global_error_dict[error_index(b,Id,c)] = {"batch":b,
@@ -666,10 +666,12 @@ class BatchManV0:
                                   "large_id":c,
                                   "small_pos":[center_x, center_y],
                                   "small_id":Id}
+                                self.find_type_I_error()
                             elif center_introder_b and neighbor_introduer_b:
                                 # TODO: TYPE 3 error tmp
+                                # raise Exception('error type 3 found')
                                 print 'type 3 error not yet implemented'
-                            self.find_type_I_error()
+                                # self.find_type_I_error()
 
             centers.append((center_x, center_y))
             ids.append(Id)
@@ -822,9 +824,15 @@ class BatchManV0:
             error_II_time_list.append(error["touch_time"])
             error_II_id_list.append(error["small_id"])
 
-        reconst_e1 = self.reconstruct_input_at_timepoint( error_I_timelist, error_I_pos_list, error_I_id_list, error_batch_list)
-        reconst_e2 = self.reconstruct_input_at_timepoint( error_II_time_list, error_II_pos_list, error_II_id_list, error_batch_list)
-        return reconst_e1,reconst_e2 , [error_I_timelist,
+        reconst_e1 = self.reconstruct_input_at_timepoint(error_I_timelist,
+                                                         error_I_pos_list,
+                                                         error_I_id_list,
+                                                         error_batch_list)
+        reconst_e2 = self.reconstruct_input_at_timepoint(error_II_time_list,
+                                                         error_II_pos_list,
+                                                         error_II_id_list,
+                                                         error_batch_list)
+        return reconst_e1, reconst_e2 , [error_I_timelist,
                                         error_I_pos_list,
                                         error_I_id_list,
                                         error_batch_list,
@@ -914,6 +922,45 @@ class BatchManV0:
             plt.show()
 
 
+class BatchMemento:
+    """
+    Remembers slices for CNN in style bc01
+    """
+    def __init__(self, bs, memory_size, random_return=False):
+        self.bs = bs
+        self.ms = memory_size
+        self.memory = None
+        self.full_b = False
+        self.counter = 0
+
+    def add_to_memory(self, mini_b):
+        if self.memory is None:
+            self.memory = np.zeros(([self.ms] + list(mini_b.shape[-3:])),
+                                   dtype=theano.config.floatX)
+        if len(mini_b.shape) == 3:  # if single slice
+            slices_to_add = 1
+        else:
+            slices_to_add = mini_b.shape[0]
+
+        if self.counter+slices_to_add > self.ms:
+            np.roll(self.memory, self.ms - self.counter+slices_to_add, axis=0)
+            self.counter = self.ms - slices_to_add
+
+        self.memory[self.counter:self.counter+slices_to_add, :, :, :] = \
+            mini_b
+        self.counter += slices_to_add
+
+    def is_ready(self):
+        return self.counter >= self.bs
+
+    def get_batch(self):
+        assert(self.is_ready())
+        return self.memory[self.counter-self.bs:self.counter]
+
+    def clear_memory(self):
+        self.memory = None
+
+
 if __name__ == '__main__':
 
     # loading of cremi
@@ -986,3 +1033,19 @@ if __name__ == '__main__':
                 probs[c, d] = random.random()
                 d += 1
         bm.update_priority_path_queue(probs, centers, ids)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
