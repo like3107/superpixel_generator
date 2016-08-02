@@ -145,7 +145,7 @@ def train_script_v1():
         if iteration % 100 == 0:
             if 2 * len(bm.global_error_dict) >= batch_size_ft or \
                             free_voxel < free_voxel_emtpy - 101:
-                error_b_type1, error_b_type2, _ = \
+                error_b_type1, error_b_type2, _, _ = \
                     bm.reconstruct_path_error_inputs()
                 print error_b_type2.shape
                 print 'error shapes', error_b_type1.shape
@@ -168,7 +168,7 @@ def train_script_v1():
         if fine_tuning:
             if iteration % 100 == 0:
                 print len(bm.global_error_dict)
-                r1, r2, _ = bm.reconstruct_path_error_inputs()
+                r1, r2, _, _ = bm.reconstruct_path_error_inputs()
                 print "reconstruction shapes:", r1.shape, r2.shape
                 # if r1.shape:
                 #     bm.draw_error_reconst('error_it_%i' % iteration)

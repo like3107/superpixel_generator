@@ -818,6 +818,8 @@ class BatchManV0:
         error_II_pos_list = []
         error_II_time_list = []
         error_II_id_list = []
+        error_I_direction = []
+        error_II_direction = []
 
         for error in self.global_error_dict.values():
             error_batch_list.append(error["batch"])
@@ -838,7 +840,7 @@ class BatchManV0:
                                                          error_II_pos_list,
                                                          error_II_id_list,
                                                          error_batch_list)
-        return reconst_e1, reconst_e2 , directions_e1, directions_e2
+        return reconst_e1, reconst_e2 , np.array(error_I_direction), np.array(error_II_direction)
 
     def draw_error_reconst(self, image_name, path='./data/nets/debug/images/', save=True):
         for e_idx, error in self.global_error_dict.items():
