@@ -928,27 +928,35 @@ class BatchMemento:
     """
     Remembers slices for CNN in style bc01
     """
-    def __init__(self, bs, memory_size, random_return=False):
+    def __init__(self, bs, memory_size, memorize_direction=True,
+                 random_return=False):
         self.bs = bs
         self.ms = memory_size
         self.memory = None
         self.full_b = False
         self.counter = 0
+        self.memorize_dir_b = memorize_direction
+        self.direction_memory = None
 
-    def add_to_memory(self, mini_b):
+    def add_to_memory(self, mini_b, dir_memory):
         if self.memory is None:
             self.memory = np.zeros(([self.ms] + list(mini_b.shape[-3:])),
                                    dtype=theano.config.floatX)
+            self.direction_memory = np.zeros(self.ms, dtype=theano.config.floatX)
         if len(mini_b.shape) == 3:  # if single slice
+
             slices_to_add = 1
         else:
             slices_to_add = mini_b.shape[0]
 
         if self.counter+slices_to_add > self.ms:
             np.roll(self.memory, self.ms - self.counter+slices_to_add, axis=0)
+            np.roll(self.direction_memory, self.ms - self.counter+slices_to_add, axis=0)
             self.counter = self.ms - slices_to_add
 
         self.memory[self.counter:self.counter+slices_to_add, :, :, :] = \
+            mini_b
+        self.direction_memory[self.counter:self.counter+slices_to_add] = \
             mini_b
         self.counter += slices_to_add
 
@@ -957,10 +965,12 @@ class BatchMemento:
 
     def get_batch(self):
         assert(self.is_ready())
-        return self.memory[self.counter-self.bs:self.counter]
+        return self.memory[self.counter-self.bs:self.counter], \
+               self.direction_memory[self.counter-self.bs:self.counter]
 
     def clear_memory(self):
         self.memory = None
+        self.direction_memory = None
 
 
 if __name__ == '__main__':

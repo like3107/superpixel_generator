@@ -73,7 +73,8 @@ def train_script_v1():
                 lasagne.layers.get_output(l_out_direction, deterministic=True)])
 
 
-    Memento = du.BatchMemento(batch_size, 2*batch_size)
+    Memento1 = du.BatchMemento(batch_size, batch_size)
+    Memento2 = du.BatchMemento(batch_size, batch_size)
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
                        height_gt=height_gt_path,
@@ -145,17 +146,20 @@ def train_script_v1():
         if iteration % 100 == 0:
             if 2 * len(bm.global_error_dict) >= batch_size_ft or \
                             free_voxel < free_voxel_emtpy - 101:
-                error_b_type1, error_b_type2, _, _ = \
+                error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 print error_b_type2.shape
                 print 'error shapes', error_b_type1.shape
-                mini_b = np.vstack((error_b_type1, error_b_type2))
-                Memento.add_to_memory(mini_b)
+                Memento1.add_to_memory(error_b_type1, dir1)
+                Memento2.add_to_memory(error_b_type2, dir2)
                 bm.init_train_path_batch()
 
-        if Memento.is_ready():
-            batch_ft = Memento.get_batch()
-            loss_valid_fine_f(batch_size_ft)
+        if Memento1.is_ready():
+            batch_ft_t1, dir_t1 = Memento1.get_batch()
+            batch_ft_t2, dir_t2 = Memento2.get_batch()
+            batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
+            batch_dir_ft = np.concatenate((dir1, dir2), axis=0)
+            loss_valid_fine_f(batch_ft, batch_dir_ft)
 
 
         if iteration % 10 == 0:

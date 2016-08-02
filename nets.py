@@ -177,7 +177,8 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
 
 
 
-def loss_updates_hydra_v0(l_in_data, l_in_direction, last_layer, L1_weight=10**-5):
+def loss_updates_hydra_v0(l_in_data, l_in_direction, last_layer,
+                          L1_weight=10**-5):
 
     all_params = L.get_all_params(last_layer)
 
@@ -199,11 +200,14 @@ def loss_updates_hydra_v0(l_in_data, l_in_direction, last_layer, L1_weight=10**-
 
     updates = las.updates.adam(loss_train, all_params)
 
-    loss_train_f = theano.function([l_in_data.input_var, l_in_direction.input_var], loss_train,
+    loss_train_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
+                                   loss_train,
                                    updates=updates)
 
-    loss_valid_f = theano.function([l_in_data.input_var, l_in_direction.input_var], loss_valid)
-    probs_f = theano.function([l_in_data.input_var, l_in_direction.input_var], l_out_valid)
+    loss_valid_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
+                                   loss_valid)
+    probs_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
+                              l_out_valid)
 
     return loss_train_f, loss_valid_f, probs_f
 
