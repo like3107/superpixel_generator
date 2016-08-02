@@ -102,6 +102,7 @@ def train_script_v1():
     iteration = -1
     losses = [[], [], []]
     iterations = []
+    fine_tuning = True
 
     free_voxel_emtpy = (global_edge_len - patch_len)**2
     free_voxel = free_voxel_emtpy
@@ -134,36 +135,42 @@ def train_script_v1():
 
         probs = probs_f(raw)
         bm.update_priority_path_queue(probs, seeds, ids)
-        if iteration % 10 == 0:
-            loss_train = float(loss_train_f(raw, gt))
+        if fine_tuning:
+            if iteration % 100 == 0:
+                print len(bm.global_error_list)
+                r1,r2 = bm.reconstruct_path_error_inputs()
+                print "reconstruction shapes:",r1.shape, r2.shape 
             # loss_train_fine = float(loss_train_fine_f(raw, np.zeros((bm.bs, 1),dtype='int32')))
+        else:
+            if iteration % 10 == 0:
+                loss_train = float(loss_train_f(raw, gt))
 
-        if iteration % 1000 == 0:
-            # loss_train_no_reg_fine = float(loss_valid_fine_f(raw, np.zeros((bm.bs, 1),dtype='int32')))
-            # loss_valid_fine = float(loss_valid_fine_f(raw_val, np.zeros((bm.bs, 1),dtype='int32')))
-            loss_train_no_reg = float(loss_valid_f(raw, gt))
-            loss_valid = float(loss_valid_f(raw_val, gt))
-            print '\r loss train %.4f, loss train_noreg %.4f, ' \
-                  'loss_validation %.4f, iteration %i' % \
-                  (loss_train, loss_train_no_reg, loss_valid, iteration),
-            if save_net_b:
-                iterations.append(iteration)
-                losses[0].append(loss_train)
-                losses[1].append(loss_train_no_reg)
-                losses[2].append(loss_valid)
-                u.plot_train_val_errors(
-                    losses,
-                    iterations,
-                    save_net_path + 'training.png',
-                    names=['loss train', 'loss train no reg', 'loss valid'])
+            if iteration % 1000 == 0:
+                # loss_train_no_reg_fine = float(loss_valid_fine_f(raw, np.zeros((bm.bs, 1),dtype='int32')))
+                # loss_valid_fine = float(loss_valid_fine_f(raw_val, np.zeros((bm.bs, 1),dtype='int32')))
+                loss_train_no_reg = float(loss_valid_f(raw, gt))
+                loss_valid = float(loss_valid_f(raw_val, gt))
+                print '\r loss train %.4f, loss train_noreg %.4f, ' \
+                      'loss_validation %.4f, iteration %i' % \
+                      (loss_train, loss_train_no_reg, loss_valid, iteration),
+                if save_net_b:
+                    iterations.append(iteration)
+                    losses[0].append(loss_train)
+                    losses[1].append(loss_train_no_reg)
+                    losses[2].append(loss_valid)
+                    u.plot_train_val_errors(
+                        losses,
+                        iterations,
+                        save_net_path + 'training.png',
+                        names=['loss train', 'loss train no reg', 'loss valid'])
 
-        # monitor growing on validation set
-        if iteration % 50000 == 0:
-            print "free_voxel ",free_voxel
-            print "errors",np.sum(bm.global_errormap)
-            bm.draw_debug_image("val_iteration_%i_freevoxel_%i" %
-                                (iteration, free_voxel),
-                                path=save_net_path + '/images/')
+            # monitor growing on validation set
+            if iteration % 50000 == 0:
+                print "free_voxel ",free_voxel
+                print "errors",np.sum(bm.global_errormap)
+                bm.draw_debug_image("val_iteration_%i_freevoxel_%i" %
+                                    (iteration, free_voxel),
+                                    path=save_net_path + '/images/')
 
 
 

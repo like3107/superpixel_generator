@@ -366,26 +366,23 @@ class BatchManV0:
             yield current_position
 
     def find_type_I_error(self):
+        for error_I in self.global_error_list:
+            if not "crossing" in error_I:
+                start_position = error_I["large_pos"]
+                batch = error_I["batch"]
+                original_error = np.array(start_position)
+                for pos in self.get_path_to_root(start_position, batch):
+                    if self.global_errormap[batch, 0, pos[0]-self.pad, pos[1]-self.pad] == True:
+                        original_error = np.array(pos)
+                        # debug
+                        self.global_errormap[batch, 2, pos[0]-self.pad,pos[1]-self.pad]=True
+                        # debug
 
-        for b in range(self.bs):
-            for error_I in self.global_error_list[b]:
-                if not "crossing" in error_I:
-                    start_position = error_I["large_pos"]
-                    batch = error_I["batch"]
-                    original_error = np.array(start_position)
-                    for pos in self.get_path_to_root(start_position, batch):
-                        if self.global_errormap[batch, 0, pos[0]-self.pad, pos[1]-self.pad] == True:
-                            original_error = np.array(pos)
-                            # debug
-                            self.global_errormap[batch, 2, pos[0]-self.pad,pos[1]-self.pad]=True
-                            # debug
-
-                            error_I["crossing"] = original_error
-                            error_I["crossing_time"] = self.global_timemap[batch, pos[0], pos[1]]
+                        error_I["crossing"] = original_error
+                        error_I["crossing_time"] = self.global_timemap[batch, pos[0], pos[1]]
            # debug
-            if b == 4:
-                self.draw_debug_image("walk_"+str(b)+"_"+str(len(self.global_error_list[b]))+"_"+str(np.sum([len(a) for a in self.global_error_list[b]])), save=True)
-                self.draw_error_reconst("reconst_"+str(b)+"_"+str(len(self.global_error_list[b]))+"_"+str(np.sum([len(a) for a in self.global_error_list[b]])))
+        self.draw_debug_image("walk_"+str(len(self.global_error_list)), save=True)
+        self.draw_error_reconst("reconst_"+str(len(self.global_error_list)))
 
     def get_cross_coords(self, seed, global_offset=0):
         seeds_x, seeds_y, dirs = [], [], []
@@ -523,7 +520,7 @@ class BatchManV0:
                                             self.global_el - self.pl),
                                         dtype=np.bool)
 
-        self.global_error_list = [[] for _ in range(self.bs)]
+        self.global_error_list = []
 
         self.global_directionmap_batch = np.zeros_like(self.global_label_batch)\
                                          - 1
@@ -566,13 +563,12 @@ class BatchManV0:
 
     def get_path_error_batch(self):
         centers, ids = self.get_centers_from_queue()
-        total_number_of_errors = np.sum([len(a) for a in self.global_error_list])
+        total_number_of_errors = len(self.global_error_list)
         print "total_number_of_errors",total_number_of_errors
         if total_number_of_errors > 0:
             print "FOUND ONE"
             print "ERRORLIST ",self.global_error_list
             # self.draw_debug_image("error_list_found"+str(self.global_time))
-            exit()
         return raw_batch, gts, centers, ids
 
     def get_heightmap_batches(self):
@@ -631,32 +627,32 @@ class BatchManV0:
             # check for errors in neighbor regions
             if self.find_errors:
                 for x, y, direction in self.walk_cross_coords([center_x, center_y]):
-                    if b == 4:
-                        # print self.global_errormap[b,x-self.pad,y-self.pad]
-                        c = int(self.global_claims[b, x, y])
-                        if c > 0:
-                            claimId = int(self.global_id2gt[b][c])
-                            gtId = int(self.global_id2gt[b][Id])
-                            if claimId > 0 and claimId != gtId:  # neighbor is claimed
-                                # print "neighbor is claimed"
-                                if self.global_errormap[b, 1, center_x-self.pad, center_y-self.pad]:
-                                    # print "fast intrusion"
-                                    self.global_error_list[b].append({"batch":b,
-                                      "touch_time":self.global_timemap[b, x, y],
-                                      "large_pos":[center_x,center_y],
-                                      "large_id":Id,
-                                      "small_pos":[x,y],
-                                      "small_id":c})
+                    # print self.global_errormap[b,x-self.pad,y-self.pad]
+                    c = int(self.global_claims[b, x, y])
+                    if c > 0:
+                        claimId = int(self.global_id2gt[b][c])
+                        gtId = int(self.global_id2gt[b][Id])
+                        if claimId > 0 and claimId != gtId:  # neighbor is claimed
+                            # print "neighbor is claimed"
+                            if self.global_errormap[b, 1, center_x-self.pad, center_y-self.pad]:
+                                # print "fast intrusion"
+                                self.global_error_list.append({"batch":b,
+                                  "touch_time":self.global_timemap[b, x, y],
+                                  "large_pos":[center_x,center_y],
+                                  "large_id":Id,
+                                  "small_pos":[x,y],
+                                  "small_id":c})
 
-                                else:
-                                    # print "slow intrusion"
-                                    self.global_error_list[b].append({"batch":b,
-                                      "touch_time":self.global_timemap[b, x, y],
-                                      "large_pos":[x,y],
-                                      "large_id":c,
-                                      "small_pos":[center_x,center_y],
-                                      "small_id":Id})
-                                self.find_type_I_error()
+                            else:
+                                # print "slow intrusion"
+                                self.global_error_list.append({"batch":b,
+                                  "touch_time":self.global_timemap[b, x, y],
+                                  "large_pos":[x,y],
+                                  "large_id":c,
+                                  "small_pos":[center_x,center_y],
+                                  "small_id":Id})
+                            print "calling find errors"
+                            self.find_type_I_error()
 
             centers.append((center_x, center_y))
             ids.append(Id)
@@ -792,32 +788,35 @@ class BatchManV0:
         self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
         return raw_batch, centers, ids
 
-    def draw_error_reconst(self, image_name, path='./data/nets/debug/images/', save=True):
-
-        plot_images = []
-
+    def reconstruct_path_error_inputs(self):
         error_I_timelist = []
         error_I_pos_list = []
         error_I_id_list = []
         error_batch_list = []
-
         error_II_pos_list = []
         error_II_time_list = []
         error_II_id_list = []
 
-        for error in self.global_error_list[4]:
+        for error in self.global_error_list:
             error_batch_list.append(error["batch"])
-
             error_I_timelist.append(error["crossing_time"])
             error_I_pos_list.append(error["crossing"])
             error_I_id_list.append(error["large_id"])
-
             error_II_pos_list.append(error["small_pos"])
             error_II_time_list.append(error["touch_time"])
             error_II_id_list.append(error["small_id"])
 
         reconst_e1 = self.reconstruct_input_at_timepoint( error_I_timelist, error_I_pos_list, error_I_id_list, error_batch_list)
         reconst_e2 = self.reconstruct_input_at_timepoint( error_II_time_list, error_II_pos_list, error_II_id_list, error_batch_list)
+        return reconst_e1,reconst_e2
+
+    def draw_error_reconst(self, image_name, path='./data/nets/debug/images/', save=True):
+
+        plot_images = []
+
+        reconst_e1, reconst_e2 = reconstruct_path_error_inputs()
+
+        print reconst_e1.shape, reconst_e2.shape
 
         for i in range(reconst_e1.shape[0]):
             # plot_images.append({"title":"Raw Input",
@@ -825,7 +824,6 @@ class BatchManV0:
             # plot_images.append({"title":"timemap",
             #                     'im':self.crop_timemap(np.array(error_I_pos_list[i]), error_I_batch_list[i])})
             plot_images.append({"title":"Ground Truth Label",
-                    # 'scatter':np.array([np.array(e["crossing"])-self.pad for e in self.global_error_list[4] if "crossing" in e]),
                     "cmap":"rand",
                     'im':self.global_label_batch[4, error_I_pos_list[i][0] - 2*self.pad:error_I_pos_list[i][0],
                                     error_I_pos_list[i][1] - 2*self.pad:error_I_pos_list[i][1]]})
@@ -839,7 +837,6 @@ class BatchManV0:
                                     error_I_pos_list[i][1] - self.pad:error_I_pos_list[i][1] + self.pad]})
 
             plot_images.append({"title":"E2 Ground Truth Label",
-                    # 'scatter':np.array([np.array(e["crossing"])-self.pad for e in self.global_error_list[4] if "crossing" in e]),
                     "cmap":"rand",
                     'im':self.global_label_batch[4, error_II_pos_list[i][0] - 2*self.pad:error_II_pos_list[i][0],
                                     error_II_pos_list[i][1] - 2*self.pad:error_II_pos_list[i][1]]})
@@ -869,13 +866,13 @@ class BatchManV0:
                             'im':self.global_height_gt_batch[4, :, :],
                             'scatter':np.array(self.global_seeds[4])-self.pad})
         plot_images.append({"title":"Ground Truth Label",
-                            'scatter':np.array([np.array(e["crossing"])-self.pad for e in self.global_error_list[4] if "crossing" in e]),
+                            'scatter':np.array([np.array(e["crossing"])-self.pad for e in self.global_error_list if "crossing" in e and e["batch"] == 4]),
                             "cmap":"rand",
                             'im':self.global_label_batch[4, :, :]})
         plot_images.append({"title":"Error Map",
                             'im':self.global_errormap[4, 0, :, :]})
         plot_images.append({"title":"path Map",
-                            'scatter':np.array([np.array(e["large_pos"])-self.pad for e in self.global_error_list[4]]),
+                            'scatter':np.array([np.array(e["large_pos"])-self.pad for e in self.global_error_list if e["batch"] == 4]),
                             'im':self.global_errormap[4, 2, :, :]})
         plot_images.append({"title":"Direction Map",
                             'im':self.global_directionmap_batch[4, :, :]})
