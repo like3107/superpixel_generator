@@ -20,7 +20,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = True
 
-    net_name = 'cnn_path_v1_tune'
+    net_name = 'cnn_path_v1_tune_trash'
     label_path = './data/volumes/label_as.h5'
     label_path_val = './data/volumes/label_as.h5'
     height_gt_path = './data/volumes/height_as.h5'
@@ -31,12 +31,15 @@ def train_script_v1():
     raw_path_val = './data/volumes/height_as.h5'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/rough/net_2500000'      # if load true
+    load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
+    load_net_path = './data/net_2500000'      # if load true
+
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     global_edge_len = 300
     gt_seeds_b = True
     find_errors = True
-
+    fine_tuning = True
     # training parameter
     c.use('gpu0')
     max_iter = 1000000000
@@ -60,7 +63,7 @@ def train_script_v1():
     loss_train_f, loss_valid_f, probs_f = \
         loss(l_in, target_t, l_out, L1_weight=regularization)
 
-    print 'compiling theano functions'
+    print 'compiling theano finetuningfunctions'
     loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
         loss_fine(l_in, l_in_direction, l_out_direction, L1_weight=regularization)
 
@@ -103,7 +106,6 @@ def train_script_v1():
     iteration = -1
     losses = [[], [], []]
     iterations = []
-    fine_tuning = True
 
     free_voxel_emtpy = (global_edge_len - patch_len)**2
     free_voxel = free_voxel_emtpy
@@ -132,6 +134,8 @@ def train_script_v1():
         bm_val.update_priority_path_queue(probs_val, seeds_val, ids_val)
 
         # train da thing
+        print 'j'
+        print bm.global_error_list, len(bm.global_error_list)
         raw, gt, seeds, ids = bm.get_path_batches()
 
         probs = probs_f(raw)
