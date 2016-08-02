@@ -668,8 +668,7 @@ class BatchManV0:
                                   "small_id":Id}
                             elif center_introder_b and neighbor_introduer_b:
                                 # TODO: TYPE 3 error tmp
-                                raise Exception('error type 3 found')
-                                # print 'type 3 error not yet implemented'
+                                print 'type 3 error not yet implemented'
                             self.find_type_I_error()
 
             centers.append((center_x, center_y))
@@ -834,51 +833,46 @@ class BatchManV0:
                                         error_II_id_list]
 
     def draw_error_reconst(self, image_name, path='./data/nets/debug/images/', save=True):
+        for e_idx, error in self.global_error_dict.items():
+            plot_images = []
+            if not "draw_file" in error:
+                reconst_e1 = self.reconstruct_input_at_timepoint( [error["crossing_time"]], [error["crossing"]], [error["large_id"]], [error["batch"]])
+                reconst_e2 = self.reconstruct_input_at_timepoint( [error["touch_time"]], [error["small_pos"]], [error["small_id"]], [error["batch"]])
 
-        plot_images = []
+                # plot_images.append({"title":"Raw Input",
+                #                     'im':reconst_e1[i, 0, :, :]})
+                # plot_images.append({"title":"timemap",
+                #                     'im':self.crop_timemap(np.array(error["crossing"]), error_I_batch_list[i])})
+                plot_images.append({"title":"Ground Truth Label",
+                        "cmap":"rand",
+                        'im':self.global_label_batch[error["batch"], error["crossing"][0] - 2*self.pad:error["crossing"][0],
+                                        error["crossing"][1] - 2*self.pad:error["crossing"][1]]})
+                plot_images.append({"title":"reconst claims at t="+str(error["crossing_time"]),
+                                    'cmap':"rand",
+                                    'im':reconst_e1[0, 1, :, :]})
+                plot_images.append({"title":"final claims",
+                                    'cmap':"rand",
+                                    'im':self.global_claims[error["batch"],
+                                        error["crossing"][0] - self.pad:error["crossing"][0] + self.pad,
+                                        error["crossing"][1] - self.pad:error["crossing"][1] + self.pad]})
 
-        reconst_e1, reconst_e2 , lists = self.reconstruct_path_error_inputs()
-        error_I_timelist, error_I_pos_list, \
-        error_I_id_list, \
-        error_batch_list, \
-        error_II_pos_list, \
-        error_II_time_list, \
-        error_II_id_list = lists
-
-
-        print 'draw reconstr', reconst_e1.shape, reconst_e2.shape
-
-        for i in range(reconst_e1.shape[0]):
-            # plot_images.append({"title":"Raw Input",
-            #                     'im':reconst_e1[i, 0, :, :]})
-            # plot_images.append({"title":"timemap",
-            #                     'im':self.crop_timemap(np.array(error_I_pos_list[i]), error_I_batch_list[i])})
-            plot_images.append({"title":"Ground Truth Label",
-                    "cmap":"rand",
-                    'im':self.global_label_batch[error_batch_list[i], error_I_pos_list[i][0] - 2*self.pad:error_I_pos_list[i][0],
-                                    error_I_pos_list[i][1] - 2*self.pad:error_I_pos_list[i][1]]})
-            plot_images.append({"title":"reconst claims at t="+str(error_I_timelist[i]),
-                                'cmap':"rand",
-                                'im':reconst_e1[i, 1, :, :]})
-            plot_images.append({"title":"final claims",
-                                'cmap':"rand",
-                                'im':self.global_claims[error_batch_list[i],
-                                    error_I_pos_list[i][0] - self.pad:error_I_pos_list[i][0] + self.pad,
-                                    error_I_pos_list[i][1] - self.pad:error_I_pos_list[i][1] + self.pad]})
-
-            plot_images.append({"title":"E2 Ground Truth Label",
-                    "cmap":"rand",
-                    'im':self.global_label_batch[error_batch_list[i], error_II_pos_list[i][0] - 2*self.pad:error_II_pos_list[i][0],
-                                    error_II_pos_list[i][1] - 2*self.pad:error_II_pos_list[i][1]]})
-            plot_images.append({"title":"E2 reconst claims at t="+str(error_II_time_list[i]),
-                                'cmap':"rand",
-                                'im':reconst_e2[i, 1, :, :]})
-            plot_images.append({"title":"E2 final claims",
-                                'cmap':"rand",
-                                'im':self.global_claims[error_batch_list[i],
-                                    error_II_pos_list[i][0] - self.pad:error_II_pos_list[i][0] + self.pad,
-                                    error_II_pos_list[i][1] - self.pad:error_II_pos_list[i][1] + self.pad]})
-        u.save_images(plot_images, path=path, name=image_name)
+                plot_images.append({"title":"E2 Ground Truth Label",
+                        "cmap":"rand",
+                        'im':self.global_label_batch[error["batch"], error["small_pos"][0] - 2*self.pad:error["small_pos"][0],
+                                        error["small_pos"][1] - 2*self.pad:error["small_pos"][1]]})
+                plot_images.append({"title":"E2 reconst claims at t="+str(error["touch_time"]),
+                                    'cmap':"rand",
+                                    'im':reconst_e2[0, 1, :, :]})
+                plot_images.append({"title":"E2 final claims",
+                                    'cmap':"rand",
+                                    'im':self.global_claims[error["batch"],
+                                        error["small_pos"][0] - self.pad:error["small_pos"][0] + self.pad,
+                                        error["small_pos"][1] - self.pad:error["small_pos"][1] + self.pad]})
+                print "plotting ",image_name+'_'+str(e_idx)
+                error["draw_file"] = image_name+'_'+str(e_idx)
+                u.save_images(plot_images, path=path, name=image_name+'_'+str(e_idx))
+            else:
+                print "skipping ",e_idx
 
 
     def draw_debug_image(self, image_name, path='./data/nets/debug/images/',
