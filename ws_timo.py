@@ -46,13 +46,13 @@ def save_h5(path, h5_key, data, overwrite='w-'):
 
 if __name__ == '__main__':
     memb_path = ''
-    memb_path = './data/volumes/membranes_a.h5'
+    memb_path = './data/volumes/membranes_b.h5'
     threshold_dist_trf = 0.3
     thres_memb_cc = 15
     thresh_seg_cc = 85
     sigma_dist_trf = 2
     somethingunimportant = 0
-    two_dim = False
+    two_dim = True
     memb_probs = load_h5(memb_path)[0]
 
     segmentation = np.zeros((125, 1250, 1250))
@@ -69,4 +69,4 @@ if __name__ == '__main__':
                               thresh_seg_cc, sigma_dist_trf,
                               somethingunimportant)
 
-    save_h5('./data/preds/ws_3D_timo_a.h5', 'pred', segmentation, 'w')
+    save_h5('./data/preds/ws_2D_timo_b.h5', 'pred', segmentation, 'w')

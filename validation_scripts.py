@@ -3,7 +3,6 @@ import scipy.sparse as sparse
 import dataset_utils as du
 
 
-
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
                           pred_key=None, gt_key=None, slice_by_slice=True):
     assert (gt_path != gt)  # specify either gt path or gt as np array
@@ -21,6 +20,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         splits, merges, ares, precisions, recalls = [], [], [], [], []
         all_measures = [splits, merges, ares, precisions, recalls]
         for i in range(pred.shape[0]):
+            print '\r %.3f' % (float(i) / pred.shape[0]),
             split, merge = voi(pred[i].copy(), gt[i].copy())
             are, precision, recall = adapted_rand(pred[i][:, :, None],
                                                   gt[i][:, :, None],
@@ -396,19 +396,20 @@ def xlogx(x, out=None, in_place=False):
     z[nz] *= np.log2(z[nz])
     return y
 
+
 if __name__ == '__main__':
     print   
     # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
-    pred_path='./data/preds/ws_3D_timo_a.h5'
+    pred_path='./data/preds/ws_3D_timo_b.h5'
     # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './data/volumes/label_a.h5'
+    gt_path = './data/volumes/label_b.h5'
 
 
     print pred_path
     validate_segmentation(
         pred_path=pred_path,
         gt_path=gt_path,
-        slice_by_slice=False)
+        slice_by_slice=True)
 
 

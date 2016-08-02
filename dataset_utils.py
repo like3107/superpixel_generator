@@ -371,7 +371,6 @@ class BatchManV0:
             if not "crossing" in error_I:
                 start_position = error_I["large_pos"]
                 batch = error_I["batch"]
-                self.draw_debug_image('nagut', b=batch)
                 for pos in self.get_path_to_root(start_position, batch):
                     # debug
                     self.global_errormap[batch, 2, pos[0]-self.pad,
@@ -670,9 +669,7 @@ class BatchManV0:
                             elif center_introder_b and neighbor_introduer_b:
                                 # TODO: TYPE 3 error tmp
                                 raise Exception('error type 3 found')
-                                print 'type 3 error not yet implemented'
-                                  "small_pos":[center_x,center_y],
-                                  "small_id":Id}
+                                # print 'type 3 error not yet implemented'
                             self.find_type_I_error()
 
             centers.append((center_x, center_y))
@@ -771,13 +768,12 @@ class BatchManV0:
                                                False, self.global_time))
 
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
-
         raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         for i,b in enumerate(batches):
             raw_batch[i, 0, :, :] = self.crop_raw(centers[i], b)
             raw_batch[i, 1, :, :] = self.crop_mask_claimed(centers[i], b, ids[i])
-        
+
         mask = self.crop_time_mask(centers, timepoint, batches)
         raw_batch[:, 1, :, :][mask] = 0
         return raw_batch

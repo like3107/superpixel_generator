@@ -64,6 +64,8 @@ def draw_image(image_info, target):
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
 
 def save_images(image_dicts, path, name, terminate=False):
+    if len(image_dicts) == 0:
+        return
     f, ax = plt.subplots(ncols=3, nrows=((len(image_dicts)-1) / 3) + 1)
     if ((len(image_dicts)-1) / 3) + 1 > 1:
         for i, image_info in enumerate(image_dicts):

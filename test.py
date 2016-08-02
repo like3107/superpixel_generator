@@ -1,11 +1,13 @@
 import matplotlib
-matplotlib.use('Qt4Agg')
+# matplotlib.use('Qt4Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
 a =[]
-for i in range(1, 100000):
-    a.append(51201 % i == 0)
+
+import os
+
+print 'heree'
+print (os.path.exists('./data/trash40000.png'))
 
 
-print np.sum(np.array(a) == 1)
