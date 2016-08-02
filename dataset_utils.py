@@ -396,7 +396,7 @@ class BatchManV0:
            # debug
         self.draw_debug_image("walk_"+str(len(self.global_error_list)),
                               save=True)
-        self.draw_error_reconst("reconst_"+str(len(self.global_error_list)))
+        # self.draw_error_reconst("reconst_"+str(len(self.global_error_list)))
 
     def get_cross_coords(self, seed, global_offset=0):
         seeds_x, seeds_y, dirs = [], [], []
@@ -824,13 +824,26 @@ class BatchManV0:
 
         reconst_e1 = self.reconstruct_input_at_timepoint( error_I_timelist, error_I_pos_list, error_I_id_list, error_batch_list)
         reconst_e2 = self.reconstruct_input_at_timepoint( error_II_time_list, error_II_pos_list, error_II_id_list, error_batch_list)
-        return reconst_e1,reconst_e2
+        return reconst_e1,reconst_e2 , [error_I_timelist,
+                                        error_I_pos_list,
+                                        error_I_id_list,
+                                        error_batch_list,
+                                        error_II_pos_list,
+                                        error_II_time_list,
+                                        error_II_id_list]
 
     def draw_error_reconst(self, image_name, path='./data/nets/debug/images/', save=True):
 
         plot_images = []
 
-        reconst_e1, reconst_e2 = self.reconstruct_path_error_inputs()
+        reconst_e1, reconst_e2 , lists = self.reconstruct_path_error_inputs()
+        error_I_timelist, error_I_pos_list, \
+        error_I_id_list, \
+        error_batch_list, \
+        error_II_pos_list, \
+        error_II_time_list, \
+        error_II_id_list = lists
+
 
         print reconst_e1.shape, reconst_e2.shape
 
@@ -841,7 +854,7 @@ class BatchManV0:
             #                     'im':self.crop_timemap(np.array(error_I_pos_list[i]), error_I_batch_list[i])})
             plot_images.append({"title":"Ground Truth Label",
                     "cmap":"rand",
-                    'im':self.global_label_batch[4, error_I_pos_list[i][0] - 2*self.pad:error_I_pos_list[i][0],
+                    'im':self.global_label_batch[error_batch_list[i], error_I_pos_list[i][0] - 2*self.pad:error_I_pos_list[i][0],
                                     error_I_pos_list[i][1] - 2*self.pad:error_I_pos_list[i][1]]})
             plot_images.append({"title":"reconst claims at t="+str(error_I_timelist[i]),
                                 'cmap':"rand",
@@ -854,7 +867,7 @@ class BatchManV0:
 
             plot_images.append({"title":"E2 Ground Truth Label",
                     "cmap":"rand",
-                    'im':self.global_label_batch[4, error_II_pos_list[i][0] - 2*self.pad:error_II_pos_list[i][0],
+                    'im':self.global_label_batch[error_batch_list[i], error_II_pos_list[i][0] - 2*self.pad:error_II_pos_list[i][0],
                                     error_II_pos_list[i][1] - 2*self.pad:error_II_pos_list[i][1]]})
             plot_images.append({"title":"E2 reconst claims at t="+str(error_II_time_list[i]),
                                 'cmap':"rand",
@@ -868,7 +881,7 @@ class BatchManV0:
 
 
     def draw_debug_image(self, image_name, path='./data/nets/debug/images/',
-                         save=True, b=4):
+                         save=True, b=0):
         plot_images = []
         plot_images.append({"title":"Claims",
                             'cmap':"rand",
@@ -882,6 +895,9 @@ class BatchManV0:
         plot_images.append({"title":"Heightmap Ground Truth",
                             'im':self.global_height_gt_batch[b, :, :],
                             'scatter':np.array(self.global_seeds[b])-self.pad})
+        print self.global_error_list
+        print [np.array(e["crossing"])-self.pad for e in self.global_error_list if "crossing" in e]
+        print [np.array(e["crossing"])-self.pad for e in self.global_error_list if "crossing" in e and e["batch"] == b]
         plot_images.append({"title":"Ground Truth Label",
                             'scatter':np.array([np.array(e["crossing"])-self.pad for e in self.global_error_list if "crossing" in e and e["batch"] == 4]),
                             "cmap":"rand",
@@ -889,7 +905,7 @@ class BatchManV0:
         plot_images.append({"title":"Error Map",
                             'im':self.global_errormap[b, 0, :, :]})
         plot_images.append({"title":"path Map",
-                            'scatter':np.array([np.array(e["large_pos"])-self.pad for e in self.global_error_list if e["batch"] == 4]),
+                            'scatter':np.array([np.array(e["large_pos"])-self.pad for e in self.global_error_list if e["batch"] == b]),
                             'im':self.global_errormap[b, 2, :, :]})
         plot_images.append({"title":"Direction Map",
                             'im':self.global_directionmap_batch[b, :, :]})
