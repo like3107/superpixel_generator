@@ -356,7 +356,7 @@ class BatchManV0:
             self.global_directionmap_batch[batch,
                                            current_position[0]-self.pad,
                                            current_position[1]-self.pad]
-        yield start_position
+        yield start_position, current_direction
         while (current_direction != -1):
             current_position = update_postion(current_position,
                                               current_direction)
@@ -364,14 +364,14 @@ class BatchManV0:
                 self.global_directionmap_batch[batch,
                                                current_position[0]-self.pad,
                                                current_position[1]-self.pad]
-            yield current_position
+            yield current_position, current_direction
 
     def find_type_I_error(self): # 1st crossing from own gt ID into other ID
         for error_I in self.global_error_dict.values():
             if not "crossing" in error_I:
                 start_position = error_I["large_pos"]
                 batch = error_I["batch"]
-                for pos in self.get_path_to_root(start_position, batch):
+                for pos, d in self.get_path_to_root(start_position, batch):
                     # debug
                     self.global_errormap[batch, 2, pos[0]-self.pad,
                                          pos[1]-self.pad] = True
@@ -380,10 +380,12 @@ class BatchManV0:
                                             pos[1]-self.pad]:
                         original_error = np.array(pos)
                         print 'found crossing'
+
                         error_I["crossing"] = original_error
                         error_I["crossing_time"] = self.global_timemap[batch,
                                                                        pos[0],
                                                                        pos[1]]
+                        error_I["crossing_direction"] = d
            # debug
         self.draw_debug_image("walk_"+str(len(self.global_error_dict)),
                               save=True)
@@ -654,6 +656,7 @@ class BatchManV0:
                                 self.global_error_dict[error_index(b,Id,c)]  = {"batch":b,
                                   "touch_time":self.global_timemap[b, x, y],
                                   "large_pos":[center_x, center_y],
+                                  "large_direction":direction,
                                   "large_id":Id,
                                   "small_pos":[x, y],
                                   "small_id":c}
@@ -663,6 +666,7 @@ class BatchManV0:
                                 self.global_error_dict[error_index(b,Id,c)] = {"batch":b,
                                   "touch_time":self.global_timemap[b, x, y],
                                   "large_pos":[x,y],
+                                  "large_direction":(direction + 2)%4, # turns direction by 180 degrees
                                   "large_id":c,
                                   "small_pos":[center_x, center_y],
                                   "small_id":Id}
@@ -818,9 +822,11 @@ class BatchManV0:
         for error in self.global_error_dict.values():
             error_batch_list.append(error["batch"])
             error_I_timelist.append(error["crossing_time"])
+            error_I_direction.append(error["crossing_direction"])
             error_I_pos_list.append(error["crossing"])
             error_I_id_list.append(error["large_id"])
             error_II_pos_list.append(error["small_pos"])
+            error_II_direction.append(error["large_direction"])
             error_II_time_list.append(error["touch_time"])
             error_II_id_list.append(error["small_id"])
 
@@ -832,13 +838,7 @@ class BatchManV0:
                                                          error_II_pos_list,
                                                          error_II_id_list,
                                                          error_batch_list)
-        return reconst_e1, reconst_e2 , [error_I_timelist,
-                                        error_I_pos_list,
-                                        error_I_id_list,
-                                        error_batch_list,
-                                        error_II_pos_list,
-                                        error_II_time_list,
-                                        error_II_id_list]
+        return reconst_e1, reconst_e2 , directions_e1, directions_e2
 
     def draw_error_reconst(self, image_name, path='./data/nets/debug/images/', save=True):
         for e_idx, error in self.global_error_dict.items():
