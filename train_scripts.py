@@ -35,8 +35,8 @@ def train_script_v1():
     load_net_path = './data/net_2500000'      # if load true
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
-    batch_size = 1         # > 4
-    batch_size_ft = 4
+    batch_size = 16         # > 4
+    batch_size_ft = 2
     global_edge_len = 300
     gt_seeds_b = False
     find_errors = True
@@ -140,8 +140,6 @@ def train_script_v1():
                             free_voxel < 1010:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
-                print error_b_type2.shape
-                print 'error shapes', error_b_type1.shape
                 Memento1.add_to_memory(error_b_type1, dir1)
                 Memento2.add_to_memory(error_b_type2, dir2)
                 if save_net_b:
@@ -165,7 +163,7 @@ def train_script_v1():
             batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
 
             ft_loss_train_noreg = loss_valid_fine_f(batch_ft, batch_dir_ft)
-            print 'ft probs', probs_fine_f(batch_ft, batch_dir_ft)
+            probs_fine = probs_fine_f(batch_ft, batch_dir_ft)
             ft_loss_train = loss_train_fine_f(batch_ft, batch_dir_ft)
             print "loss_train_fine %.4f" % ft_loss_train
             fine_tune_losses[0].append(ft_loss_train_noreg)
@@ -203,8 +201,7 @@ def train_script_v1():
                     names=['loss train', 'loss train no reg', 'loss valid'])
 
         # monitor growth on validation set tmp debug change train to val
-        if iteration % 1000 == 0:
-            print "free_voxel ", free_voxel
+        if iteration % 100000 == 0:
             bm.draw_debug_image("train_iteration_%i_counter_%i_freevoxel_%i" %
                                 (iteration, bm.counter, free_voxel),
                                 path=save_net_path + '/images/')

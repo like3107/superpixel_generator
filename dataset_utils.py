@@ -389,15 +389,15 @@ class BatchManV0:
                     if self.global_errormap[batch, 0, pos[0]-self.pad,
                                             pos[1]-self.pad]:
                         original_error = np.array(pos)
-                        print 'found crossing. type II linked to type I. Error #',\
-                            self.counter
+                        # print 'found crossing. type II linked to type I. Error #',\
+                        #     self.counter
 
                         error_I["e1_pos"] = original_error
                         error_I["e1_time"] = self.global_timemap[batch,
                                                                        pos[0],
                                                                        pos[1]]
                         error_I["e1_direction"] = d
-       # debug
+        # debug
         self.draw_debug_image("%i_walk_%i_type_%s" % (self.counter,
                                                       len(self.global_error_dict),
                                                       self.current_type),
@@ -547,7 +547,7 @@ class BatchManV0:
         self.initialize_priority_queue(global_seeds, global_ids)
 
     def init_train_path_batch(self):
-        print 'init path batch'
+        # print 'init path batch'
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
         self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
@@ -975,7 +975,7 @@ class BatchMemento:
         if self.memory is None:
             self.memory = np.zeros(([self.ms] + list(mini_b.shape[-3:])),
                                    dtype=theano.config.floatX)
-            self.direction_memory = np.zeros((self.ms, 1), dtype=np.int32)
+            self.direction_memory = np.zeros((self.ms), dtype=np.int32)
         if len(mini_b.shape) == 3:  # if single slice
 
             slices_to_add = 1
@@ -989,7 +989,7 @@ class BatchMemento:
 
         self.memory[self.counter:self.counter+slices_to_add, :, :, :] = \
             mini_b
-        self.direction_memory[self.counter:self.counter+slices_to_add, 0] = \
+        self.direction_memory[self.counter:self.counter+slices_to_add] = \
             dir_b
         self.counter += slices_to_add
 

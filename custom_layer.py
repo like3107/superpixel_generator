@@ -18,6 +18,28 @@ class SliceLayer(lasagne.layers.Layer):
         return (input_shape[0], 1, 3, 3)
 
 
+class BatchChannelSlicer(las.layers.MergeLayer):
+    """
+    input: 2 Las layers:
+        1. layer which should be sliced along the channels (axis=1)
+        2. vector of which indices should be used (one channel per batch)
+    output: shape (b, 1, ...)
+    """
+    def __init__(self, incomings, **kwargs):
+        super(BatchChannelSlicer, self).__init__(incomings, **kwargs)
+
+    def get_output_shape_for(self, input_shape):
+        if len(input_shape) > 2:
+            return tuple((input_shape[0], 1, input_shape[2:]))
+        else:
+            return tuple((input_shape[0], 1))
+
+    def get_output_for(self, inputs, **kwargs):
+        l_in, slices = inputs
+        batches = l_in.shape[0]
+        return l_in[T.arange(batches), slices, None]
+
+
 if __name__ == '__main__':
     shape = (10, 2, 4, 4)
     l_in = las.layers.InputLayer(shape)
