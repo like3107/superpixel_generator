@@ -719,7 +719,7 @@ class BatchManV0:
                             elif center_intruder_b and neighbor_intruder_b:
                                 # TODO: TYPE 3 error tmp
                                 # raise Exception('error type 3 found')
-                                print 'type 3 error not yet implemented'
+                                # print 'type 3 error not yet implemented'
                                 # self.find_type_I_error()
                                 # self.find_source_of_II_error()
 
