@@ -176,6 +176,7 @@ class BatchManV0:
         self.priority_queue = None
         self.crossing_errors = None
         self.find_errors = find_errors
+        self.error_indicator_pass = None
 
     def prepare_global_batch(self, return_gt_ids=True, start=None):
         # initialize two global batches = region where CNNs compete
@@ -346,9 +347,10 @@ class BatchManV0:
                 yield center_x, center_y, direction
 
     def get_path_to_root(self, start_position, batch):
-        def update_postion(pos, direction):
+
+        def update_position(pos, direction):
             offsets = zip([-1, 0, 1, 0], [0, -1, 0, 1])[int(direction)]
-            new_pos = [pos[0]-offsets[0], pos[1]-offsets[1]]
+            new_pos = [pos[0] - offsets[0], pos[1] - offsets[1]]
             return new_pos
 
         current_position = start_position
@@ -357,9 +359,9 @@ class BatchManV0:
                                            current_position[0]-self.pad,
                                            current_position[1]-self.pad]
         yield start_position, current_direction
-        while (current_direction != -1):
-            current_position = update_postion(current_position,
-                                              current_direction)
+        while current_direction != -1:
+            current_position = update_position(current_position,
+                                               current_direction)
             current_direction = \
                 self.global_directionmap_batch[batch,
                                                current_position[0]-self.pad,
@@ -373,20 +375,23 @@ class BatchManV0:
                 batch = error_I["batch"]
                 for pos, d in self.get_path_to_root(start_position, batch):
                     # debug
-                    self.global_errormap[batch, 2, pos[0]-self.pad,
-                                         pos[1]-self.pad] = True
+                    # shortest path of error type II to root (1st crossing)
+                    self.global_errormap[batch, 2,
+                                         pos[0] - self.pad,
+                                         pos[1] - self.pad] = True
                     # debug
+                    # remember type I error on path
                     if self.global_errormap[batch, 0, pos[0]-self.pad,
                                             pos[1]-self.pad]:
                         original_error = np.array(pos)
-                        print 'found crossing'
+                        print 'found crossing. type II linked to type I'
 
                         error_I["crossing"] = original_error
                         error_I["crossing_time"] = self.global_timemap[batch,
                                                                        pos[0],
                                                                        pos[1]]
                         error_I["crossing_direction"] = d
-           # debug
+        # debug
         self.draw_debug_image("walk_"+str(len(self.global_error_dict)),
                               save=True)
         # self.draw_error_reconst("reconst_"+str(len(self.global_error_dict)))
@@ -597,8 +602,9 @@ class BatchManV0:
         # remember if crossed once and always carry this information along every
         # path for error indicator
         self.error_indicator_pass = np.zeros(self.bs, dtype=np.bool)
+
         def error_index(b, id1, id2):
-            return (b, min(id1, id2), max(id1, id2))
+            return b, min(id1, id2), max(id1, id2)
 
         self.global_time += 1
         for b in range(self.bs):
@@ -621,58 +627,58 @@ class BatchManV0:
                                 center_x,
                                 center_y] = time_put
 
-            # check for errors in boundary crossing (type I)
+            # pass on if type I error already occured
             if error_indicator:
                 self.error_indicator_pass[b] = True     # remember to pass on
-                self.global_errormap[b, 1, center_x-self.pad, center_y-self.pad] \
-                    = 1
-
+                self.global_errormap[b, 1,
+                                     center_x-self.pad,
+                                     center_y-self.pad] = 1
+            # check for type I errors
             elif self.global_id2gt[b][Id] != \
                     self.global_label_batch[b, center_x-self.pad,
                                             center_y-self.pad]:
                 self.global_errormap[b, 0, center_x-self.pad,
-                                     center_y-self.pad] \
-                    = 1
+                                     center_y-self.pad] = 1
                 self.error_indicator_pass[b] = True
 
-            # check for errors in neighbor regions
+            # check for errors in neighbor regions, type II
             if self.find_errors:
                 for x, y, direction in self.walk_cross_coords([center_x,
                                                                center_y]):
-                    # print self.global_errormap[b,x-self.pad,y-self.pad]
-                    c = int(self.global_claims[b, x, y])
-                    if c > 0 and not error_index(b,Id,c) in self.global_error_dict:
+                    c = int(self.global_claims[b, x, y])    # neighbor label
+                    if c > 0 and not error_index(b, Id, c) in self.global_error_dict:
                         claimId = int(self.global_id2gt[b][c])
                         gtId = int(self.global_id2gt[b][Id])
-                        if claimId > 0 and claimId != gtId:  # neighbor is claimed
-                            # print "neighbor is claimed"
-                            center_introder_b = \
+                        if claimId > 0 and claimId != gtId:  # neighbor claimed
+                            center_intruder_b = \
                                 self.global_errormap[b, 1, center_x-self.pad,
                                                     center_y-self.pad]
-                            neighbor_introduer_b = \
+                            neighbor_intruder_b = \
                                 self.global_errormap[b, 1, x-self.pad,
                                                      y-self.pad]
-                            if center_introder_b and not neighbor_introduer_b:
+                            if center_intruder_b and not neighbor_intruder_b:
                                 # print "fast intrusion"
-                                self.global_error_dict[error_index(b,Id,c)]  = {"batch":b,
-                                  "touch_time":self.global_timemap[b, x, y],
-                                  "large_pos":[center_x, center_y],
-                                  "large_direction":direction,
-                                  "large_id":Id,
-                                  "small_pos":[x, y],
-                                  "small_id":c}
+                                self.global_error_dict[error_index(b, Id, c)] = \
+                                    {"batch": b,
+                                     "touch_time": self.global_timemap[b, x, y],
+                                     "large_pos": [center_x, center_y],
+                                     "large_direction": direction,
+                                     "large_id": Id,
+                                     "small_pos": [x, y],
+                                     "small_id": c}
                                 self.find_type_I_error()
-                            elif not center_introder_b and neighbor_introduer_b:
+                            elif not center_intruder_b and neighbor_intruder_b:
                                 # print "slow intrusion"
-                                self.global_error_dict[error_index(b,Id,c)] = {"batch":b,
-                                  "touch_time":self.global_timemap[b, x, y],
-                                  "large_pos":[x,y],
-                                  "large_direction":(direction + 2)%4, # turns direction by 180 degrees
-                                  "large_id":c,
-                                  "small_pos":[center_x, center_y],
-                                  "small_id":Id}
+                                self.global_error_dict[error_index(b, Id, c)] = \
+                                    {"batch": b,
+                                     "touch_time": self.global_timemap[b, x, y],
+                                     "large_pos": [x, y],
+                                     "large_direction": (direction + 2) % 4, # turns direction by 180 degrees
+                                     "large_id": c,
+                                     "small_pos": [center_x, center_y],
+                                     "small_id": Id}
                                 self.find_type_I_error()
-                            elif center_introder_b and neighbor_introduer_b:
+                            elif center_intruder_b and neighbor_intruder_b:
                                 # TODO: TYPE 3 error tmp
                                 # raise Exception('error type 3 found')
                                 print 'type 3 error not yet implemented'
@@ -724,7 +730,7 @@ class BatchManV0:
     def update_priority_path_queue(self, heights_batch, centers, ids):
         directions = [0, 1, 2, 3]
         for b, center, Id, heights in zip(range(self.bs), centers, ids,
-                                        heights_batch[:, :, 0, 0]):
+                                          heights_batch[:, :, 0, 0]):
             # if possibly wrong
             new_seeds_x, new_seeds_y, _ = self.get_cross_coords(center)
 
@@ -747,7 +753,8 @@ class BatchManV0:
                         height_j
                     self.priority_queue[b].put((height, x, y,
                                                 Id, direction,
-                                               error_indicator, self.global_time))
+                                               error_indicator,
+                                                self.global_time))
 
     def update_priority_path_queue_prediction(self, heights_batch, centers, ids):
         directions = [0, 1, 2, 3]
