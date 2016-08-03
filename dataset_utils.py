@@ -756,12 +756,12 @@ class BatchManV0:
 
                     height_prev = self.global_heightmap_batch[b, x-self.pad,
                                                               y-self.pad]
-                    height_j = max(heights[direction], height_prev)
+                    height_j = max(height, height_prev)
                     if height_prev > 0:
                         height_j = min(height_j, height_prev)
                     self.global_heightmap_batch[b, x-self.pad, y-self.pad] = \
                         height_j
-                    self.priority_queue[b].put((height, np.random.random(), x, y,
+                    self.priority_queue[b].put((height_j, np.random.random(), x, y,
                                                 Id, direction,
                                                error_indicator,
                                                 self.global_time))
@@ -781,12 +781,12 @@ class BatchManV0:
 
                     height_prev = self.global_heightmap_batch[b, x-self.pad,
                                                               y-self.pad]
-                    height_j = max(heights[direction], height_prev)
+                    height_j = max(height, height_prev)
                     if height_prev > 0:
                         height_j = min(height_j, height_prev)
                     self.global_heightmap_batch[b, x-self.pad, y-self.pad] = \
                         height_j
-                    self.priority_queue[b].put((height, x, y,
+                    self.priority_queue[b].put((height_j, x, y,
                                                 Id, direction,
                                                False, self.global_time))
 
