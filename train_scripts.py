@@ -157,7 +157,7 @@ def train_script_v1():
 
         # clear memory, do fine-tuning and reset image
         if Memento1.is_ready():
-            ft_iterations += 1
+            ft_iteration += 1
             print 'Finetuning...'
             batch_ft_t1, dir_t1 = Memento1.get_batch()
             batch_ft_t2, dir_t2 = Memento2.get_batch()
@@ -171,7 +171,7 @@ def train_script_v1():
             fine_tune_losses[0].append(ft_loss_train_noreg)
             fine_tune_losses[1].append(ft_loss_train)
 
-            u.plot_train_val_errors(fine_tune_losses, range(ft_iterations),
+            u.plot_train_val_errors(fine_tune_losses, range(ft_iteration),
                                     save_net_path + 'ft_training.png',
                                     ['ft loss no reg no dropout', 'ft loss'])
 
