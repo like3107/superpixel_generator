@@ -18,7 +18,7 @@ def train_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = False
+    load_net_b = True
 
     net_name = 'cnn_path_v1_tune_trash'
     label_path = './data/volumes/label_a.h5'
@@ -36,11 +36,11 @@ def train_script_v1():
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
-    batch_size_ft = 4
+    batch_size_ft = 10
     global_edge_len = 300
     gt_seeds_b = False
     find_errors = True
-    fine_tuning = True
+
     # training parameter
     c.use('gpu0')
     max_iter = 1000000000
@@ -134,13 +134,14 @@ def train_script_v1():
 
         if iteration % 100 == 0:
             if len(bm.global_error_dict) >= batch_size_ft or \
-                            free_voxel < 1010:
+                            free_voxel < 101:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 print error_b_type2.shape
                 print 'error shapes', error_b_type1.shape
                 Memento1.add_to_memory(error_b_type1, dir1)
                 Memento2.add_to_memory(error_b_type2, dir2)
+                print "resetting",free_voxel,free_voxel_emtpy
                 bm.init_train_path_batch()
                 bm_val.init_train_path_batch()
                 free_voxel = free_voxel_emtpy
@@ -152,43 +153,45 @@ def train_script_v1():
                                             path=save_net_path + '/images/')
 
         if Memento1.is_ready():
-            print 'Memento is ready'
+            print 'Memento is ready ... finetuning...'
             batch_ft_t1, dir_t1 = Memento1.get_batch()
             batch_ft_t2, dir_t2 = Memento2.get_batch()
             batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
             batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
-            loss_train_fine_f(batch_ft, batch_dir_ft)
+            loss_train_fine = float(loss_train_fine_f(batch_ft, batch_dir_ft))
+            print "loss_train_fine %.4f" % loss_train_fine
             Memento1.clear_memory()
             Memento2.clear_memory()
             bm_val.init_train_path_batch()
             bm.init_train_path_batch()
             free_voxel = free_voxel_emtpy
 
-        if iteration % 10 == 0 and iteration < 50000:
-            loss_train = float(loss_train_f(raw, gt))
+        # if iteration % 10 == 0 and iteration < 50000:
+        #     loss_train = float(loss_train_f(raw, gt))
 
-        if iteration % 1000 == 0:
-            loss_train_no_reg = float(loss_valid_f(raw, gt))
-            loss_valid = float(loss_valid_f(raw_val, gt))
-            print '\r loss train %.4f, loss train_noreg %.4f, ' \
-                  'loss_validation %.4f, iteration %i' % \
-                  (loss_train, loss_train_no_reg, loss_valid, iteration),
-            if save_net_b:
-                iterations.append(iteration)
-                losses[0].append(loss_train)
-                losses[1].append(loss_train_no_reg)
-                losses[2].append(loss_valid)
-                u.plot_train_val_errors(
-                    losses,
-                    iterations,
-                    save_net_path + 'training.png',
-                    names=['loss train', 'loss train no reg', 'loss valid'])
+        # if iteration % 1000 == 0:
+        #     loss_train_no_reg = float(loss_valid_f(raw, gt))
+        #     loss_valid = float(loss_valid_f(raw_val, gt))
+        #     print '\r loss train %.4f, loss train_noreg %.4f, ' \
+        #           'loss_validation %.4f, iteration %i' % \
+        #           (loss_train, loss_train_no_reg, loss_valid, iteration),
+        #     if save_net_b:
+        #         iterations.append(iteration)
+        #         losses[0].append(loss_train)
+        #         losses[1].append(loss_train_no_reg)
+        #         losses[2].append(loss_valid)
+        #         u.plot_train_val_errors(
+        #             losses,
+        #             iterations,
+        #             save_net_path + 'training.png',
+        #             names=['loss train', 'loss train no reg', 'loss valid'])
     #
         # monitor growing on validation set
         if iteration % 1000 == 0:
-            print "free_voxel ",free_voxel
-            print "errors",np.sum(bm.global_errormap)
-            bm.draw_debug_image("val_iteration_%i_freevoxel_%i" %
+            # print "free_voxel ",free_voxel
+            # print "errors",np.sum(bm.global_errormap)
+            print "Memento size ",Memento1.counter
+            bm.draw_debug_image("train_iteration_%i_freevoxel_%i" %
                                 (iteration, free_voxel),
                                 path=save_net_path + '/images/')
 
