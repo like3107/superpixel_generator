@@ -18,9 +18,9 @@ def train_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = False
+    load_net_b = True
 
-    net_name = 'cnn_path_v1_tune_trash'
+    net_name = 'cnn_path_v1_fine_tune'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -36,7 +36,7 @@ def train_script_v1():
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
-    batch_size_ft = 2
+    batch_size_ft = 16
     global_edge_len = 300
     gt_seeds_b = False
     find_errors = True
