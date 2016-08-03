@@ -176,7 +176,6 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
     return loss_train_f, loss_valid_f, probs_f
 
 
-
 def loss_updates_hydra_v0(l_in_data, l_in_direction, last_layer,
                           L1_weight=10**-5):
 

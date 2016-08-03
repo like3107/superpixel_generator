@@ -62,6 +62,7 @@ def draw_image(image_info, target):
             centers = np.array(image_info['scatter'])
             target.scatter(centers[:, 1], centers[:, 0], s=1, marker='.')
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
+    target.axis('off')
 
 def save_images(image_dicts, path, name, terminate=False):
     if len(image_dicts) == 0:

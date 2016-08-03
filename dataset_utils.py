@@ -178,6 +178,9 @@ class BatchManV0:
         self.find_errors = find_errors
         self.error_indicator_pass = None
 
+        # debug
+        self.counter = 0
+
     def prepare_global_batch(self, return_gt_ids=True, start=None):
         # initialize two global batches = region where CNNs compete
         # against each other
@@ -257,19 +260,19 @@ class BatchManV0:
             self.global_id2gt.append(id2gt)
             global_seeds.append(seeds)
         self.global_seeds = global_seeds
-        return global_seeds, global_ids
+        global_seed_ids = self.global_seed_ids
+        return global_seeds, global_seed_ids
 
     def get_seeds_by_minimum(self, sigma=2, min_dist=8, thresh=0.3):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
         """
-
         self.global_id2gt = []
         bin_membrane = np.ones(self.global_label_batch.shape, dtype=np.bool)
         dist_trf = np.zeros_like(self.global_label_batch)
         global_seeds = []
-        global_seed_ids = []
+        self.global_seed_ids = []
         for b in range(self.bs):
             bin_membrane[b, :, :][self.global_batch[b,
                                                     self.pad:-self.pad,
@@ -288,16 +291,18 @@ class BatchManV0:
                 seeds = np.array([self.global_el / 2, self.global_el / 2])
 
             global_seeds.append(seeds)
-            global_seed_ids.append(range(1, len(seeds)+1))
+            seed_ids = []
             id2gt = {}
             for id_counter, seed in enumerate(seeds):
+                seed_ids.append(id_counter + 1)
                 id2gt[id_counter+1] = \
                     self.global_label_batch[b,
                                             seed[0]-self.pad,
                                             seed[1]-self.pad]
             self.global_id2gt.append(id2gt)
+            self.global_seed_ids.append(seed_ids)
         self.global_seeds = global_seeds
-        return global_seeds, global_seed_ids
+        return global_seeds, self.global_seed_ids
 
     def initialize_priority_queue(self, global_seeds, global_ids):
         b = -1  # batch counter
@@ -384,7 +389,8 @@ class BatchManV0:
                     if self.global_errormap[batch, 0, pos[0]-self.pad,
                                             pos[1]-self.pad]:
                         original_error = np.array(pos)
-                        print 'found crossing. type II linked to type I'
+                        print 'found crossing. type II linked to type I. Error #',\
+                            self.counter
 
                         error_I["e1_pos"] = original_error
                         error_I["e1_time"] = self.global_timemap[batch,
@@ -392,7 +398,11 @@ class BatchManV0:
                                                                        pos[1]]
                         error_I["e1_direction"] = d
        # debug
-        self.draw_debug_image("walk_"+"%10d" % time.time(),save=True)
+        self.draw_debug_image("%i_walk_%i_type_%s" % (self.counter,
+                                                      len(self.global_error_dict),
+                                                      self.current_type),
+                              save=True)
+        self.counter += 1
         # self.draw_error_reconst("reconst_"+str(len(self.global_error_dict)))
 
     def find_source_of_II_error(self):
@@ -400,7 +410,8 @@ class BatchManV0:
         if not "e2_pos" in error_I:
             batch = error_I["batch"]
             start_position = error_I["small_pos"]
-            current_height = self.global_heightmap_batch[batch, start_position[0]-self.pad,
+            current_height = self.global_heightmap_batch[batch,
+                                                         start_position[0]-self.pad,
                                                 start_position[1]-self.pad]
             # find the beginning of the plateau
             for pos, d in self.get_path_to_root(start_position, batch):
@@ -618,7 +629,6 @@ class BatchManV0:
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
         return raw_batch, gts, centers, ids
 
-
     def get_centers_from_queue(self):
         centers = []
         ids = []
@@ -681,6 +691,8 @@ class BatchManV0:
                                                      y-self.pad]
                             if center_intruder_b and not neighbor_intruder_b:
                                 # print "fast intrusion"
+                                # debug
+                                self.current_type = 'fastI'
                                 self.global_error_dict[error_index(b, Id, c)] = \
                                     {"batch": b,
                                      "touch_time": self.global_timemap[b, x, y],
@@ -693,6 +705,7 @@ class BatchManV0:
                                 self.find_source_of_II_error()
                             elif not center_intruder_b and neighbor_intruder_b:
                                 # print "slow intrusion"
+                                self.current_type = 'slowI'
                                 self.global_error_dict[error_index(b, Id, c)] = \
                                     {"batch": b,
                                      "touch_time": self.global_timemap[b, x, y],
@@ -793,7 +806,7 @@ class BatchManV0:
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
         raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
-        for i,b in enumerate(batches):
+        for i, b in enumerate(batches):
             raw_batch[i, 0, :, :] = self.crop_raw(centers[i], b)
             raw_batch[i, 1, :, :] = self.crop_mask_claimed(centers[i], b, ids[i])
 
@@ -900,7 +913,7 @@ class BatchManV0:
                 error["draw_file"] = image_name+'_'+str(e_idx)
                 u.save_images(plot_images, path=path, name=image_name+'_'+str(e_idx))
             else:
-                print "skipping ",e_idx
+                print "skipping ", e_idx
 
 
     def draw_debug_image(self, image_name, path='./data/nets/debug/images/',
