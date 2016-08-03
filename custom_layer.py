@@ -5,6 +5,20 @@ import theano
 from theano import tensor as T
 
 
+class SliceLayer(lasagne.layers.Layer):
+
+    def get_output_for(self, input, **kwargs):
+        bs = self.input_shape[0]
+        middle_ind = self.input_shape[2]/2
+        output_t = input[:, 0:1,
+                         middle_ind-1:middle_ind+2,
+                         middle_ind - 1:middle_ind + 2]
+        return output_t
+
+    def get_output_shape_for(self, input_shape):
+        return (input_shape[0], 1, 3, 3)
+
+
 class BatchChannelSlicer(las.layers.MergeLayer):
     """
     input: 2 Las layers:

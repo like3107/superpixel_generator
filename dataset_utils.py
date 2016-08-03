@@ -394,8 +394,8 @@ class BatchManV0:
 
                         error_I["e1_pos"] = original_error
                         error_I["e1_time"] = self.global_timemap[batch,
-                                                                       pos[0],
-                                                                       pos[1]]
+                                                                 pos[0],
+                                                                 pos[1]]
                         error_I["e1_direction"] = d
         # debug
         self.draw_debug_image("%i_walk_%i_type_%s" % (self.counter,
@@ -722,6 +722,7 @@ class BatchManV0:
                                 # print 'type 3 error not yet implemented'
                                 # self.find_type_I_error()
                                 # self.find_source_of_II_error()
+                                pass
 
             centers.append((center_x, center_y))
             ids.append(Id)
