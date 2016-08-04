@@ -742,8 +742,8 @@ class BatchManV0:
             while already_claimed:
                 if self.priority_queue[b].empty():
                     raise Exception('priority queue empty. All pixels labeled')
-                height, center_x, center_y, Id, direction, error_indicator, \
-                    time_put = self.priority_queue[b].get()
+                height, _, center_x, center_y, Id, direction, error_indicator, \
+                        time_put = self.priority_queue[b].get()
                 if self.global_claims[b, center_x, center_y] == 0:
                     already_claimed = False
             assert (self.global_claims[b, center_x, center_y] == 0)
@@ -803,7 +803,7 @@ class BatchManV0:
                         height_j = min(height_j, height_prev)
                     self.global_heightmap_batch[b, x-self.pad, y-self.pad] = \
                         height_j
-                    self.priority_queue[b].put((height_j, x, y,
+                    self.priority_queue[b].put((height_j, np.random.random(), x, y,
                                                 Id, direction,
                                                False, self.global_time))
 
