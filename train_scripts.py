@@ -20,7 +20,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = True
 
-    net_name = 'cnn_path_v1_fine_tune'
+    net_name = 'cnn_path_v1_fine_tune2'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -32,17 +32,18 @@ def train_script_v1():
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/rough/net_2500000'      # if load true
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
-    load_net_path = './data/net_2500000'      # if load true
+    load_net_path = './data/nets/cnn_path_v1_fine_tune/net_500000.h5'      # if load true
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     batch_size_ft = 16
     global_edge_len = 300
-    gt_seeds_b = False
+    gt_seeds_b = True
     find_errors = True
 
     # training parameter
     c.use('gpu0')
+    train_iter = 1000000
     max_iter = 1000000000
     save_counter = 100000        # save every n iterations
 
@@ -137,7 +138,7 @@ def train_script_v1():
         # update height difference errors
         if iteration % 100 == 0:
             if len(bm.global_error_dict) >= batch_size_ft or \
-                            free_voxel < 1010:
+                            free_voxel < 101:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 Memento1.add_to_memory(error_b_type1, dir1)
@@ -179,7 +180,7 @@ def train_script_v1():
             bm.init_train_path_batch()
             free_voxel = free_voxel_empty
 
-        if iteration % 10 == 0 and iteration < 50000:
+        if iteration % 10 == 0 and iteration < train_iter:
             loss_train = float(loss_train_f(raw, gt))
 
         # monitor training and plot loss
@@ -201,7 +202,7 @@ def train_script_v1():
                     names=['loss train', 'loss train no reg', 'loss valid'])
 
         # monitor growth on validation set tmp debug change train to val
-        if iteration % 100000 == 0:
+        if iteration % 10000 == 0:
             bm.draw_debug_image("train_iteration_%i_counter_%i_freevoxel_%i" %
                                 (iteration, bm.counter, free_voxel),
                                 path=save_net_path + '/images/')

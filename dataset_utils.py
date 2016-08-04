@@ -11,6 +11,7 @@ import utils as u
 from scipy.ndimage import convolve, gaussian_filter
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage.feature import peak_local_max
+from skimage.morphology import label
 import time
 import h5py
 
@@ -217,6 +218,9 @@ class BatchManV0:
                     self.labels[ind_b[b],
                                 ind_x[b]:ind_x[b] + self.global_el - self.pl,
                                 ind_y[b]:ind_y[b] + self.global_el - self.pl]
+                if self.gt_seeds_b:
+                    self.global_seed_ids[b, :, :] = \
+                        label(self.global_label_batch[b, :, :])
             if return_gt_ids and self.train_b:
                 global_ids.append(
                     np.unique(
@@ -269,6 +273,7 @@ class BatchManV0:
         :return:
         """
         self.global_id2gt = []
+
         bin_membrane = np.ones(self.global_label_batch.shape, dtype=np.bool)
         dist_trf = np.zeros_like(self.global_label_batch)
         global_seeds = []
@@ -398,10 +403,10 @@ class BatchManV0:
                                                                  pos[1]]
                         error_I["e1_direction"] = d
         # debug
-        self.draw_debug_image("%i_walk_%i_type_%s" % (self.counter,
-                                                      len(self.global_error_dict),
-                                                      self.current_type),
-                              save=True)
+        # self.draw_debug_image("%i_walk_%i_type_%s" % (self.counter,
+        #                                               len(self.global_error_dict),
+        #                                               self.current_type),
+        #                       save=True)
         self.counter += 1
         # self.draw_error_reconst("reconst_"+str(len(self.global_error_dict)))
 
@@ -565,9 +570,7 @@ class BatchManV0:
         self.global_errormap = np.zeros((self.bs, 3,self.global_el - self.pl,
                                             self.global_el - self.pl),
                                         dtype=np.bool)
-
-        self.global_error_dict = {}
-
+        self.global_error_dict = {}-
         self.global_directionmap_batch = np.zeros_like(self.global_label_batch)\
                                          - 1
         self.prepare_global_batch(return_gt_ids=False)
