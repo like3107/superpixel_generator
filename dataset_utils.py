@@ -570,7 +570,7 @@ class BatchManV0:
         self.global_errormap = np.zeros((self.bs, 3,self.global_el - self.pl,
                                             self.global_el - self.pl),
                                         dtype=np.bool)
-        self.global_error_dict = {}-
+        self.global_error_dict = {}
         self.global_directionmap_batch = np.zeros_like(self.global_label_batch)\
                                          - 1
         self.prepare_global_batch(return_gt_ids=False)
