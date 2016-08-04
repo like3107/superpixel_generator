@@ -219,7 +219,7 @@ class BatchManV0:
                                 ind_x[b]:ind_x[b] + self.global_el - self.pl,
                                 ind_y[b]:ind_y[b] + self.global_el - self.pl]
                 if self.gt_seeds_b:
-                    self.global_seed_ids[b, :, :] = \
+                    self.global_label_batch[b, :, :] = \
                         label(self.global_label_batch[b, :, :])
             if return_gt_ids and self.train_b:
                 global_ids.append(
@@ -237,18 +237,18 @@ class BatchManV0:
         global_seeds = []   # seeds relative to global_claims, global_batch
         self.global_id2gt = []
 
-        global_ids = []
+        self.global_seed_ids = []
         dist_trf = np.zeros_like(self.global_label_batch)
         #  map (- self.pad for global_label_label)
         for b in range(self.bs):
-            global_ids.append(np.unique(
+            self.global_seed_ids.append(np.unique(
                 self.global_label_batch[b, :, :]).astype(int))
 
             _, dist_trf[b, :, :] = \
                 segmenation_to_membrane_core(self.global_label_batch[b, :, :])
         id_old = 0
 
-        for b, ids in zip(range(self.bs), global_ids):    # iterates over batches
+        for b, ids in zip(range(self.bs), self.global_seed_ids):    # iterates over batches
             seeds = []
             id2gt = {}
             for Id in ids:      # ids within each slice
