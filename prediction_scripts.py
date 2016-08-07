@@ -16,18 +16,21 @@ def pred_script_v1():
     # dictions and train, val... are saved
     save_net_b = True
     load_net_b = False
-
     net_name = 'gt_seeds_2D'
     raw_path = './data/volumes/membranes_b.h5'
-    load_net_path = '/mnt/localdata01/lschott/src/superpixel_generator/' \
-                    'data/nets/cnn_PathPredecessor_gtseeds_big/net_4590000'
+    label_path = './data/volumes/label_b.h5'
+    height_gt_path = './data/volumes/height_b.h5'
+    height_gt_key = 'height'
+
+    load_net_path = './data/nets/cnn_path_v1_fine_tune2/net_100000'
     save_path = './data/membranes_real_seeds.h5'
 
-    batch_size = 125  # > 4
+    batch_size = 4  # > 4
     global_edge_len = 1290      # 1250  + patch_len for memb
+    gt_seeds_b = True
 
     # training parameter
-    c.use('gpu1')
+    c.use('gpu0')
 
     # choose your network from nets.py
     network = nets.build_ID_v0
@@ -40,11 +43,12 @@ def pred_script_v1():
     probs_f = nets.prob_funcs(l_in, l_out)
 
     print 'Loading data and Priority queue init'
-    bm = du.BatchManV0(raw_path, label=None,
+    bm = du.BatchManV0(raw_path, label=label_path,
                        batch_size=batch_size,
                        patch_len=patch_len, global_edge_len=global_edge_len,
-                       padding_b=True, train_b=False)
-    bm.init_train_path_batch()
+                       padding_b=True, train_b=False, gt_seeds_b=gt_seeds_b,
+                       height_gt=height_gt_path, height_gt_key=height_gt_key)
+    # bm.init_train_path_batch()
     u.load_network(load_net_path, l_out)
 
     prediction = np.zeros((batch_size, bm.global_el - bm.pl,
@@ -66,6 +70,7 @@ def pred_script_v1():
                 du.save_h5(save_path, 'pred', data=prediction, overwrite='w')
 
                 fig, ax = plt.subplots(1, 2)
+                bm.draw_debug_image('pred_%s_%i' % (net_name, j))
                 ax[0].imshow(bm.global_claims[0, :, :],
                              cmap=u.random_color_map(), interpolation='none')
                 ax[1].imshow(bm.global_batch[0, :, :],

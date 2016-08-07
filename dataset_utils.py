@@ -116,13 +116,14 @@ class BatchManV0:
         """
 
         self.train_b = train_b
+        self.gt_seeds_b = gt_seeds_b
         if not train_b:     # tmp
             assert (padding_b)
         if isinstance(raw, str):
             self.raw = load_h5(raw, h5_key=raw_key)[0]
         else:
             self.raw = raw
-        if self.train_b:
+        if self.train_b or self.gt_seeds_b:
             if isinstance(label, str):
                 self.labels = load_h5(label, h5_key=label_key)[0]
             else:
@@ -170,7 +171,6 @@ class BatchManV0:
         self.global_heightmap_batch = None      # no padding
         self.global_timemap = None              # no padding
         self.global_errormap = None             # no padding
-        self.gt_seeds_b = gt_seeds_b
         self.global_seeds = None                # !!ALL!! coords include padding
         self.global_time = 0
         self.global_error_dict = None
@@ -213,7 +213,7 @@ class BatchManV0:
                     self.height_gt[ind_b[b],
                                    ind_x[b]:ind_x[b] + self.global_el - self.pl,
                                    ind_y[b]:ind_y[b] + self.global_el - self.pl]
-            if self.train_b:
+            if self.train_b or self.gt_seeds_b:
                 self.global_label_batch[b, :, :] = \
                     self.labels[ind_b[b],
                                 ind_x[b]:ind_x[b] + self.global_el - self.pl,
@@ -236,30 +236,26 @@ class BatchManV0:
         """
         global_seeds = []   # seeds relative to global_claims, global_batch
         self.global_id2gt = []
-
         self.global_seed_ids = []
+
         dist_trf = np.zeros_like(self.global_label_batch)
-        #  map (- self.pad for global_label_label)
         for b in range(self.bs):
             self.global_seed_ids.append(np.unique(
                 self.global_label_batch[b, :, :]).astype(int))
 
             _, dist_trf[b, :, :] = \
                 segmenation_to_membrane_core(self.global_label_batch[b, :, :])
-        id_old = 0
 
         for b, ids in zip(range(self.bs), self.global_seed_ids):    # iterates over batches
             seeds = []
             id2gt = {}
             for Id in ids:      # ids within each slice
-                assert (Id != id_old)
-                id_old = Id
                 id2gt[Id] = Id
                 regions = np.where(
                     self.global_label_batch[b, :, :] == Id)
                 seed_ind = np.argmax(dist_trf[b][regions])
-                seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) \
-                                 + self.pad
+                seed = np.array([regions[0][seed_ind],
+                                 regions[1][seed_ind]]) + self.pad
                 seeds.append([seed[0], seed[1]])
             self.global_id2gt.append(id2gt)
             global_seeds.append(seeds)
@@ -571,8 +567,9 @@ class BatchManV0:
                                             self.global_el - self.pl),
                                         dtype=np.bool)
         self.global_error_dict = {}
-        self.global_directionmap_batch = np.zeros_like(self.global_label_batch)\
-                                         - 1
+        self.global_directionmap_batch = \
+            np.zeros_like(self.global_label_batch) - 1
+        # set global_batch and global_label_batch
         self.prepare_global_batch(return_gt_ids=False)
         # also initializes id_2_gt lookup, seeds in coord syst of label
         if self.gt_seeds_b:
@@ -826,9 +823,20 @@ class BatchManV0:
         self.global_claims = np.ones((self.bs, self.rl, self.rl))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
         self.global_batch[:, :, :] = self.raw[start:stop, :, :]
-        self.prepare_global_batch(return_gt_ids=False, start=start)
 
-        global_seeds, global_seed_ids = self.get_seeds_by_minimum()
+        if self.gt_seeds_b:
+            self.global_label_batch = np.zeros(
+                (self.bs, self.global_el - self.pl,
+                 self.global_el - self.pl),
+                dtype=theano.config.floatX)
+            self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
+            self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
+
+        self.prepare_global_batch(return_gt_ids=False, start=start)
+        if self.gt_seeds_b:
+            global_seeds, global_seed_ids = self.get_gt_seeds()
+        else:
+            global_seeds, global_seed_ids = self.get_seeds_by_minimum()
         self.initialize_path_priority_queue(global_seeds, global_seed_ids)
 
     def get_pred_batch(self):
@@ -938,21 +946,22 @@ class BatchManV0:
         # print self.global_error_dict
         # print [np.array(e["e1_pos"])-self.pad for e in self.global_error_dict.values() if "e1_pos" in e]
         # print [np.array(e["e1_pos"])-self.pad for e in self.global_error_dict.values() if "e1_pos" in e and e["batch"] == b]
-        plot_images.append({"title":"Ground Truth Label",
+        if self.train_b:
+            plot_images.append({"title":"Ground Truth Label",
                             'scatter':np.array([np.array(e["e1_pos"])-self.pad for e in self.global_error_dict.values() if "e1_pos" in e and e["batch"] == 4]),
                             "cmap":"rand",
                             'im':self.global_label_batch[b, :, :]})
-        plot_images.append({"title":"Error Map",
-                            'im':self.global_errormap[b, 0, :, :]})
-        plot_images.append({"title":"path Map",
-                            'scatter':np.array([np.array(e["large_pos"])-self.pad for e in self.global_error_dict.values() if e["batch"] == b]),
-                            'im':self.global_errormap[b, 2, :, :]})
-        plot_images.append({"title":"Direction Map",
-                            'im':self.global_directionmap_batch[b, :, :]})
-        timemap = np.array(self.global_timemap[b, :, :])
-        timemap[timemap<0] = 0
-        plot_images.append({"title":"Time Map ",
-                    'im':timemap})
+            plot_images.append({"title":"Error Map",
+                                'im':self.global_errormap[b, 0, :, :]})
+            plot_images.append({"title":"path Map",
+                                'scatter':np.array([np.array(e["large_pos"])-self.pad for e in self.global_error_dict.values() if e["batch"] == b]),
+                                'im':self.global_errormap[b, 2, :, :]})
+            plot_images.append({"title":"Direction Map",
+                                'im':self.global_directionmap_batch[b, :, :]})
+            timemap = np.array(self.global_timemap[b, :, :])
+            timemap[timemap<0] = 0
+            plot_images.append({"title":"Time Map ",
+                        'im':timemap})
 
         if save:
             u.save_images(plot_images, path=path, name=image_name)
