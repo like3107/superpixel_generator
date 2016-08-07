@@ -100,7 +100,7 @@ class BatchManV0:
                  raw_key=None, label_key=None, batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  train_b=True, find_errors=False,
-                 gt_seeds_b=False, get_gt_id_b=False):
+                 gt_seeds_b=False):
         """
         batch loader. Use either for predict OR train. For valId and train use:
         get batches function.
@@ -117,7 +117,6 @@ class BatchManV0:
 
         self.train_b = train_b
         self.gt_seeds_b = gt_seeds_b
-        self.get_gt_id_b = get_gt_id_b
         if not train_b:     # tmp
             assert (padding_b)
         if isinstance(raw, str):

@@ -38,7 +38,7 @@ def train_script_v1():
     batch_size = 16         # > 4
     batch_size_ft = 16
     global_edge_len = 300
-    gt_seeds_b = True
+    gt_seeds_b = False
     find_errors = False
     find_errors = False
 
@@ -73,9 +73,6 @@ def train_script_v1():
     #             [lasagne.layers.get_output(l_out, deterministic=True),
     #             lasagne.layers.get_output(l_out_direction, deterministic=True)])
 
-    Memento1 = du.BatchMemento(batch_size_ft, 100)
-    Memento2 = du.BatchMemento(batch_size_ft, 100)
-
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
                        height_gt=height_gt_path,
@@ -84,7 +81,7 @@ def train_script_v1():
                        patch_len=patch_len, global_edge_len=global_edge_len,
                        padding_b=False,
                        find_errors=find_errors,
-                       gt_seeds_b=gt_seeds_b, get_gt_id_b=True)
+                       gt_seeds_b=gt_seeds_b)
 
     bm.init_train_path_batch()
     bm_val = du.BatchManV0(raw_path_val, label_path_val,
@@ -110,9 +107,7 @@ def train_script_v1():
     converged = False       # placeholder, this is not yet implemented
     iteration = -1
     losses = [[], [], []]
-    fine_tune_losses = [[], []]
     iterations = []
-    ft_iteration = 0
 
     free_voxel_empty = (global_edge_len - patch_len)**2
     free_voxel = free_voxel_empty
@@ -133,25 +128,6 @@ def train_script_v1():
         raw, gt, seeds, ids = bm.get_path_gt_batches()
         probs = probs_f(raw)
         bm.update_priority_path_queue(probs, seeds, ids)
-
-        # update height difference errors
-        if iteration % 100 == 0:
-            if (len(bm.global_error_dict) >= batch_size_ft or \
-                            free_voxel < 101) and fine_tune_b:
-                error_b_type1, error_b_type2, dir1, dir2 = \
-                    bm.reconstruct_path_error_inputs()
-                Memento1.add_to_memory(error_b_type1, dir1)
-                Memento2.add_to_memory(error_b_type2, dir2)
-                if save_net_b:
-                    # plot train images
-                    bm.draw_debug_image("train_iteration_iter_%i_counter_%i" %
-                                        (iteration, bm.counter),
-                                        path=save_net_path + '/images/')
-                    bm_val.draw_debug_image("val_iteration_" + str(iteration),
-                                            path=save_net_path + '/images/')
-                bm.init_train_path_batch()
-                bm_val.init_train_path_batch()
-                free_voxel = free_voxel_empty
 
         if iteration % 10 == 0 and iteration < max_pre_train_iter:
             loss_train = float(loss_train_f(raw, gt))
@@ -175,7 +151,7 @@ def train_script_v1():
                     names=['loss train', 'loss train no reg', 'loss valid'])
 
         # monitor growth on validation set tmp debug change train to val
-        if iteration % 100000 == 0:
+        if iteration % 50000 == 0:
             bm.draw_debug_image("train_iteration_%i_counter_%i_freevoxel_%i" %
                                 (iteration, bm.counter, free_voxel),
                                 path=save_net_path + '/images/')
