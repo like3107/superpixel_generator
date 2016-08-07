@@ -18,9 +18,9 @@ def train_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = True
+    load_net_b = False
 
-    net_name = 'cnn_path_v1_fine_tune2'
+    net_name = 'trast'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
