@@ -100,7 +100,7 @@ class BatchManV0:
                  raw_key=None, label_key=None, batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  train_b=True, find_errors=False,
-                 gt_seeds_b=False):
+                 gt_seeds_b=False, get_gt_id_b=False):
         """
         batch loader. Use either for predict OR train. For valId and train use:
         get batches function.
@@ -117,6 +117,7 @@ class BatchManV0:
 
         self.train_b = train_b
         self.gt_seeds_b = gt_seeds_b
+        self.get_gt_id_b = get_gt_id_b
         if not train_b:     # tmp
             assert (padding_b)
         if isinstance(raw, str):
@@ -602,6 +603,21 @@ class BatchManV0:
             raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
             gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            # check whether already pulled
+            assert(self.global_claims[b, centers[b][0], centers[b][1]] == 0)
+            self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
+        return raw_batch, gts, centers, ids
+
+    def get_path_gt_batches(self):
+        centers, ids = self.get_centers_from_queue()
+        raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
+                             dtype=theano.config.floatX)
+        gts = np.zeros((self.bs, 8, 1, 1), dtype=theano.config.floatX)
+        for b in range(self.bs):
+            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
+            gts[b, :4, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            gts[b, 4:, 0, 0] = self.get_adjacent_gts(centers[b], b, ids[b])
             # check whether already pulled
             assert(self.global_claims[b, centers[b][0], centers[b][1]] == 0)
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]

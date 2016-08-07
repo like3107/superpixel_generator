@@ -103,11 +103,14 @@ def build_ID_v0():
                         W=gen_identity_filter([0, 1, 2, 3]))
     return l_in, l_9, fov
 
+
 def build_ID_v0_hydra():
     l_in, l_9, fov = build_ID_v0()
     l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
     l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
     return l_in, l_in_direction, l_9, l_10, fov
+
+
 
 def build_ID_v0_hybrid():
     fov = 40  # field of view = patch length
@@ -146,6 +149,41 @@ def build_ID_v0_hybrid():
                         nonlinearity=las.nonlinearities.rectify,
                         W=gen_identity_filter([0, 1, 2, 3]))
     return l_in, l_9, fov
+
+
+def build_ID_v1_hybrid():
+    fov = 40  # field of view = patch length
+    n_channels = 2
+    n_classes = 4
+    filt = [7, 6, 6]
+    n_filt = [20, 25, 60, 30, n_classes]
+    pool = [2, 2]
+    dropout = [0.5, 0.5]
+
+    # init weights =
+
+    # 40
+    l_in = L.InputLayer((None, n_channels, fov, fov))
+
+    # parallel 1
+    l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0])
+    l_2 = L.MaxPool2DLayer(l_1, pool[0])
+    l_3 = L.DropoutLayer(l_2, p=dropout[0])
+    # 17
+    l_4 = L.Conv2DLayer(l_3, n_filt[1], filt[1])
+    l_5 = L.MaxPool2DLayer(l_4, pool[1])
+    l_6 = L.DropoutLayer(l_5, p=dropout[1])
+    # 6
+    l_7 = L.Conv2DLayer(l_6, n_filt[2], 5, filt[2])
+    # 1
+
+    l_8 = L.Conv2DLayer(l_7, n_filt[3], 1,
+                        nonlinearity=las.nonlinearities.elu)
+    l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
+                        nonlinearity=las.nonlinearities.rectify)
+    l_10 = L.Conv2DLayer(l_8, n_filt[4], 1,
+                        nonlinearity=las.nonlinearities.sigmoid)
+    return l_in, (l_9, l_10), fov
 
 
 def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5):
@@ -241,6 +279,43 @@ def loss_updates_probs_v1_hybrid(l_in, target, last_layer, L1_weight=10**-5):
 
     loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
     probs_f = theano.function([l_in.input_var], l_out_valid)
+
+    return loss_train_f, loss_valid_f, probs_f
+
+
+def loss_updates_probs_v2_hybrid(l_in, target, last_layers, L1_weight=10**-5):
+
+    l_height, l_id = last_layers
+    l_merge = las.layers.MergeLayer([l_height, l_id])
+    all_params = L.get_all_params(l_merge)
+
+    l_out_train_height = L.get_output(l_height, deterministic=False)
+    l_out_train_id = L.get_output(l_id, deterministic=False)
+    l_out_valid_height = L.get_output(l_height, deterministic=True)
+    l_out_valid_id = L.get_output(l_id, deterministic=True)
+
+    L1_norm = las.regularization.regularize_network_params(
+        l_merge,
+        las.regularization.l1)
+
+
+    loss_train = \
+        T.mean(las.objectives.squared_error(
+                                    l_out_train_height, target[:, :4]) + \
+                50 * las.objectives.squared_error(l_out_train_id, target[:, 4:])) + \
+                    L1_weight * L1_norm
+    loss_valid = T.mean(las.objectives.squared_error(
+                                    l_out_valid_height, target[:, :4]) + \
+                50 * las.objectives.squared_error(
+                                    l_out_valid_id, target[:, 4:]))
+
+    updates = las.updates.adam(loss_train, all_params)
+
+    loss_train_f = theano.function([l_in.input_var, target], loss_train,
+                                   updates=updates)
+
+    loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
+    probs_f = theano.function([l_in.input_var], l_out_valid_height)
 
     return loss_train_f, loss_valid_f, probs_f
 
