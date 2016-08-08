@@ -566,6 +566,9 @@ class BatchManV0:
         self.global_errormap = np.zeros((self.bs, 3,self.global_el - self.pl,
                                             self.global_el - self.pl),
                                         dtype=np.bool)
+
+        self.global_prediction_map = np.zeros((self.bs, self.global_el - self.pl,
+                                            self.global_el - self.pl, 4))
         self.global_error_dict = {}
         self.global_directionmap_batch = \
             np.zeros_like(self.global_label_batch) - 1
@@ -772,6 +775,8 @@ class BatchManV0:
                                           heights_batch[:, :, 0, 0]):
             # if possibly wrong
             new_seeds_x, new_seeds_y, _ = self.get_cross_coords(center)
+
+            self.global_prediction_map[b, center[0], center[1], :] = heights
 
             # check for touching errors
             for x, y, height, direction in \
@@ -983,6 +988,37 @@ class BatchManV0:
         else:
             print 'show'
             plt.show()
+
+    def draw_error_paths(self, path=path, name=image_name):
+
+        for nume, error in enumerate(self.global_error_dict.values()):
+            pred = {}
+            height = {}
+            
+            for startpos in ["small_pos", "large_pos"]:
+                startpos = error[e_name]
+                pred[e_name] = []
+                height[e_name] = []
+                for pos, d in self.get_path_to_root(startpos):
+                    pred[e_name].append(self.global_prediction_map[error["batch"],pos[0]-self.pad,pos[1]-self.pad, d]])
+                    height[e_name].append(self.global_heightmap_batch[error["batch"],pos[0]-self.pad,pos[1]-self.pad])
+
+            pred["small_pos"].reverse()
+            height["small_pos"].reverse()
+
+            print pred["small_pos"]
+            print pred["large_pos"]
+            print height["small_pos"]
+            print height["large_pos"]
+            prediction = pred["small_pos"]+pred["large_pos"]
+            heights = height["small_pos"]+height["large_pos"]
+
+            f, ax = plt.subplots(ncols=2)
+            # ax[0].imshow(im_x, interpolation='none', cmap=random_color_map())
+            ax[0].plot(prediction, "r-")
+            ax[0].plot(heights, "h-")
+            f.savefig(path + name + '_e%07d' % nume)
+            plt.close(f)
 
 
 class BatchMemento:
