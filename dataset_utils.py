@@ -336,7 +336,7 @@ class BatchManV0:
             i = -1      # ids within slice
             for seed, Id in zip(seeds, ids):
                 i += 1
-                q.put((-1, 0., seed[0], seed[1], Id, -1, False, 0))
+                q.put((0., 0., seed[0], seed[1], Id, -1, False, 0))
             self.priority_queue.append(q)
 
     def walk_cross_coords(self, center):
@@ -537,7 +537,8 @@ class BatchManV0:
         self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
-        self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
+        self.global_heightmap_batch = np.empty_like(self.global_label_batch)
+        self.global_heightmap_batch.fill(np.inf)
         self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
 
         # extract slices and ids within raw and label cubes
@@ -555,10 +556,12 @@ class BatchManV0:
                                             self.global_el - self.pl),
                                            dtype=theano.config.floatX)
         # remember where territory has been claimed before. !=0 claimed, 0 free
-        self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
+        self.global_claims = np.empty((self.bs, self.global_el, self.global_el))
+        self.global_claims.fill(-1.)
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
 
-        self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
+        self.global_heightmap_batch = np.empty_like(self.global_label_batch)
+        self.global_heightmap_batch.fill(np.inf)
         self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
         self.global_timemap = np.empty_like(self.global_batch, dtype=np.int)
         self.global_timemap.fill(np.inf)
@@ -583,7 +586,7 @@ class BatchManV0:
         return global_seeds # debug only, remove me, tmp
 
     def get_batches(self):
-        centers, ids = self.get_centers_from_queue()
+        centers, ids, _ = self.get_centers_from_queue()
 
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
@@ -597,7 +600,7 @@ class BatchManV0:
         return raw_batch, gts, centers, ids
 
     def get_path_batches(self):
-        centers, ids = self.get_centers_from_queue()
+        centers, ids, heights = self.get_centers_from_queue()
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
@@ -607,6 +610,9 @@ class BatchManV0:
             gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
             # check whether already pulled
             assert(self.global_claims[b, centers[b][0], centers[b][1]] == 0)
+            self.global_heightmap_batch[b,
+                                        centers[b][0] - self.pad,
+                                        centers[b][1] - self.pad] = heights[b]
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
         return raw_batch, gts, centers, ids
 
@@ -650,6 +656,7 @@ class BatchManV0:
     def get_centers_from_queue(self):
         centers = []
         ids = []
+        heights = []
         # remember if crossed once and always carry this information along every
         # path for error indicator
         self.error_indicator_pass = np.zeros(self.bs, dtype=np.bool)
@@ -744,8 +751,9 @@ class BatchManV0:
 
             centers.append((center_x, center_y))
             ids.append(Id)
+            heights.append(height)
 
-        return centers, ids
+        return centers, ids, heights
 
     # copy of update priority path priority queue without all path error stuff
     def get_centers_from_queue_prediction(self):
@@ -776,7 +784,13 @@ class BatchManV0:
             # if possibly wrong
             new_seeds_x, new_seeds_y, _ = self.get_cross_coords(center)
 
-            self.global_prediction_map[b, center[0], center[1], :] = heights
+            self.global_prediction_map[b, center[0] - self.pad, center[1] - self.pad, :] = heights
+
+            lower_bound = self.global_heightmap_batch[b, center[0]-self.pad,
+                                                      center[1]-self.pad]
+            if lower_bound == np.inf:
+                print "encountered inf for prediction center !!!!",b, center, Id, heights, lower_bound
+                raise Exception('encountered inf for prediction center')
 
             # check for touching errors
             for x, y, height, direction in \
@@ -786,13 +800,13 @@ class BatchManV0:
                 else:
                     error_indicator = False
 
-                if self.global_claims[b, x, y] == 0:
+                prev_height = self.global_heightmap_batch[b, x-self.pad, y-self.pad]
 
-                    height_prev = self.global_heightmap_batch[b, x-self.pad,
-                                                              y-self.pad]
-                    height_j = max(height, height_prev)
-                    if height_prev > 0:
-                        height_j = min(height_j, height_prev)
+                if self.global_claims[b, x, y] == 0 and height < prev_height:
+                    #  min of NN output and other estimates (if ezistant)
+                    height_j = max(height , lower_bound)
+                    # if height_prev > 0:
+                    #     height_j = min(height_j, height_prev)
                     self.global_heightmap_batch[b, x-self.pad, y-self.pad] = \
                         height_j
                     self.priority_queue[b].put((height_j, np.random.random(), x, y,
@@ -989,19 +1003,36 @@ class BatchManV0:
             print 'show'
             plt.show()
 
-    def draw_error_paths(self, path=path, name=image_name):
+    def draw_error_paths(self, image_name, path='./data/nets/debug/images/'):
 
         for nume, error in enumerate(self.global_error_dict.values()):
             pred = {}
             height = {}
-            
-            for startpos in ["small_pos", "large_pos"]:
+
+            for e_name in ["small_pos", "large_pos"]:
                 startpos = error[e_name]
                 pred[e_name] = []
                 height[e_name] = []
-                for pos, d in self.get_path_to_root(startpos):
-                    pred[e_name].append(self.global_prediction_map[error["batch"],pos[0]-self.pad,pos[1]-self.pad, d]])
-                    height[e_name].append(self.global_heightmap_batch[error["batch"],pos[0]-self.pad,pos[1]-self.pad])
+                prev_direction = None
+                # prev_pos = None
+
+                for pos, d in self.get_path_to_root(startpos, error["batch"]):
+                    used_direction = self.global_directionmap_batch[error["batch"],
+                                           pos[0] - self.pad,
+                                           pos[1] - self.pad]
+                    print "is direction the same ? ",d,used_direction
+                    if prev_direction != None:
+                        pred[e_name].append(
+                        self.global_prediction_map[error["batch"],
+                                                   pos[0]-self.pad,
+                                                   pos[1]-self.pad, prev_direction])
+                    height[e_name].append(
+                        self.global_heightmap_batch[error["batch"],
+                                                    pos[0]-self.pad,
+                                                    pos[1]-self.pad])
+                    prev_direction = d
+
+                pred[e_name].append(0)
 
             pred["small_pos"].reverse()
             height["small_pos"].reverse()
@@ -1010,14 +1041,15 @@ class BatchManV0:
             print pred["large_pos"]
             print height["small_pos"]
             print height["large_pos"]
-            prediction = pred["small_pos"]+pred["large_pos"]
-            heights = height["small_pos"]+height["large_pos"]
+            prediction=pred["small_pos"]+pred["large_pos"]
+            heights=height["small_pos"]+height["large_pos"]
 
-            f, ax = plt.subplots(ncols=2)
+            f, ax=plt.subplots()
             # ax[0].imshow(im_x, interpolation='none', cmap=random_color_map())
-            ax[0].plot(prediction, "r-")
-            ax[0].plot(heights, "h-")
-            f.savefig(path + name + '_e%07d' % nume)
+            ax.plot(prediction, "r-")
+            ax.plot(heights, "h-")
+            ax.axvline(len(pred["small_pos"])-0.5 , color='k', linestyle='-')
+            f.savefig(path + image_name + '_e%07d' % nume)
             plt.close(f)
 
 
@@ -1102,7 +1134,7 @@ if __name__ == '__main__':
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
     tmp_path = '/media/liory/ladata/bla'        # debugging
-    batch_size = 8         # > 4
+    batch_size = 5         # > 4
     global_edge_len = 300
     patch_len= 40
 
@@ -1131,7 +1163,6 @@ if __name__ == '__main__':
         if i % 5000 == 0 and i != 0:
             bm.init_train_path_batch()
             raw_batch, gts, centers, ids = bm.get_path_batches()
-            name += 'asdf'
         probs = np.zeros((batch_size, 4, 1,1))
         for c in range(batch_size):
             d = 0
