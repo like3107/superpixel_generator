@@ -220,7 +220,7 @@ class BatchManV0:
                                 ind_y[b]:ind_y[b] + self.global_el - self.pl]
                 if self.gt_seeds_b:
                     self.global_label_batch[b, :, :] = \
-                        label(self.global_label_batch[b, :, :])
+                        label(self.global_label_batch[b, :, :])+1
             if return_gt_ids and self.train_b:
                 global_ids.append(
                     np.unique(
