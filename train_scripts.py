@@ -20,7 +20,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trast'
+    net_name = 'path_cnn_v2_height_pq_fix'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -38,13 +38,13 @@ def train_script_v1():
     batch_size = 16         # > 4
     batch_size_ft = 16
     global_edge_len = 300
-    gt_seeds_b = True
+    gt_seeds_b = False
     find_errors = True
 
     # training parameter
     c.use('gpu0')
     train_iter = 1000000
-    max_iter = 1000000000
+    max_iter = 10000000000
     save_counter = 100000        # save every n iterations
 
     # choose your network from nets.py
@@ -138,7 +138,7 @@ def train_script_v1():
         # update height difference errors
         if iteration % 100 == 0:
             if len(bm.global_error_dict) >= batch_size_ft or \
-                            free_voxel < 101:
+                            free_voxel < 101 and iteration > train_iter:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 Memento1.add_to_memory(error_b_type1, dir1)
@@ -184,7 +184,7 @@ def train_script_v1():
             loss_train = float(loss_train_f(raw, gt))
 
         # monitor training and plot loss
-        if iteration % 1000 == 0 and iteration < 50000:
+        if iteration % 1000 == 0 and iteration < train_iter:
             loss_train_no_reg = float(loss_valid_f(raw, gt))
             loss_valid = float(loss_valid_f(raw_val, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
