@@ -20,7 +20,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash'
+    net_name = 'hybrid2'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -37,7 +37,7 @@ def train_script_v1():
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     batch_size_ft = 16
-    global_edge_len = 300
+    global_edge_len = 600
     gt_seeds_b = False
     find_errors = False
     find_errors = False
@@ -118,6 +118,10 @@ def train_script_v1():
 
         if iteration % save_counter == 0 and save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
+	
+	if free_voxel <= 100 or free_voxel_empty % (iteration + 1) == 0:
+	    bm.init_train_path_batch()
+	    bm_val.init_train_path_batch()
 
         # predict val
         raw_val, gt, seeds_val, ids_val = bm_val.get_path_gt_batches()
