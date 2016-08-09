@@ -484,9 +484,9 @@ class BatchManV0:
         labels = self.global_claims[b,
                                     seed[0] - self.pad:seed[0] + self.pad,
                                     seed[1] - self.pad:seed[1] + self.pad]
-        claimed = np.zeros((self.pl, self.pl), dtype=theano.config.floatX) - 1
-        claimed[labels != Id] = 1       # the others
-        claimed[labels == 0] = 0       # me
+        claimed = np.zeros((self.pl, self.pl), dtype=theano.config.floatX)
+        claimed[labels > 0] = 1        # the others
+        claimed[labels == 0] = -1       # me
         return claimed
 
     def crop_timemap(self, center, b):
