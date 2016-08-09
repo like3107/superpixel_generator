@@ -176,7 +176,7 @@ class BatchManV0:
         self.global_error_dict = None
         self.priority_queue = None
         self.crossing_errors = None
-        self.find_errors = find_errors
+        self.find_errors_b = find_errors
         self.error_indicator_pass = None
 
         # debug
@@ -603,18 +603,23 @@ class BatchManV0:
         centers, ids, heights = self.get_centers_from_queue()
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
-        gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
+        if self.train_b:
+            gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
             raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
-            gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            if self.train_b:
+                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
             # check whether already pulled
             assert(self.global_claims[b, centers[b][0], centers[b][1]] == 0)
             self.global_heightmap_batch[b,
                                         centers[b][0] - self.pad,
                                         centers[b][1] - self.pad] = heights[b]
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
-        return raw_batch, gts, centers, ids
+        if self.train_b:
+            return raw_batch, gts, centers, ids
+        else:
+            return raw_batch, centers, ids
 
     def get_path_gt_batches(self):
         centers, ids = self.get_centers_from_queue()
@@ -700,60 +705,66 @@ class BatchManV0:
                 self.error_indicator_pass[b] = True
 
             # check for errors in neighbor regions, type II
-            if self.find_errors:
-                for x, y, direction in self.walk_cross_coords([center_x,
-                                                               center_y]):
-                    c = int(self.global_claims[b, x, y])    # neighbor label
-                    if c > 0 and not error_index(b, Id, c) in self.global_error_dict:
-                        claimId = int(self.global_id2gt[b][c])
-                        gtId = int(self.global_id2gt[b][Id])
-                        if claimId > 0 and claimId != gtId:  # neighbor claimed
-                            center_intruder_b = \
-                                self.global_errormap[b, 1, center_x-self.pad,
-                                                    center_y-self.pad]
-                            neighbor_intruder_b = \
-                                self.global_errormap[b, 1, x-self.pad,
-                                                     y-self.pad]
-                            if center_intruder_b and not neighbor_intruder_b:
-                                # print "fast intrusion"
-                                # debug
-                                self.current_type = 'fastI'
-                                self.global_error_dict[error_index(b, Id, c)] = \
-                                    {"batch": b,
-                                     "touch_time": self.global_timemap[b, x, y],
-                                     "large_pos": [center_x, center_y],
-                                     "large_direction": direction,
-                                     "large_id": Id,
-                                     "small_pos": [x, y],
-                                     "small_id": c}
-                                self.find_type_I_error()
-                                self.find_source_of_II_error()
-                            elif not center_intruder_b and neighbor_intruder_b:
-                                # print "slow intrusion"
-                                self.current_type = 'slowI'
-                                self.global_error_dict[error_index(b, Id, c)] = \
-                                    {"batch": b,
-                                     "touch_time": self.global_timemap[b, x, y],
-                                     "large_pos": [x, y],
-                                     "large_direction": (direction + 2) % 4, # turns direction by 180 degrees
-                                     "large_id": c,
-                                     "small_pos": [center_x, center_y],
-                                     "small_id": Id}
-                                self.find_type_I_error()
-                                self.find_source_of_II_error()
-                            elif center_intruder_b and neighbor_intruder_b:
-                                # TODO: TYPE 3 error tmp
-                                # raise Exception('error type 3 found')
-                                # print 'type 3 error not yet implemented'
-                                # self.find_type_I_error()
-                                # self.find_source_of_II_error()
-                                pass
+            if self.find_errors_b:
+                self.check_type_II_errors(center_x, center_y, error_index, Id)
 
             centers.append((center_x, center_y))
             ids.append(Id)
             heights.append(height)
 
         return centers, ids, heights
+
+    def check_type_II_errors(self, center_x, center_y, error_index, Id):
+        for x, y, direction in self.walk_cross_coords([center_x,
+                                                       center_y]):
+
+            c = int(self.global_claims[b, x, y])  # neighbor label
+            if c > 0 and not error_index(b, Id, c) \
+                    in self.global_error_dict:
+                claimId = int(self.global_id2gt[b][c])
+                gtId = int(self.global_id2gt[b][Id])
+                if claimId > 0 and claimId != gtId:  # neighbor claimed
+                    center_intruder_b = \
+                        self.global_errormap[b, 1, center_x - self.pad,
+                                             center_y - self.pad]
+                    neighbor_intruder_b = \
+                        self.global_errormap[b, 1, x - self.pad,
+                                             y - self.pad]
+                    if center_intruder_b and not neighbor_intruder_b:
+                        # print "fast intrusion"
+                        # debug
+                        self.current_type = 'fastI'
+                        self.global_error_dict[error_index(b, Id, c)] = \
+                            {"batch": b,
+                             "touch_time": self.global_timemap[b, x, y],
+                             "large_pos": [center_x, center_y],
+                             "large_direction": direction,
+                             "large_id": Id,
+                             "small_pos": [x, y],
+                             "small_id": c}
+                        self.find_type_I_error()
+                        self.find_source_of_II_error()
+                    elif not center_intruder_b and neighbor_intruder_b:
+                        # print "slow intrusion"
+                        self.current_type = 'slowI'
+                        self.global_error_dict[error_index(b, Id, c)] = \
+                            {"batch": b,
+                             "touch_time": self.global_timemap[b, x, y],
+                             "large_pos": [x, y],
+                             "large_direction": (direction + 2) % 4,
+                             # turns direction by 180 degrees
+                             "large_id": c,
+                             "small_pos": [center_x, center_y],
+                             "small_id": Id}
+                        self.find_type_I_error()
+                        self.find_source_of_II_error()
+                    elif center_intruder_b and neighbor_intruder_b:
+                        # TODO: TYPE 3 error tmp
+                        # raise Exception('error type 3 found')
+                        # print 'type 3 error not yet implemented'
+                        # self.find_type_I_error()
+                        # self.find_source_of_II_error()
+                        pass
 
     # copy of update priority path priority queue without all path error stuff
     def get_centers_from_queue_prediction(self):
@@ -792,7 +803,7 @@ class BatchManV0:
                 print "encountered inf for prediction center !!!!",b, center, Id, heights, lower_bound
                 raise Exception('encountered inf for prediction center')
 
-            # check for touching errors
+            # pass errors on
             for x, y, height, direction in \
                     zip(new_seeds_x, new_seeds_y, heights, directions):
                 if self.error_indicator_pass[b]:
@@ -800,10 +811,11 @@ class BatchManV0:
                 else:
                     error_indicator = False
 
-                prev_height = self.global_heightmap_batch[b, x-self.pad, y-self.pad]
+                prev_height = self.global_heightmap_batch[b, x-self.pad,
+                                                          y-self.pad]
 
                 if self.global_claims[b, x, y] == 0 and height < prev_height:
-                    #  min of NN output and other estimates (if ezistant)
+                    #  min of NN output and other estimates (if existent)
                     height_j = max(height , lower_bound)
                     # if height_prev > 0:
                     #     height_j = min(height_j, height_prev)
@@ -813,30 +825,30 @@ class BatchManV0:
                                                 Id, direction,
                                                error_indicator,
                                                 self.global_time))
-
-    def update_priority_path_queue_prediction(self, heights_batch, centers, ids):
-        directions = [0, 1, 2, 3]
-        for b, center, Id, heights in zip(range(self.bs), centers, ids,
-                                        heights_batch[:, :, 0, 0]):
-            # if possibly wrong
-            new_seeds_x, new_seeds_y, _ = self.get_cross_coords(center)
-
-            # check for touching errors
-            for x, y, height, direction in \
-                    zip(new_seeds_x, new_seeds_y, heights, directions):
-
-                if self.global_claims[b, x, y] == 0:
-
-                    height_prev = self.global_heightmap_batch[b, x-self.pad,
-                                                              y-self.pad]
-                    height_j = max(height, height_prev)
-                    if height_prev > 0:
-                        height_j = min(height_j, height_prev)
-                    self.global_heightmap_batch[b, x-self.pad, y-self.pad] = \
-                        height_j
-                    self.priority_queue[b].put((height_j, np.random.random(), x, y,
-                                                Id, direction,
-                                               False, self.global_time))
+    #
+    # def update_priority_path_queue_prediction(self, heights_batch, centers, ids):
+    #     directions = [0, 1, 2, 3]
+    #     for b, center, Id, heights in zip(range(self.bs), centers, ids,
+    #                                     heights_batch[:, :, 0, 0]):
+    #         # if possibly wrong
+    #         new_seeds_x, new_seeds_y, _ = self.get_cross_coords(center)
+    #
+    #         # check for touching errors
+    #         for x, y, height, direction in \
+    #                 zip(new_seeds_x, new_seeds_y, heights, directions):
+    #
+    #             if self.global_claims[b, x, y] == 0:
+    #
+    #                 height_prev = self.global_heightmap_batch[b, x-self.pad,
+    #                                                           y-self.pad]
+    #                 height_j = max(height, height_prev)
+    #                 if height_prev > 0:
+    #                     height_j = min(height_j, height_prev)
+    #                 self.global_heightmap_batch[b, x-self.pad, y-self.pad] = \
+    #                     height_j
+    #                 self.priority_queue[b].put((height_j, np.random.random(), x, y,
+    #                                             Id, direction,
+    #                                            False, self.global_time))
 
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
         raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
@@ -857,14 +869,13 @@ class BatchManV0:
         self.global_claims = np.ones((self.bs, self.rl, self.rl))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
         self.global_batch[:, :, :] = self.raw[start:stop, :, :]
+        self.global_label_batch = np.zeros(
+            (self.bs, self.global_el - self.pl,
+             self.global_el - self.pl),
+            dtype=theano.config.floatX)
 
-        if self.gt_seeds_b:
-            self.global_label_batch = np.zeros(
-                (self.bs, self.global_el - self.pl,
-                 self.global_el - self.pl),
-                dtype=theano.config.floatX)
-            self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
-            self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
+        self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
+        self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
 
         self.prepare_global_batch(return_gt_ids=False, start=start)
         if self.gt_seeds_b:

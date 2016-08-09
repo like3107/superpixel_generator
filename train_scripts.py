@@ -18,9 +18,9 @@ def train_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = False
+    load_net_b = True
 
-    net_name = 'path_cnn_v2_height_pq_fix'
+    net_name = 'path_cnn_v2_height_pq_fix_noft'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -30,16 +30,18 @@ def train_script_v1():
     raw_path = './data/volumes/membranes_a.h5'
     raw_path_val = './data/volumes/membranes_b.h5'
     save_net_path = './data/nets/' + net_name + '/'
-    load_net_path = './data/nets/rough/net_2500000'      # if load true
+    load_net_path = './data/nets/rough/net_00000'      # if load true
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
-    load_net_path = './data/nets/cnn_path_v1_fine_tune/net_500000.h5'      # if load true
+    load_net_path = './data/nets/path_cnn_v2_height_pq_fix_noft/net_100000'      # if load true
+
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     batch_size_ft = 16
     global_edge_len = 300
     gt_seeds_b = False
-    find_errors = True
+    find_errors = True 
+    fine_tune_b = False
 
     # training parameter
     c.use('gpu0')
@@ -64,18 +66,19 @@ def train_script_v1():
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
         loss(l_in, target_t, l_out, L1_weight=regularization)
+    
+    if fine_tune_b:
+        print 'compiling theano finetuningfunctions'
+        loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
+            loss_fine(l_in, l_in_direction, l_out_direction,
+                          L1_weight=regularization)
+        Memento1 = du.BatchMemento(batch_size_ft, 100)
+        Memento2 = du.BatchMemento(batch_size_ft, 100)
 
-    print 'compiling theano finetuningfunctions'
-    loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
-        loss_fine(l_in, l_in_direction, l_out_direction,
-                  L1_weight=regularization)
-
-    debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
-                [lasagne.layers.get_output(l_out, deterministic=True),
-                lasagne.layers.get_output(l_out_direction, deterministic=True)])
-
-    Memento1 = du.BatchMemento(batch_size_ft, 100)
-    Memento2 = du.BatchMemento(batch_size_ft, 100)
+    # debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
+    #             [lasagne.layers.get_output(l_out, deterministic=True),
+    #             lasagne.layers.get_output(l_out_direction, deterministic=True)])
+    #
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
@@ -84,7 +87,7 @@ def train_script_v1():
                        batch_size=batch_size,
                        patch_len=patch_len, global_edge_len=global_edge_len,
                        padding_b=False,
-                       find_errors=find_errors,
+                       find_errors=find_errors and fine_tune_b,
                        gt_seeds_b=gt_seeds_b)
 
     bm.init_train_path_batch()
@@ -137,8 +140,9 @@ def train_script_v1():
 
         # update height difference errors
         if iteration % 100 == 0:
-            if len(bm.global_error_dict) >= batch_size_ft or \
-                            free_voxel < 101 and iteration > train_iter:
+            if (len(bm.global_error_dict) >= batch_size_ft or \
+                            free_voxel < 101) and iteration > train_iter \
+                    and fine_tune_b:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 Memento1.add_to_memory(error_b_type1, dir1)
@@ -154,8 +158,14 @@ def train_script_v1():
                 bm_val.init_train_path_batch()
                 free_voxel = free_voxel_empty
 
+        if (free_voxel <= 100 or free_voxel_empty % (iteration + 1) == 0) \
+                and not fine_tune_b:
+            bm.init_train_path_batch()
+            bm_val.init_train_path_batch()
+            free_voxel = free_voxel_empty
+
         # clear memory, do fine-tuning and reset image
-        if Memento1.is_ready():
+        if fine_tune_b and Memento1.is_ready():
             ft_iteration += 1
             print 'Finetuning...'
             batch_ft_t1, dir_t1 = Memento1.get_batch()
@@ -184,7 +194,8 @@ def train_script_v1():
             loss_train = float(loss_train_f(raw, gt))
 
         # monitor training and plot loss
-        if iteration % 1000 == 0 and iteration < train_iter:
+        if iteration % 1000 == 0 and (iteration < train_iter or not
+        fine_tune_b):
             loss_train_no_reg = float(loss_valid_f(raw, gt))
             loss_valid = float(loss_valid_f(raw_val, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \

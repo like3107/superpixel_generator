@@ -14,20 +14,22 @@ def pred_script_v1():
     # data params:
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
-    save_net_b = True
-    load_net_b = False
-    net_name = 'gt_seeds_2D'
+
+    net_name = 'cnn_path_v1_fine_tune2'
     raw_path = './data/volumes/membranes_b.h5'
-    label_path = './data/volumes/label_b.h5'
-    height_gt_path = './data/volumes/height_b.h5'
-    height_gt_key = 'height'
+    label_path = None
+    height_gt_path = None
+    height_gt_key = None
+    # label_path = './data/volumes/label_b.h5'
+    # height_gt_path = './data/volumes/height_b.h5'
+    # height_gt_key = 'height'
 
-    load_net_path = './data/nets/cnn_path_v1_fine_tune2/net_100000'
-    save_path = './data/membranes_real_seeds.h5'
+    load_net_path = './data/nets/' + net_name + '/net_19900000'
+    save_path = './data/pred_memb3_cnn_path_v1_fine_tune2.h5'
 
-    batch_size = 4  # > 4
+    batch_size = 125  # > 4
     global_edge_len = 1290      # 1250  + patch_len for memb
-    gt_seeds_b = True
+    gt_seeds_b = False
 
     # training parameter
     c.use('gpu0')
@@ -59,9 +61,9 @@ def pred_script_v1():
 
         for j in range((bm.global_el - bm.pl) ** 2):
             print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
-            raw, centers, ids = bm.get_pred_batch()
+            raw, centers, ids = bm.get_path_batches()
             probs = probs_f(raw)
-            bm.update_priority_path_queue_prediction(probs, centers, ids)
+            bm.update_priority_path_queue(probs, centers, ids)
 
             if j == 100 or j == 40000:
                 # test saving
