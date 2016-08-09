@@ -15,8 +15,9 @@ def pred_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
 
-    net_name = 'trash2'
-    raw_path = './data/volumes/membranes_b.h5'
+    net_name = 'trash_mc'
+    membrane_path = './data/volumes/membranes_b.h5'
+    raw_path = './data/volumes/raw_b.h5'
     label_path = None
     height_gt_path = None
     height_gt_key = None
@@ -24,10 +25,10 @@ def pred_script_v1():
     # height_gt_path = './data/volumes/height_b.h5'
     # height_gt_key = 'height'
 
-    load_net_path = './data/nets/' + net_name + '/net_0'
-    save_path = './data/pred_memb3_cnn_path_v1_fine_tune2.h5'
+    load_net_path = './data/nets/' + net_name + '/net_800000'
+    save_path = './data/cnn_v4_mc.h5'
 
-    batch_size = 4  # > 4
+    batch_size = 125  # > 4
     global_edge_len = 1290      # 1250  + patch_len for memb
     gt_seeds_b = False      # needs label path
 
@@ -36,10 +37,12 @@ def pred_script_v1():
 
     # choose your network and train functions from nets.py
     # network = nets.build_ID_v0      # hydra only needs build_ID_v0
-    network = nets.build_ID_v1_hybrid
-
-    # probs_funcs = nets.prob_funcs       # hydra
-    probs_funcs = nets.prob_funcs_hybrid       # hybrid
+    network = nets.build_ID_v1_multichannel
+    # hydra only needs build_ID_v0
+    # network = nets.build_ID_v1_hybrid
+    #
+    probs_funcs = nets.prob_funcs       # hydra, multichannel
+    # probs_funcs = nets.prob_funcs_hybrid       # hybrid
 
 
     # all params entered.......................
@@ -50,8 +53,8 @@ def pred_script_v1():
     probs_f = probs_funcs(l_in, l_out)
 
     print 'Loading data and Priority queue init'
-    bm = du.BatchManV0(raw_path, label=label_path,
-                       batch_size=batch_size,
+    bm = du.BatchManV0(membrane_path, label=label_path,
+                       batch_size=batch_size, raw=raw_path,
                        patch_len=patch_len, global_edge_len=global_edge_len,
                        padding_b=True, train_b=False, gt_seeds_b=gt_seeds_b,
                        height_gt=height_gt_path, height_gt_key=height_gt_key)
@@ -70,7 +73,7 @@ def pred_script_v1():
             probs = probs_f(raw)
             bm.update_priority_path_queue(probs, centers, ids)
 
-            if j == 100 or j == 40000:
+            if j == 100 or j == 40000 or j % 100000 == 0:
                 # test saving
                 prediction[i * batch_size:(i + 1) * batch_size, :, :] = \
                     bm.global_claims[:, bm.pad:-bm.pad, bm.pad:-bm.pad]

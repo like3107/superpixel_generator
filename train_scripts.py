@@ -21,15 +21,17 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash'
+    net_name = 'trash_mc'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
     height_gt_key = 'height'
     height_gt_path_val = './data/volumes/height_b.h5'
     height_gt_key_val = 'height'
-    raw_path = './data/volumes/membranes_a.h5'
-    raw_path_val = './data/volumes/membranes_b.h5'
+    raw_path = './data/volumes/raw_a.h5'
+    raw_path_val = './data/volumes/raw_b.h5'
+    membrane_path = './data/volumes/membranes_a.h5'
+    membrane_path_val = './data/volumes/membranes_b.h5'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/rough/net_2500000'      # if load true
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
@@ -52,7 +54,7 @@ def train_script_v1():
 
     # choose your network from nets.py
     regularization = 10**-4
-    network = nets.build_ID_v0_hydra
+    network = nets.build_ID_v01_hydra
     loss = nets.loss_updates_probs_v0
     loss_fine = nets.loss_updates_hydra_v0
 
@@ -77,9 +79,10 @@ def train_script_v1():
         Memento2 = du.BatchMemento(batch_size_ft, 100)
 
     print 'Loading data and Priority queue init'
-    bm = du.BatchManV0(raw_path, label_path,
+    bm = du.BatchManV0(membrane_path, label_path,
                        height_gt=height_gt_path,
                        height_gt_key=height_gt_key,
+                       raw=raw_path,
                        batch_size=batch_size,
                        patch_len=patch_len, global_edge_len=global_edge_len,
                        padding_b=False,
@@ -87,9 +90,10 @@ def train_script_v1():
                        gt_seeds_b=gt_seeds_b)
 
     bm.init_train_path_batch()
-    bm_val = du.BatchManV0(raw_path_val, label_path_val,
+    bm_val = du.BatchManV0(membrane_path_val, label_path_val,
                            height_gt=height_gt_path_val,
                            height_gt_key=height_gt_key_val,
+                           raw=raw_path_val,
                            batch_size=batch_size,
                            patch_len=patch_len, global_edge_len=global_edge_len,
                            padding_b=False, gt_seeds_b=gt_seeds_b)
@@ -125,13 +129,13 @@ def train_script_v1():
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
         # predict val
-        raw_val, gt, seeds_val, ids_val = bm_val.get_path_batches()
-        probs_val = probs_f(raw_val)
+        membrane_val, gt, seeds_val, ids_val = bm_val.get_path_batches()
+        probs_val = probs_f(membrane_val)
         bm_val.update_priority_path_queue(probs_val, seeds_val, ids_val)
 
         # predict train
-        raw, gt, seeds, ids = bm.get_path_batches()
-        probs = probs_f(raw)
+        membrane, gt, seeds, ids = bm.get_path_batches()
+        probs = probs_f(membrane)
         bm.update_priority_path_queue(probs, seeds, ids)
 
         # update height difference errors
@@ -195,13 +199,13 @@ def train_script_v1():
             free_voxel = free_voxel_empty
 
         if iteration % 10 == 0 and iteration < train_iter:
-            loss_train = float(loss_train_f(raw, gt))
+            loss_train = float(loss_train_f(membrane, gt))
 
         # monitor training and plot loss
         if iteration % 1000 == 0 and (iteration < train_iter or not
         fine_tune_b):
-            loss_train_no_reg = float(loss_valid_f(raw, gt))
-            loss_valid = float(loss_valid_f(raw_val, gt))
+            loss_train_no_reg = float(loss_valid_f(membrane, gt))
+            loss_valid = float(loss_valid_f(membrane_val, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
                   'loss_validation %.4f, iteration %i' % \
                   (loss_train, loss_train_no_reg, loss_valid, iteration),

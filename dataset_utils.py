@@ -96,8 +96,9 @@ def segmenation_to_membrane_core(label_image):
 
 
 class BatchManV0:
-    def __init__(self, raw, label, height_gt=None, height_gt_key=None,
-                 raw_key=None, label_key=None, batch_size=10,
+    def __init__(self, membranes, label, raw=None, raw_key=None,
+                 height_gt=None, height_gt_key=None,
+                 membrane_key=None, label_key=None, batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  train_b=True, find_errors=False,
                  gt_seeds_b=False):
@@ -107,7 +108,7 @@ class BatchManV0:
 
         :param raw:
         :param label:
-        :param raw_key:
+        :param membrane_key:
         :param label_key:
         :param batch_size:
         :param global_edge_len:
@@ -119,6 +120,10 @@ class BatchManV0:
         self.gt_seeds_b = gt_seeds_b
         if not train_b:     # tmp
             assert (padding_b)
+        if isinstance(membranes, str):
+            self.membranes = load_h5(membranes, h5_key=membrane_key)[0]
+        else:
+            self.membranes = membranes
         if isinstance(raw, str):
             self.raw = load_h5(raw, h5_key=raw_key)[0]
         else:
@@ -140,15 +145,17 @@ class BatchManV0:
         self.padding_b = padding_b
         self.pad = patch_len / 2
         if self.padding_b:
-            self.raw = mirror_cube(self.raw, self.pad)
+            if raw is not None:
+                self.raw = mirror_cube(self.raw, self.pad)
+            self.membranes = mirror_cube(self.membranes, self.pad)
         else:
             # crop label
             self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]
             self.height_gt = self.height_gt[:, self.pad:-self.pad,
                                             self.pad:-self.pad]
 
-        self.rl = self.raw.shape[1]     # includes padding
-        self.n_slices = len(self.raw)
+        self.rl = self.membranes.shape[1]     # includes padding
+        self.n_slices = len(self.membranes)
         self.bs = batch_size
         self.global_el = global_edge_len        # length of field, global_batch
         # includes padding)
@@ -164,6 +171,7 @@ class BatchManV0:
 
         # private
         self.global_batch = None                # includes padding, nn input
+        self.global_raw = None                  # includes padding, nn input
         self.global_claims = None               # includes padding, tri-map, inp
         self.global_directionmap_batch = None   # no padding
         self.global_label_batch = None          # no padding
@@ -204,6 +212,10 @@ class BatchManV0:
         global_ids = []
         for b in range(self.bs):
             self.global_batch[b, :, :] = \
+                self.membranes[ind_b[b],
+                         ind_x[b]:ind_x[b] + self.global_el,
+                         ind_y[b]:ind_y[b] + self.global_el]
+            self.global_raw[b, :, :] = \
                 self.raw[ind_b[b],
                          ind_x[b]:ind_x[b] + self.global_el,
                          ind_y[b]:ind_y[b] + self.global_el]
@@ -451,7 +463,8 @@ class BatchManV0:
         # boundary conditions
         ground_truth = \
             np.array([self.global_label_batch[batch,
-                                              seeds_x, seeds_y] == Id][0],
+                                              seeds_x, seeds_y] ==
+                      self.global_id2gt[batch]][Id],
                      dtype=theano.config.floatX)
         return ground_truth
 
@@ -467,6 +480,12 @@ class BatchManV0:
         ground_truth = \
             self.global_height_gt_batch[batch, seeds_x, seeds_y].flatten()
         return ground_truth
+
+    def crop_membrane(self, seed, batch_counter):
+        membrane = self.global_batch[batch_counter,
+                                seed[0] - self.pad:seed[0] + self.pad,
+                                seed[1] - self.pad:seed[1] + self.pad]
+        return membrane
 
     def crop_raw(self, seed, batch_counter):
         raw = self.global_batch[batch_counter,
@@ -487,6 +506,15 @@ class BatchManV0:
         claimed = np.zeros((self.pl, self.pl), dtype=theano.config.floatX)
         claimed[labels > 0] = 1        # the others
         claimed[labels == Id] = -1       # me
+        return claimed
+
+    def crop_mask_claimed_one_hot(self, seed, b, Id):
+        labels = self.global_claims[b,
+                                    seed[0] - self.pad:seed[0] + self.pad,
+                                    seed[1] - self.pad:seed[1] + self.pad]
+        claimed = np.zeros((2, self.pl, self.pl), dtype=theano.config.floatX)
+        claimed[0, :, :][(labels != Id) & (labels != 0)] = 1   # the others
+        claimed[1, :, :][labels == Id] = 1        # me
         return claimed
 
     def crop_timemap(self, center, b):
@@ -510,48 +538,13 @@ class BatchManV0:
             mask[i,:,:][self.crop_timemap(centers[i], b)>timepoint[i]] = 1
         return mask
 
-    def init_train_batch(self):
-        self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
-                                     dtype=theano.config.floatX)
-
-        self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
-                                            self.global_el - self.pl))
-        # remember where territory has been claimed before. !=0 claimed, 0 free
-        self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
-        self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
-
-        # extract slices and ids within raw and label cubes
-        global_ids = self.prepare_global_batch()
-        # extract starting points
-        global_seeds = self.get_seeds(global_ids)
-        # put seeds and ids in priority queue. All info to load batch is in pq
-        self.initialize_priority_queue(global_seeds, global_ids)
-
-    def init_train_heightmap_batch(self):
-        self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
-                                     dtype=theano.config.floatX)
-
-        self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
-                                            self.global_el - self.pl))
-        # remember where territory has been claimed before. !=0 claimed, 0 free
-        self.global_claims = np.ones((self.bs, self.global_el, self.global_el))
-        self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
-
-        self.global_heightmap_batch = np.empty_like(self.global_label_batch)
-        self.global_heightmap_batch.fill(np.inf)
-        self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
-
-        # extract slices and ids within raw and label cubes
-        global_ids = self.prepare_global_batch()    # seeds in label coord syst
-        # extract starting points
-        global_seeds = self.get_seeds(global_ids)
-        # put seeds and ids in priority queue. All info to load batch is in pq
-        self.initialize_priority_queue(global_seeds, global_ids)
-
     def init_train_path_batch(self):
         # print 'init path batch'
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
+        self.global_raw = np.zeros((self.bs, self.global_el, self.global_el),
+                                     dtype=theano.config.floatX)
+
         self.global_label_batch = np.zeros((self.bs, self.global_el - self.pl,
                                             self.global_el - self.pl),
                                            dtype=theano.config.floatX)
@@ -596,7 +589,7 @@ class BatchManV0:
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
 
         for b in range(self.bs):
-            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
             gts[b, :, 0, 0] = self.get_adjacent_gts(centers[b], b, ids[b])
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
@@ -604,14 +597,47 @@ class BatchManV0:
 
     def get_path_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
-
-        raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
+        n_channels = 2
+        if self.raw is not None:
+            n_channels = 4
+        raw_batch = np.zeros((self.bs, n_channels, self.pl, self.pl),
                              dtype=theano.config.floatX)
         if self.train_b:
             gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
-            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
-            raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
+            if self.raw is not None:
+                raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
+                raw_batch[b, 1, :, :] = self.crop_raw(centers[b], b)
+                raw_batch[b, 2:4, :, :] = self.crop_mask_claimed_one_hot(
+                    centers[b], b, ids[b])
+            else:
+                raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
+                raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
+
+            if self.train_b:
+                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            # check whether already pulled
+            assert(self.global_claims[b, centers[b][0], centers[b][1]] == 0)
+            self.global_heightmap_batch[b,
+                                        centers[b][0] - self.pad,
+                                        centers[b][1] - self.pad] = heights[b]
+            self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
+        if self.train_b:
+            return raw_batch, gts, centers, ids
+        else:
+            return raw_batch, centers, ids
+
+    def get_path_one_hot_batches(self):
+        centers, ids, heights = self.get_centers_from_queue()
+
+        raw_batch = np.zeros((self.bs, 4, self.pl, self.pl),
+                             dtype=theano.config.floatX)
+        if self.train_b:
+            gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
+        for b in range(self.bs):
+            raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
+            raw_batch[b, 1, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 2:4, :, :] = self.crop_mask_claimed_one_hot(centers[b], b, ids[b])
             if self.train_b:
                 gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
             # check whether already pulled
@@ -632,7 +658,7 @@ class BatchManV0:
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 8, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
-            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b,
                                                            ids[b])
             gts[b, :4, 0, 0] = self.get_adjacent_heights(centers[b], b)
@@ -663,7 +689,7 @@ class BatchManV0:
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
-            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
             gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
@@ -866,7 +892,7 @@ class BatchManV0:
         raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         for i, b in enumerate(batches):
-            raw_batch[i, 0, :, :] = self.crop_raw(centers[i], b)
+            raw_batch[i, 0, :, :] = self.crop_membrane(centers[i], b)
             raw_batch[i, 1, :, :] = self.crop_mask_claimed(centers[i], b, ids[i])
 
         mask = self.crop_time_mask(centers, timepoint, batches)
@@ -877,10 +903,15 @@ class BatchManV0:
     def init_prediction(self, start, stop):
         self.global_batch = np.zeros((self.bs, self.rl, self.rl),
                                      dtype=theano.config.floatX)
+        self.raw = np.zeros((self.bs, self.rl, self.rl),
+                                     dtype=theano.config.floatX)
+
         # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims = np.ones((self.bs, self.rl, self.rl))
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
-        self.global_batch[:, :, :] = self.raw[start:stop, :, :]
+        self.global_batch[:, :, :] = self.membranes[start:stop, :, :]
+        if self.raw is not None:
+            self.global_raw[:, :, :] = self.raw[start:stop, :, :]
         self.global_label_batch = np.zeros(
             (self.bs, self.global_el - self.pl,
              self.global_el - self.pl),
@@ -902,7 +933,7 @@ class BatchManV0:
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         for b in range(self.bs):
-            raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
             raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b,
                                                            ids[b])
             assert (self.global_claims[b, centers[b][0], centers[b][1]] == 0)
