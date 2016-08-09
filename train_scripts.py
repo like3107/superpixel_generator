@@ -12,15 +12,16 @@ import numpy as np
 from theano.sandbox import cuda as c
 
 
+
 def train_script_v1():
     print 'train script v1'
     # data params:
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = True
+    load_net_b = False
 
-    net_name = 'path_cnn_v2_height_pq_fix_noft'
+    net_name = 'trash'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -30,18 +31,18 @@ def train_script_v1():
     raw_path = './data/volumes/membranes_a.h5'
     raw_path_val = './data/volumes/membranes_b.h5'
     save_net_path = './data/nets/' + net_name + '/'
-    load_net_path = './data/nets/rough/net_00000'      # if load true
+    load_net_path = './data/nets/rough/net_2500000'      # if load true
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
-    load_net_path = './data/nets/path_cnn_v2_height_pq_fix_noft/net_100000'      # if load true
-
+    load_net_path = './data/nets/cnn_path_v1_fine_tune/net_500000.h5'      # if load true
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     batch_size_ft = 16
     global_edge_len = 300
     gt_seeds_b = False
-    find_errors = True 
-    fine_tune_b = False
+    find_errors = False
+    fine_tune_b = find_errors
+
 
     # training parameter
     c.use('gpu0')
@@ -66,7 +67,7 @@ def train_script_v1():
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
         loss(l_in, target_t, l_out, L1_weight=regularization)
-    
+
     if fine_tune_b:
         print 'compiling theano finetuningfunctions'
         loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
@@ -74,11 +75,6 @@ def train_script_v1():
                           L1_weight=regularization)
         Memento1 = du.BatchMemento(batch_size_ft, 100)
         Memento2 = du.BatchMemento(batch_size_ft, 100)
-
-    # debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
-    #             [lasagne.layers.get_output(l_out, deterministic=True),
-    #             lasagne.layers.get_output(l_out_direction, deterministic=True)])
-    #
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label_path,
@@ -149,17 +145,25 @@ def train_script_v1():
                 Memento2.add_to_memory(error_b_type2, dir2)
                 if save_net_b:
                     # plot train images
-                    bm.draw_debug_image("train_iteration_iter_%i_counter_%i" %
+                    bm.draw_debug_image("train_iteration_iter_%08i_counter_%i" %
                                         (iteration, bm.counter),
                                         path=save_net_path + '/images/')
-                    bm_val.draw_debug_image("val_iteration_" + str(iteration),
+                    bm_val.draw_debug_image("val_iteration_%08i" % iteration,
                                             path=save_net_path + '/images/')
                 bm.init_train_path_batch()
                 bm_val.init_train_path_batch()
                 free_voxel = free_voxel_empty
 
-        if (free_voxel <= 100 or free_voxel_empty % (iteration + 1) == 0) \
-                and not fine_tune_b:
+        if (free_voxel <= 100 or (free_voxel_empty / 4)  % (iteration + 1) == 0)\
+                and free_voxel_empty - free_voxel > 10000 and not fine_tune_b:
+            bm.draw_debug_image(
+                "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
+                (iteration, bm.counter, free_voxel),
+                path=save_net_path + '/images/')
+            bm_val.draw_debug_image(
+                "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
+                (iteration, bm.counter, free_voxel),
+                path=save_net_path + '/images/')
             bm.init_train_path_batch()
             bm_val.init_train_path_batch()
             free_voxel = free_voxel_empty
@@ -214,7 +218,7 @@ def train_script_v1():
 
         # monitor growth on validation set tmp debug change train to val
         if iteration % 10000 == 0:
-            bm.draw_debug_image("train_iteration_%i_counter_%i_freevoxel_%i" %
+            bm.draw_debug_image("train_iteration_%08i_counter_%i_freevoxel_%i" %
                                 (iteration, bm.counter, free_voxel),
                                 path=save_net_path + '/images/')
 

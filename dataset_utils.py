@@ -576,7 +576,10 @@ class BatchManV0:
         self.global_directionmap_batch = \
             np.zeros_like(self.global_label_batch) - 1
         # set global_batch and global_label_batch
-        self.prepare_global_batch(return_gt_ids=False)
+        start = None
+        if not self.train_b:
+            start = 0
+        self.prepare_global_batch(return_gt_ids=False, start=start)
         # also initializes id_2_gt lookup, seeds in coord syst of label
         if self.gt_seeds_b:
             global_seeds, global_seed_ids = self.get_gt_seeds()
@@ -622,17 +625,24 @@ class BatchManV0:
             return raw_batch, centers, ids
 
     def get_path_gt_batches(self):
-        centers, ids = self.get_centers_from_queue()
+
+        centers, ids, heights = self.get_centers_from_queue()
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         gts = np.zeros((self.bs, 8, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
             raw_batch[b, 0, :, :] = self.crop_raw(centers[b], b)
-            raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b, ids[b])
+            raw_batch[b, 1, :, :] = self.crop_mask_claimed(centers[b], b,
+                                                           ids[b])
             gts[b, :4, 0, 0] = self.get_adjacent_heights(centers[b], b)
             gts[b, 4:, 0, 0] = self.get_adjacent_gts(centers[b], b, ids[b])
             # check whether already pulled
-            assert(self.global_claims[b, centers[b][0], centers[b][1]] == 0)
+            assert (
+                self.global_claims[b, centers[b][0], centers[b][1]] == 0)
+            self.global_heightmap_batch[b,
+                                        centers[b][0] - self.pad,
+                                        centers[b][1] - self.pad] = heights[
+                b]
             self.global_claims[b, centers[b][0], centers[b][1]] = ids[b]
         return raw_batch, gts, centers, ids
 
@@ -706,7 +716,8 @@ class BatchManV0:
 
             # check for errors in neighbor regions, type II
             if self.find_errors_b:
-                self.check_type_II_errors(center_x, center_y, error_index, Id)
+                self.check_type_II_errors(center_x, center_y, error_index, Id,
+                                          b)
 
             centers.append((center_x, center_y))
             ids.append(Id)
@@ -714,7 +725,7 @@ class BatchManV0:
 
         return centers, ids, heights
 
-    def check_type_II_errors(self, center_x, center_y, error_index, Id):
+    def check_type_II_errors(self, center_x, center_y, error_index, Id, b):
         for x, y, direction in self.walk_cross_coords([center_x,
                                                        center_y]):
 
@@ -876,7 +887,8 @@ class BatchManV0:
 
         self.global_height_gt_batch = np.zeros_like(self.global_label_batch)
         self.global_heightmap_batch = np.zeros_like(self.global_label_batch)
-
+        self.global_directionmap_batch = \
+            np.zeros_like(self.global_label_batch) - 1
         self.prepare_global_batch(return_gt_ids=False, start=start)
         if self.gt_seeds_b:
             global_seeds, global_seed_ids = self.get_gt_seeds()
@@ -1064,6 +1076,66 @@ class BatchManV0:
             plt.close(f)
 
 
+class SliceMan(object):
+    def __init__(self, global_slice, global_label_slice=None, **kwargs):
+        self.global_slice = global_slice
+        self.global_label_slice = global_label_slice
+
+        # internal
+        self.global_height_map = None
+        self.global_claims = None
+
+    def intit_batch(self):
+        NotImplemented
+
+    def get_seeds_by_minimum(self):
+        assert (self.global_slice is not None)
+        NotImplemented
+
+    def get_seeds_by_gt(self):
+        # Needs self.global_slice, self.global_label_slice
+        assert (self.global_slice is not None)
+        assert (self.global_label_slice is not None)
+        NotImplemented
+
+    def get_batch(self):
+        NotImplemented
+
+    def update_priority_queue(self):
+        NotImplemented
+
+
+class SliceManTrain(SliceMan):
+    def __init__(self, global_slice, global_label, **kwargs):
+        super(SliceManTrain, self).__init__(global_slice)
+        self.global_label_slice = global_label
+
+    def get_batch(self,a):
+        print 'whoah the other one'
+        import time
+        time.sleep(1)
+        NotImplemented
+        return a
+
+
+class MultiBatchMan(object):
+    def __init__(self, SliceMan, raw, batch_size=1, labels=None, heights=None):
+        self.raw = raw
+        self.bs = batch_size
+        self.SMs = []
+        for SM in range(self.bs):
+            self.SMs.append(SliceMan(self.raw, self.bs))
+
+    def get_batch(self):
+        from multiprocessing import Pool
+        pool = Pool(5)
+        for SM in self.SMs:
+
+            pool.map_async(SM.get_batch(), iterable=(4, no))
+
+
+
+
 class BatchMemento:
     """
     Remembers slices for CNN in style bc01
@@ -1116,6 +1188,10 @@ class BatchMemento:
 
 if __name__ == '__main__':
 
+    MBM = MultiBatchMan(SliceManTrain, None, batch_size=16)
+
+    MBM.get_batch()
+
     # loading of cremi
     # path = './data/sample_A_20160501.hdf'
     # /da
@@ -1133,71 +1209,71 @@ if __name__ == '__main__':
     #                 global_edge_len=95)
     # bm.init_train_batch()
 
-    net_name = 'cnn_ID2_trash'
-    label_path = './data/volumes/label_a.h5'
-    label_path_val = './data/volumes/label_b.h5'
-    height_gt_path = './data/volumes/height_a.h5'
-    height_gt_key = 'height'
-    height_gt_path_val = './data/volumes/height_b.h5'
-    height_gt_key_val = 'height'
-    raw_path = './data/volumes/membranes_a.h5'
-    raw_path_val = './data/volumes/membranes_b.h5'
-    save_net_path = './data/nets/' + net_name + '/'
-    load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
-    tmp_path = '/media/liory/ladata/bla'        # debugging
-    batch_size = 5         # > 4
-    global_edge_len = 300
-    patch_len= 40
-
-    bm = BatchManV0(raw_path, label_path,
-                    height_gt=height_gt_path,
-                    height_gt_key=height_gt_key,
-                    batch_size=batch_size,
-                    patch_len=patch_len, global_edge_len=global_edge_len,
-                    padding_b=True,find_errors=True)
-    gt_seeds_b = True
-    seeds = bm.init_train_path_batch()
-    seeds = np.array(seeds[4])
-    heights = np.random.random(size=batch_size)
-    b = 4
-    raw_batch, gts, centers, ids = bm.get_path_batches()
-    name = 'debug'
-    for i in range(500000):
-        if i % 100 == 0:
-            print i
-
-        if i % 1000 == 0:
-            bm.draw_debug_image(name + '_deb_%i' %i, save=True)
-            print i
-        raw_batch, gts, centers, ids = bm.get_path_batches()
-
-        if i % 5000 == 0 and i != 0:
-            bm.init_train_path_batch()
-            raw_batch, gts, centers, ids = bm.get_path_batches()
-        probs = np.zeros((batch_size, 4, 1,1))
-        for c in range(batch_size):
-            d = 0
-            for x, y, _ in bm.walk_cross_coords(centers[b]):
-                x -= bm.pad
-                y -= bm.pad
-                # probs[c, d] = bm.global_height_gt_batch[b, x, y]
-                # probs[c, d] = i
-                probs[c, d] = random.random()
-                d += 1
-        bm.update_priority_path_queue(probs, centers, ids)
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # net_name = 'cnn_ID2_trash'
+    # label_path = './data/volumes/label_a.h5'
+    # label_path_val = './data/volumes/label_b.h5'
+    # height_gt_path = './data/volumes/height_a.h5'
+    # height_gt_key = 'height'
+    # height_gt_path_val = './data/volumes/height_b.h5'
+    # height_gt_key_val = 'height'
+    # raw_path = './data/volumes/membranes_a.h5'
+    # raw_path_val = './data/volumes/membranes_b.h5'
+    # save_net_path = './data/nets/' + net_name + '/'
+    # load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
+    # tmp_path = '/media/liory/ladata/bla'        # debugging
+    # batch_size = 5         # > 4
+    # global_edge_len = 300
+    # patch_len= 40
+    #
+    # bm = BatchManV0(raw_path, label_path,
+    #                 height_gt=height_gt_path,
+    #                 height_gt_key=height_gt_key,
+    #                 batch_size=batch_size,
+    #                 patch_len=patch_len, global_edge_len=global_edge_len,
+    #                 padding_b=True,find_errors=True)
+    # gt_seeds_b = True
+    # seeds = bm.init_train_path_batch()
+    # seeds = np.array(seeds[4])
+    # heights = np.random.random(size=batch_size)
+    # b = 4
+    # raw_batch, gts, centers, ids = bm.get_path_batches()
+    # name = 'debug'
+    # for i in range(500000):
+    #     if i % 100 == 0:
+    #         print i
+    #
+    #     if i % 1000 == 0:
+    #         bm.draw_debug_image(name + '_deb_%i' %i, save=True)
+    #         print i
+    #     raw_batch, gts, centers, ids = bm.get_path_batches()
+    #
+    #     if i % 5000 == 0 and i != 0:
+    #         bm.init_train_path_batch()
+    #         raw_batch, gts, centers, ids = bm.get_path_batches()
+    #     probs = np.zeros((batch_size, 4, 1,1))
+    #     for c in range(batch_size):
+    #         d = 0
+    #         for x, y, _ in bm.walk_cross_coords(centers[b]):
+    #             x -= bm.pad
+    #             y -= bm.pad
+    #             # probs[c, d] = bm.global_height_gt_batch[b, x, y]
+    #             # probs[c, d] = i
+    #             probs[c, d] = random.random()
+    #             d += 1
+    #     bm.update_priority_path_queue(probs, centers, ids)
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
 
 
 

@@ -325,6 +325,12 @@ def prob_funcs(l_in, last_layer):
     probs_f = theano.function([l_in.input_var], l_out_valid)
     return probs_f
 
+def prob_funcs_hybrid(l_in, last_layers):
+    l_height, l_id = last_layers
+    l_out_valid = L.get_output(l_height, deterministic=True)
+    probs_f = theano.function([l_in.input_var], l_out_valid)
+    return probs_f
+
 
 def gen_identity_filter(indices):
     def initializer(shape):

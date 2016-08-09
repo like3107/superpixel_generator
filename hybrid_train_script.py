@@ -20,7 +20,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'hybrid2'
+    net_name = 'trash2'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -36,16 +36,12 @@ def train_script_v1():
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
-    batch_size_ft = 16
     global_edge_len = 600
     gt_seeds_b = False
-    find_errors = False
     find_errors = False
 
     # training parameter
     c.use('gpu0')
-    fine_tune_b = False
-    train_iter = 1000000
     max_iter = 1000000000
     save_counter = 100000        # save every n iterations
     max_pre_train_iter = 100000000
@@ -100,7 +96,7 @@ def train_script_v1():
             os.mkdir(save_net_path + '/images')
 
     if load_net_b:
-        print "loading network parameters from ",load_net_path
+        print "loading network parameters from ", load_net_path
         u.load_network(load_net_path, l_out)
 
     # everything is initialized now train and predict every once in a while....
@@ -118,10 +114,19 @@ def train_script_v1():
 
         if iteration % save_counter == 0 and save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
-	
-	if free_voxel <= 100 or free_voxel_empty % (iteration + 1) == 0:
-	    bm.init_train_path_batch()
-	    bm_val.init_train_path_batch()
+
+        if free_voxel <= 100 or (free_voxel_empty / 4) % (iteration + 1) == 0\
+                and free_voxel_empty - free_voxel > 10000:
+            bm.draw_debug_image(
+                "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
+                (iteration, bm.counter, free_voxel),
+                path=save_net_path + '/images/')
+            bm_val.draw_debug_image(
+                "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
+                (iteration, bm.counter, free_voxel),
+                path=save_net_path + '/images/')
+            bm.init_train_path_batch()
+            bm_val.init_train_path_batch()
 
         # predict val
         raw_val, gt, seeds_val, ids_val = bm_val.get_path_gt_batches()
@@ -133,11 +138,11 @@ def train_script_v1():
         probs = probs_f(raw)
         bm.update_priority_path_queue(probs, seeds, ids)
 
-        if iteration % 10 == 0 and iteration < max_pre_train_iter:
+        if iteration % 10 == 0:
             loss_train = float(loss_train_f(raw, gt))
 
         # monitor training and plot loss
-        if iteration % 1000 == 0 and iteration < max_pre_train_iter:
+        if iteration % 1000 == 0:
             loss_train_no_reg = float(loss_valid_f(raw, gt))
             loss_valid = float(loss_valid_f(raw_val, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
@@ -155,7 +160,7 @@ def train_script_v1():
                     names=['loss train', 'loss train no reg', 'loss valid'])
 
         # monitor growth on validation set tmp debug change train to val
-        if iteration % 50000 == 0:
+        if iteration % 5000 == 0:
             bm.draw_debug_image("train_iteration_%i_counter_%i_freevoxel_%i" %
                                 (iteration, bm.counter, free_voxel),
                                 path=save_net_path + '/images/')

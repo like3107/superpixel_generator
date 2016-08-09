@@ -15,7 +15,7 @@ def pred_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
 
-    net_name = 'cnn_path_v1_fine_tune2'
+    net_name = 'trash2'
     raw_path = './data/volumes/membranes_b.h5'
     label_path = None
     height_gt_path = None
@@ -24,25 +24,30 @@ def pred_script_v1():
     # height_gt_path = './data/volumes/height_b.h5'
     # height_gt_key = 'height'
 
-    load_net_path = './data/nets/' + net_name + '/net_19900000'
+    load_net_path = './data/nets/' + net_name + '/net_0'
     save_path = './data/pred_memb3_cnn_path_v1_fine_tune2.h5'
 
-    batch_size = 125  # > 4
+    batch_size = 4  # > 4
     global_edge_len = 1290      # 1250  + patch_len for memb
-    gt_seeds_b = False
+    gt_seeds_b = False      # needs label path
 
     # training parameter
     c.use('gpu0')
 
-    # choose your network from nets.py
-    network = nets.build_ID_v0
+    # choose your network and train functions from nets.py
+    # network = nets.build_ID_v0      # hydra only needs build_ID_v0
+    network = nets.build_ID_v1_hybrid
+
+    # probs_funcs = nets.prob_funcs       # hydra
+    probs_funcs = nets.prob_funcs_hybrid       # hybrid
+
 
     # all params entered.......................
 
     # initialize the net
     print 'initializing network graph for net ', net_name
     l_in, l_out, patch_len = network()
-    probs_f = nets.prob_funcs(l_in, l_out)
+    probs_f = probs_funcs(l_in, l_out)
 
     print 'Loading data and Priority queue init'
     bm = du.BatchManV0(raw_path, label=label_path,
@@ -57,7 +62,7 @@ def pred_script_v1():
                            bm.global_el - bm.pl),
                           dtype=np.uint64)
     for i in range(0, batch_size, batch_size):
-        bm.init_prediction(i, i + batch_size)
+        bm.init_train_path_batch()
 
         for j in range((bm.global_el - bm.pl) ** 2):
             print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
@@ -72,13 +77,8 @@ def pred_script_v1():
                 du.save_h5(save_path, 'pred', data=prediction, overwrite='w')
 
                 fig, ax = plt.subplots(1, 2)
-                bm.draw_debug_image('pred_%s_%i' % (net_name, j))
-                ax[0].imshow(bm.global_claims[0, :, :],
-                             cmap=u.random_color_map(), interpolation='none')
-                ax[1].imshow(bm.global_batch[0, :, :],
-                             cmap='gray', interpolation='none')
-                # ax[2].imshow(bm.global_label_batch[0, :, :])
-                plt.savefig('./data/' + 'trash' + str(j))
+                bm.draw_debug_image('pred_%s_%i' % (net_name, j),
+                                    path='./data/')
 
         prediction[i * batch_size:(i + 1) * batch_size, :, :] = \
             bm.global_claims[:, bm.pad:-bm.pad, bm.pad:-bm.pad]
