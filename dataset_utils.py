@@ -486,7 +486,7 @@ class BatchManV0:
                                     seed[1] - self.pad:seed[1] + self.pad]
         claimed = np.zeros((self.pl, self.pl), dtype=theano.config.floatX)
         claimed[labels > 0] = 1        # the others
-        claimed[labels == 0] = -1       # me
+        claimed[labels == Id] = -1       # me
         return claimed
 
     def crop_timemap(self, center, b):
@@ -604,6 +604,7 @@ class BatchManV0:
 
     def get_path_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
+
         raw_batch = np.zeros((self.bs, 2, self.pl, self.pl),
                              dtype=theano.config.floatX)
         if self.train_b:
@@ -1124,67 +1125,6 @@ class BatchManV0:
             f.savefig(path + image_name + '_e%07d' % nume)
             plt.close(f)
 
-
-class SliceMan(object):
-    def __init__(self, global_slice, global_label_slice=None, **kwargs):
-        self.global_slice = global_slice
-        self.global_label_slice = global_label_slice
-
-        # internal
-        self.global_height_map = None
-        self.global_claims = None
-
-    def intit_batch(self):
-        NotImplemented
-
-    def get_seeds_by_minimum(self):
-        assert (self.global_slice is not None)
-        NotImplemented
-
-    def get_seeds_by_gt(self):
-        # Needs self.global_slice, self.global_label_slice
-        assert (self.global_slice is not None)
-        assert (self.global_label_slice is not None)
-        NotImplemented
-
-    def get_batch(self):
-        NotImplemented
-
-    def update_priority_queue(self):
-        NotImplemented
-
-
-class SliceManTrain(SliceMan):
-    def __init__(self, global_slice, global_label, **kwargs):
-        super(SliceManTrain, self).__init__(global_slice)
-        self.global_label_slice = global_label
-
-    def get_batch(self,a):
-        print 'whoah the other one'
-        import time
-        time.sleep(1)
-        NotImplemented
-        return a
-
-
-class MultiBatchMan(object):
-    def __init__(self, SliceMan, raw, batch_size=1, labels=None, heights=None):
-        self.raw = raw
-        self.bs = batch_size
-        self.SMs = []
-        for SM in range(self.bs):
-            self.SMs.append(SliceMan(self.raw, self.bs))
-
-    def get_batch(self):
-        from multiprocessing import Pool
-        pool = Pool(5)
-        for SM in self.SMs:
-
-            pool.map_async(SM.get_batch(), iterable=(4, no))
-
-
-
-
 class BatchMemento:
     """
     Remembers slices for CNN in style bc01
@@ -1237,12 +1177,9 @@ class BatchMemento:
 
 if __name__ == '__main__':
 
-    MBM = MultiBatchMan(SliceManTrain, None, batch_size=16)
-
-    MBM.get_batch()
 
     # loading of cremi
-    # path = './data/sample_A_20160501.hdf'
+    path = './data/sample_A_20160501.hdf'
     # /da
     # a = make_array_cumulative(a)
     # save_h5('./data/label_a.h5', 'labels', a, 'w')
