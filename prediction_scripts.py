@@ -15,9 +15,10 @@ def pred_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
 
-    net_name = 'trash_mc'
+    net_name = 'trash_ft'
     membrane_path = './data/volumes/membranes_b.h5'
     raw_path = './data/volumes/raw_b.h5'
+    raw_path = None
     label_path = None
     height_gt_path = None
     height_gt_key = None
@@ -25,8 +26,8 @@ def pred_script_v1():
     # height_gt_path = './data/volumes/height_b.h5'
     # height_gt_key = 'height'
 
-    load_net_path = './data/nets/' + net_name + '/net_800000'
-    save_path = './data/cnn_v4_mc.h5'
+    load_net_path = './data/nets/trash/net_4300000'
+    save_path = './data/cnn_v4_ft.h5'
 
     batch_size = 125  # > 4
     global_edge_len = 1290      # 1250  + patch_len for memb
@@ -36,8 +37,8 @@ def pred_script_v1():
     c.use('gpu0')
 
     # choose your network and train functions from nets.py
-    # network = nets.build_ID_v0      # hydra only needs build_ID_v0
-    network = nets.build_ID_v1_multichannel
+    network = nets.build_ID_v0      # hydra only needs build_ID_v0
+    # network = nets.build_ID_v1_multichannel
     # hydra only needs build_ID_v0
     # network = nets.build_ID_v1_hybrid
     #

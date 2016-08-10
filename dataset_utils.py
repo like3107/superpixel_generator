@@ -488,7 +488,7 @@ class BatchManV0:
         return membrane
 
     def crop_raw(self, seed, batch_counter):
-        raw = self.global_batch[batch_counter,
+        raw = self.global_raw[batch_counter,
                                 seed[0] - self.pad:seed[0] + self.pad,
                                 seed[1] - self.pad:seed[1] + self.pad]
         return raw
@@ -977,6 +977,21 @@ class BatchManV0:
                                                          error_batch_list)
         return reconst_e1, reconst_e2 , np.array(error_I_direction), np.array(error_II_direction)
 
+    def draw_batch(self, raw_batch, image_name, path='./data/nets/debug/images/', save=True):
+        plot_images = []
+        for b in range(raw_batch.shape[0]):
+            plot_images.append({"title":"membrane",
+                        'im':raw_batch[b,0]})
+            plot_images.append({"title":"raw",
+                        'im':raw_batch[b,1]})
+            plot_images.append({"title":"claim me",
+                        'cmap':"rand",
+                        'im':raw_batch[b,2]})
+            plot_images.append({"title":"claim others",
+                        'cmap':"rand",
+                        'im':raw_batch[b,3]})
+        u.save_images(plot_images, path=path, name=image_name, column_size=4)
+
     def draw_error_reconst(self, image_name, path='./data/nets/debug/images/', save=True):
         for e_idx, error in self.global_error_dict.items():
             plot_images = []
@@ -1018,7 +1033,6 @@ class BatchManV0:
                 u.save_images(plot_images, path=path, name=image_name+'_'+str(e_idx))
             else:
                 print "skipping ", e_idx
-
 
     def draw_debug_image(self, image_name, path='./data/nets/debug/images/',
                          save=True, b=0):
