@@ -76,16 +76,20 @@ def build_net_v5():
 
     # 40
     l_in = L.InputLayer((None, n_channels, fov, fov))
-    l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0], las.nonlinearities.elu)
+    l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0],
+                        nonlinearity=las.nonlinearities.elu)
     l_2 = L.MaxPool2DLayer(l_1, pool[0])
     l_3 = L.DropoutLayer(l_2, p=dropout[0])
     # 17
-    l_4 = L.Conv2DLayer(l_3, n_filt[1], filt[1], las.nonlinearities.elu)
+    l_4 = L.Conv2DLayer(l_3, n_filt[1], filt[1],
+                        nonlinearity=las.nonlinearities.elu)
     l_5 = L.MaxPool2DLayer(l_4, pool[1])
     l_6 = L.DropoutLayer(l_5, p=dropout[1])
     # 6
-    l_7 = L.Conv2DLayer(l_6, n_filt[2], 5, filt[2], las.nonlinearities.elu)
-    l_8 = L.Conv2DLayer(l_7, n_filt[3], 1, las.nonlinearities.elu)
+    l_7 = L.Conv2DLayer(l_6, n_filt[2], 5, filt[2],
+                        nonlinearity=las.nonlinearities.elu)
+    l_8 = L.Conv2DLayer(l_7, n_filt[3], 1,
+                        nonlinearity=las.nonlinearities.elu)
     l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
                         nonlinearity=las.nonlinearities.elu)
     return l_in, l_9, fov

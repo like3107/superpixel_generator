@@ -38,25 +38,27 @@ def train_script_v1():
     load_net_path = './data/nets/cnn_path_v1_fine_tune/net_500000.h5'      # if load true
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
-    batch_size = 16         # > 4
-    batch_size_ft = 16
+    batch_size = 2         # > 4
+    batch_size_ft = 2
     global_edge_len = 300
     gt_seeds_b = False
-    find_errors = False
+    find_errors = True
     fine_tune_b = find_errors
 
 
     # training parameter
     c.use('gpu0')
-    train_iter = 1000000
+    pre_train_iter = 1000000
     max_iter = 10000000000
     save_counter = 100000        # save every n iterations
+    # fine tune
+
 
     # choose your network from nets.py
     regularization = 10**-4
-    network = nets.build_ID_v01_hydra
+    network = nets.build_ID_v5_hydra
     loss = nets.loss_updates_probs_v0
-    loss_fine = nets.loss_updates_hydra_v0
+    loss_fine = nets.loss_updates_hydra_v5
 
     # all params entered.......................
 
@@ -141,7 +143,7 @@ def train_script_v1():
         # update height difference errors
         if iteration % 100 == 0:
             if (len(bm.global_error_dict) >= batch_size_ft or \
-                            free_voxel < 101) and iteration > train_iter \
+                            free_voxel < 101) and iteration > pre_train_iter \
                     and fine_tune_b:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
@@ -198,11 +200,11 @@ def train_script_v1():
             bm.init_train_path_batch()
             free_voxel = free_voxel_empty
 
-        if iteration % 10 == 0 and iteration < train_iter:
+        if iteration % 10 == 0 and iteration < pre_train_iter:
             loss_train = float(loss_train_f(membrane, gt))
 
         # monitor training and plot loss
-        if iteration % 1000 == 0 and (iteration < train_iter or not
+        if iteration % 1000 == 0 and (iteration < pre_train_iter or not
         fine_tune_b):
             loss_train_no_reg = float(loss_valid_f(membrane, gt))
             loss_valid = float(loss_valid_f(membrane_val, gt))
