@@ -171,7 +171,6 @@ class BatchManV0:
 
         # private
         self.global_batch = None                # includes padding, nn input
-        self.global_raw = None                  # includes padding, nn input
         self.global_claims = None               # includes padding, tri-map, inp
         self.global_directionmap_batch = None   # no padding
         self.global_label_batch = None          # no padding
@@ -215,10 +214,11 @@ class BatchManV0:
                 self.membranes[ind_b[b],
                          ind_x[b]:ind_x[b] + self.global_el,
                          ind_y[b]:ind_y[b] + self.global_el]
-            self.global_raw[b, :, :] = \
-                self.raw[ind_b[b],
-                         ind_x[b]:ind_x[b] + self.global_el,
-                         ind_y[b]:ind_y[b] + self.global_el]
+            if self.raw is not None:
+                self.global_raw[b, :, :] = \
+                    self.raw[ind_b[b],
+                             ind_x[b]:ind_x[b] + self.global_el,
+                             ind_y[b]:ind_y[b] + self.global_el]
             # ind_x[b], ind_y[b] = (ind_x[b] - self.pl, ind_y[b] - self.pl)
             if self.height_gt is not None:
                 self.global_height_gt_batch[b, :, :] = \
@@ -1069,7 +1069,7 @@ class BatchManV0:
                 current_front = 0
                 for idx in ids:
                     if idx != last_id:
-                        print "id from ",current_back," to ", current_front 
+                        print "id from ",current_back," to ", current_front
                         # axis.plot(np.arange(current_pos, length),[0] * length, linewidth=6)
                         axis.axvspan(current_back, current_front, color=cmap(idx % 256), alpha=0.5)
                         last_id = idx
