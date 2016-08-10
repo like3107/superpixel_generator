@@ -64,13 +64,13 @@ def draw_image(image_info, target):
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
     target.axis('off')
 
-def save_images(image_dicts, path, name, terminate=False):
+def save_images(image_dicts, path, name, terminate=False, column_size=3):
     if len(image_dicts) == 0:
         return
-    f, ax = plt.subplots(ncols=3, nrows=((len(image_dicts)-1) / 3) + 1)
-    if ((len(image_dicts)-1) / 3) + 1 > 1:
+    f, ax = plt.subplots(ncols=column_size, nrows=((len(image_dicts)-1) / column_size) + 1)
+    if ((len(image_dicts)-1) / column_size) + 1 > 1:
         for i, image_info in enumerate(image_dicts):
-            draw_image(image_info, ax[i / 3, i % 3])
+            draw_image(image_info, ax[i / column_size, i % column_size])
     else:
         for i, image_info in enumerate(image_dicts):
             draw_image(image_info, ax[i])
