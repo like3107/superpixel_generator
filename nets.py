@@ -345,10 +345,11 @@ def loss_updates_hydra_v5(l_in_data, l_in_direction, last_layer,
         las.regularization.regularize_network_params(last_layer,
                                                      las.regularization.l1)
 
-    loss_train = T.mean((l_out_train[:bs/2] - l_out_train[bs/2:] + margin)**2)
+    # typeII - typeI + m
+    loss_train = T.mean((l_out_train[bs/2:] - l_out_train[:bs/2] + margin)**2)
     loss_train += L1_weight * L1_norm
 
-    loss_valid = T.mean((l_out_train[:bs/2] - l_out_train[bs/2:])**2)
+    loss_valid = T.mean((l_out_train[bs/2:] - l_out_train[:bs/2])**2)
 
     updates = las.updates.adam(loss_train, all_params)
 

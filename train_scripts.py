@@ -21,7 +21,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash_mc'
+    net_name = 'trash_v5'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -48,11 +48,11 @@ def train_script_v1():
 
     # training parameter
     c.use('gpu0')
-    pre_train_iter = 1000000
+    pre_train_iter = 1000
     max_iter = 10000000000
     save_counter = 100000        # save every n iterations
     # fine tune
-
+    margin = 10
 
     # choose your network from nets.py
     regularization = 10**-4
@@ -76,7 +76,7 @@ def train_script_v1():
         print 'compiling theano finetuningfunctions'
         loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
             loss_fine(l_in, l_in_direction, l_out_direction,
-                          L1_weight=regularization)
+                          L1_weight=regularization, margin=margin)
         Memento1 = du.BatchMemento(batch_size_ft, 100)
         Memento2 = du.BatchMemento(batch_size_ft, 100)
 
@@ -140,10 +140,10 @@ def train_script_v1():
         probs = probs_f(membrane)
         bm.update_priority_path_queue(probs, seeds, ids)
 
-        # update height difference errors
+        # fine-tuning: update height difference errors
         if iteration % 100 == 0:
-            if (len(bm.global_error_dict) >= batch_size_ft or \
-                            free_voxel < 101) and iteration > pre_train_iter \
+            if (len(bm.global_error_dict) >= batch_size_ft or
+                    free_voxel < 101) and iteration > pre_train_iter \
                     and fine_tune_b:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
@@ -160,8 +160,9 @@ def train_script_v1():
                 bm_val.init_train_path_batch()
                 free_voxel = free_voxel_empty
 
+        # reset bms
         if (free_voxel <= 100 or (free_voxel_empty / 4)  % (iteration + 1) == 0)\
-                and free_voxel_empty - free_voxel > 10000 and not fine_tune_b:
+                and free_voxel_empty - free_voxel > 10000:
             bm.draw_debug_image(
                 "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
                 (iteration, bm.counter, free_voxel),
