@@ -889,14 +889,17 @@ class BatchManV0:
     #                                            False, self.global_time))
 
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
-        raw_batch = np.zeros((len(batches), 2, self.pl, self.pl),
+        raw_batch = np.zeros((len(batches), 4, self.pl, self.pl),
                              dtype=theano.config.floatX)
         for i, b in enumerate(batches):
-            raw_batch[i, 0, :, :] = self.crop_membrane(centers[i], b)
-            raw_batch[i, 1, :, :] = self.crop_mask_claimed(centers[i], b, ids[i])
+            raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
+            raw_batch[b, 1, :, :] = self.crop_raw(centers[b], b)
+            raw_batch[b, 2:4, :, :] = self.crop_mask_claimed_one_hot(
+                    centers[b], b, ids[b])
 
         mask = self.crop_time_mask(centers, timepoint, batches)
-        raw_batch[:, 1, :, :][mask] = 0
+        raw_batch[:, 2, :, :][mask] = 0
+        raw_batch[:, 3, :, :][mask] = 0
         return raw_batch
 
     # validation of cube slice by slice
