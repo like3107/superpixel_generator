@@ -65,6 +65,32 @@ def build_net_v1():
     return l_in, l_12, fov
 
 
+def build_net_v5():
+    fov = 40    # field of view = patch length
+    n_channels = 4
+    n_classes = 4
+    filt = [7, 6, 6]
+    n_filt = [20, 25, 60, 30, n_classes]
+    pool = [2, 2]
+    dropout = [0.2, 0.2]
+
+    # 40
+    l_in = L.InputLayer((None, n_channels, fov, fov))
+    l_1 = L.Conv2DLayer(l_in, n_filt[0], filt[0], las.nonlinearities.elu)
+    l_2 = L.MaxPool2DLayer(l_1, pool[0])
+    l_3 = L.DropoutLayer(l_2, p=dropout[0])
+    # 17
+    l_4 = L.Conv2DLayer(l_3, n_filt[1], filt[1], las.nonlinearities.elu)
+    l_5 = L.MaxPool2DLayer(l_4, pool[1])
+    l_6 = L.DropoutLayer(l_5, p=dropout[1])
+    # 6
+    l_7 = L.Conv2DLayer(l_6, n_filt[2], 5, filt[2], las.nonlinearities.elu)
+    l_8 = L.Conv2DLayer(l_7, n_filt[3], 1, las.nonlinearities.elu)
+    l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
+                        nonlinearity=las.nonlinearities.elu)
+    return l_in, l_9, fov
+
+
 def build_ID_v0():
     fov = 40  # field of view = patch length
     n_channels = 2
@@ -156,6 +182,12 @@ def build_ID_v01_hydra():
     l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
     return l_in, l_in_direction, l_9, l_10, fov
 
+
+def build_ID_v5_hydra():
+    l_in, l_9, fov = build_net_v5()
+    l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+    l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+    return l_in, l_in_direction, l_9, l_10, fov
 
 
 def build_ID_v0_hybrid():
@@ -288,6 +320,41 @@ def loss_updates_hydra_v0(l_in_data, l_in_direction, last_layer,
                                    updates=updates)
 
     loss_valid_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
+                                   loss_valid)
+    probs_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
+                              l_out_valid)
+
+    return loss_train_f, loss_valid_f, probs_f
+
+
+def loss_updates_hydra_v5(l_in_data, l_in_direction, last_layer,
+                          L1_weight=10**-5, margin=0):
+
+    all_params = L.get_all_params(last_layer)
+
+    bs = l_in_data.input_var.shape[0]
+
+    l_out_train = L.get_output(last_layer, deterministic=False)
+    l_out_valid = L.get_output(last_layer, deterministic=True)
+
+    L1_norm = \
+        las.regularization.regularize_network_params(last_layer,
+                                                     las.regularization.l1)
+
+    loss_train = T.mean((l_out_train[:bs/2] - l_out_train[bs/2:] + margin)**2)
+    loss_train += L1_weight * L1_norm
+
+    loss_valid = T.mean((l_out_train[:bs/2] - l_out_train[bs/2:])**2)
+
+    updates = las.updates.adam(loss_train, all_params)
+
+    # theano funcs
+    loss_train_f = theano.function([l_in_data.input_var,
+                                    l_in_direction.input_var],
+                                   loss_train,
+                                   updates=updates)
+    loss_valid_f = theano.function([l_in_data.input_var,
+                                    l_in_direction.input_var],
                                    loss_valid)
     probs_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
                               l_out_valid)
