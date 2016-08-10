@@ -1159,6 +1159,7 @@ class BatchManV0:
             f.savefig(path + image_name + '_e%07d' % nume)
             plt.close(f)
 
+
 class BatchMemento:
     """
     Remembers slices for CNN in style bc01
@@ -1207,6 +1208,29 @@ class BatchMemento:
         self.memory = None
         self.direction_memory = None
         self.counter = 0
+
+
+def generate_dummy_data(batch_size, edge_len, patch_len):
+    raw = np.zeros((batch_size, edge_len, edge_len))
+    raw[:, ::edge_len/10, :] = 1.
+
+    membrane = np.zeros_like(raw)
+    membrane[:, ::edge_len/10, :] = 1
+    membrane[:, :, ::edge_len/10] = 1
+    gt = np.zeros_like(raw)
+    gt[membrane == 0] = 1
+    gt = label(gt)
+    gt[:, 1:, :][gt[:, 1:, :] == 0] = gt[:, :-1, :][gt[:, 1:, :] == 0]
+    gt[:, :, 1:][gt[:, :, 1:] == 0] = gt[:, :, :-1][gt[:, :, 1:] == 0]
+    gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
+    raw = gaussian_filter(raw, sigma=4)
+    membrane = gaussian_filter(membrane, sigma=4)
+
+    fig, ax = plt.subplots(3)
+    ax[0].imshow(raw[1, :, :])
+    ax[1].imshow(membrane[1, :, :])
+    ax[2].imshow(gt[1, :, :])
+    plt.show()
 
 
 if __name__ == '__main__':

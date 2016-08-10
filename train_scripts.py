@@ -1,5 +1,6 @@
 import matplotlib
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
+matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
 import theano
@@ -21,7 +22,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash_v5'
+    net_name = 'trash_v5_1'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -67,6 +68,8 @@ def train_script_v1():
     target_t = T.ftensor4()
 
     l_in, l_in_direction, l_out, l_out_direction, patch_len = network()
+    du.generate_dummy_data(batch_size, global_edge_len, patch_len)
+    exit()
 
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
