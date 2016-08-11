@@ -9,7 +9,7 @@ import theano
 from Queue import PriorityQueue
 import utils as u
 from scipy.ndimage import convolve, gaussian_filter
-from scipy.ndimage.morphology import distance_transform_edt
+from scipy.ndimage.morphology import distance_transform_edt, binary_dilation
 from skimage.feature import peak_local_max
 from skimage.morphology import label
 import time
@@ -1260,9 +1260,7 @@ def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
     dist_trf = np.zeros_like(raw)
     raw[:, ::edge_len/10, :] = 100.
 
-    membrane = np.zeros_like(raw)
-    membrane[:, ::edge_len/10, :] = 1.
-    membrane[:, :, ::edge_len/10] = 1.
+    membrane = random_lines(batch_size, 40, edge_len)
 
     for b in range(batch_size):
         dist_trf[b] = distance_transform_edt(membrane[b] == 0)
@@ -1275,8 +1273,8 @@ def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
 
     raw = gaussian_filter(raw, sigma=4)
-    membrane = gaussian_filter(membrane, sigma=2)
-    membrane /= np.max(membrane)
+    # membrane = gaussian_filter(membrane, sigma=2)
+    # membrane /= np.max(membrane)
 
     if save_path is not None:
         fig, ax = plt.subplots(2,2)
@@ -1284,10 +1282,31 @@ def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
         ax[0,1].imshow(membrane[1, :, :])
         ax[1,0].imshow(gt[1, :, :])
         ax[1,1].imshow(dist_trf[1, :, :], cmap='gray')
-        # plt.show()
-        plt.savefig(save_path)
+        plt.show()
+        # plt.savefig(save_path)
     return raw, membrane, dist_trf, gt
 
+
+def random_lines(bs, n_lines, edge_len):
+    memb = np.zeros((bs, edge_len, edge_len))
+    print 'edge len', edge_len
+    for b in range(bs):
+        for i in range(n_lines):
+            m = np.random.uniform() * 10 - 5
+            c = np.random.uniform() * edge_len * 2 - edge_len
+            x = np.arange(0, edge_len-1, 0.01)
+            if np.random.random() < 0.3:
+                x = np.arange(edge_len/2, edge_len - 1, 0.01)
+
+            y = m * x + c
+            x = np.round(x[(y < edge_len) & (y >= 0)]).astype(np.int)
+            y = y[(y < edge_len) & (y >= 0)].astype(np.int)
+            memb[b, x, y] = 1.
+    memb = binary_dilation(memb)
+    # rand_mask = np.random.randint(0, 100, size=(b, edge_len, edge_len))
+    # rand_bool_mask = np.random.ra
+    # rand_bool_mask[rand_mask > 5] = True
+    return memb
 
 if __name__ == '__main__':
 
