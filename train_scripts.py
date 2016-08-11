@@ -39,8 +39,8 @@ def train_script_v1():
     load_net_path = './data/nets/cnn_path_v1_fine_tune/net_500000.h5'      # if load true
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
-    batch_size = 2         # > 4
-    batch_size_ft = 2
+    batch_size = 1         # > 4
+    batch_size_ft = 1
     global_edge_len = 300
     gt_seeds_b = False
     find_errors = True
@@ -50,7 +50,7 @@ def train_script_v1():
 
     # training parameter
     c.use('gpu0')
-    pre_train_iter = 1000
+    pre_train_iter = 10000
     max_iter = 10000000000
     save_counter = 100000        # save every n iterations
     # fine tune
@@ -80,6 +80,10 @@ def train_script_v1():
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
         loss(l_in, target_t, l_out, L1_weight=regularization)
+
+    debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
+                    [lasagne.layers.get_output(l_out, deterministic=True),
+                    lasagne.layers.get_output(l_out_direction, deterministic=True)])
 
     if fine_tune_b:
         print 'compiling theano finetuningfunctions'
@@ -156,11 +160,30 @@ def train_script_v1():
                     and fine_tune_b:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
-                Memento1.add_to_memory(error_b_type1, dir1)
-                Memento2.add_to_memory(error_b_type2, dir2)
+                if bm.global_error_dict > 0:
+                    Memento1.add_to_memory(error_b_type1, dir1)
+                    Memento2.add_to_memory(error_b_type2, dir2)
+
+                    # print debug_f(error_b_type1, dir1)
+                    # print debug_f(error_b_type2, dir2)
+                    bm.draw_batch(error_b_type1, "finetunging_error1_batch_%08i_counter_%i" %
+                            (iteration, bm.counter),path=save_net_path + '/images/')
+                    bm.draw_batch(error_b_type2, "finetunging_error2_batch_%08i_counter_%i" %
+                            (iteration, bm.counter),path=save_net_path + '/images/')
+                    bm.draw_error_paths("finetuning_path_error_iter_%08i_counter_%i" %
+                            (iteration, bm.counter),
+                            path=save_net_path + '/images/')
+                    for b in range(bm.bs):
+                        bm.draw_debug_image(
+                            "finetunging_pic_iteration_%08i_counter_%i_b_%i" %
+                            (iteration, bm.counter, b),
+                            path=save_net_path + '/images/', b=b)
                 if save_net_b:
                     # plot train images
                     bm.draw_debug_image("train_iteration_iter_%08i_counter_%i" %
+                                        (iteration, bm.counter),
+                                        path=save_net_path + '/images/')
+                    bm.draw_error_paths("train_path_error_iter_%08i_counter_%i" %
                                         (iteration, bm.counter),
                                         path=save_net_path + '/images/')
                     bm_val.draw_debug_image("val_iteration_%08i" % iteration,

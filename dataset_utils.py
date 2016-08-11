@@ -401,7 +401,7 @@ class BatchManV0:
                                                current_position[1]-self.pad]
             yield current_position, current_direction
 
-    def find_type_I_error(self): # 1st crossing from own gt ID into other ID
+    def find_type_I_error(self, plateau_backtrace = True): # 2st crossing from own gt ID into other ID
         for error_I in self.global_error_dict.values():
             if not "e1_pos" in error_I:
                 start_position = error_I["large_pos"]
@@ -425,6 +425,13 @@ class BatchManV0:
                                                                  pos[0],
                                                                  pos[1]]
                         error_I["e1_direction"] = d
+                if plateau_backtrace:
+                    new_pos, new_d = self.find_end_of_plateau(error_I["e1_pos"], batch)
+                    error_I["e1_pos"] = new_pos
+                    error_I["e1_time"] = self.global_timemap[batch,
+                                                             new_pos[0],
+                                                             new_pos[1]]
+                    error_I["e1_direction"] = new_d
         # debug
         # self.draw_debug_image("%i_walk_%i_type_%s" % (self.counter,
         #                                               len(self.global_error_dict),
@@ -433,30 +440,30 @@ class BatchManV0:
         self.counter += 1
         # self.draw_error_reconst("reconst_"+str(len(self.global_error_dict)))
 
-    def find_source_of_II_error(self):
-      for error_I in self.global_error_dict.values():
-        if not "e2_pos" in error_I:
-            batch = error_I["batch"]
-            start_position = error_I["small_pos"]
-            current_height = self.global_heightmap_batch[batch,
+    def find_end_of_plateau(self, start_position, batch):
+        current_height = self.global_heightmap_batch[batch,
                                                          start_position[0]-self.pad,
                                                 start_position[1]-self.pad]
-            # find the beginning of the plateau
-            for pos, d in self.get_path_to_root(start_position, batch):
-                # check if the slope is not zero
-                if self.global_heightmap_batch[batch, pos[0]-self.pad, \
-                                                pos[1]-self.pad] \
-                                        - current_height < 0:
-                    # stop because the slope was found
-                    # print 'found end of plateau'
-                    break
-                else:
-                    beginning_of_plateau = np.array(pos)
-                    error_I["e2_pos"] = np.array(pos)
-                    error_I["e2_time"] = self.global_timemap[batch,
-                                                                   pos[0],
-                                                                   pos[1]]
-                    error_I["e2_direction"] = d
+        for pos, d in self.get_path_to_root(start_position, batch):
+            # check if the slope is not zero
+            if self.global_heightmap_batch[batch, pos[0]-self.pad, \
+                                            pos[1]-self.pad] \
+                                    < current_height:
+                return pos,d
+        print "WARNING: plateau ended at root node"
+        return pos,d
+
+    def find_source_of_II_error(self):
+      for error in self.global_error_dict.values():
+        if not "e2_pos" in error:
+            batch = error["batch"]
+            start_position = error["small_pos"]
+
+            error["e2_pos"], error["e2_direction"] = \
+                            self.find_end_of_plateau(start_position, batch)
+            error["e2_time"] = self.global_timemap[batch,
+                                           error["e2_pos"][0],
+                                           error["e2_pos"][1]]
 
     def get_cross_coords(self, seed, global_offset=0):
         seeds_x, seeds_y, dirs = [], [], []
@@ -999,10 +1006,10 @@ class BatchManV0:
                         'im':raw_batch[b,0]})
             plot_images.append({"title":"raw",
                         'im':raw_batch[b,1]})
-            plot_images.append({"title":"claim me",
+            plot_images.append({"title":"claim others",
                         'cmap':"rand",
                         'im':raw_batch[b,2]})
-            plot_images.append({"title":"claim others",
+            plot_images.append({"title":"claim me",
                         'cmap':"rand",
                         'im':raw_batch[b,3]})
         u.save_images(plot_images, path=path, name=image_name, column_size=4)
@@ -1154,20 +1161,19 @@ class BatchManV0:
 
                 pred[e_name].append(0)
 
-            # trim stuff
-
-
-
             pred["small_pos"].reverse()
             height["small_pos"].reverse()
             gt_id["small_pos"].reverse()
 
-            print pred["small_pos"]
-            print pred["large_pos"]
-            print height["small_pos"]
-            print height["large_pos"]
-            print gt_id["small_pos"]
-            print gt_id["large_pos"]
+            print "pred small",pred["small_pos"]
+            print "pred large",pred["large_pos"]
+            print "height small",height["small_pos"]
+            print "height large",height["large_pos"]
+            print "gt id small",gt_id["small_pos"]
+            print "gt id large",gt_id["large_pos"]
+
+            # if len(pred["small_pos"]) > MAXLENGTH:
+            #     base_offset = len(pred["small_pos"])-MAXLENGTH
 
             f, ax=plt.subplots()
             # prediction=pred["small_pos"][-MAXLENGTH:]+pred["large_pos"][:MAXLENGTH]
