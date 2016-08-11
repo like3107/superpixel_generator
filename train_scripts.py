@@ -22,7 +22,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash_v5_2'
+    net_name = 'trash_v5_3'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -49,6 +49,7 @@ def train_script_v1():
 
 
     # training parameter
+    BM = du.HoneyBatcherPath
     c.use('gpu0')
     pre_train_iter = 10000
     max_iter = 10000000000
@@ -69,7 +70,7 @@ def train_script_v1():
     target_t = T.ftensor4()
 
     l_in, l_in_direction, l_out, l_out_direction, patch_len = network()
-
+    patch_len = 40
     if dummy_data_b:
         raw_path, membrane_path, height_gt_path, label_path = \
             du.generate_dummy_data(batch_size, global_edge_len, patch_len)
@@ -94,7 +95,7 @@ def train_script_v1():
         Memento2 = du.BatchMemento(batch_size_ft, 100)
 
     print 'Loading data and Priority queue init'
-    bm = du.BatchManV0(membrane_path, label_path,
+    bm = BM(membrane_path, label=label_path,
                        height_gt=height_gt_path,
                        height_gt_key=height_gt_key,
                        raw=raw_path,
@@ -104,8 +105,10 @@ def train_script_v1():
                        find_errors=find_errors and fine_tune_b,
                        gt_seeds_b=gt_seeds_b)
 
-    bm.init_train_path_batch()
-    bm_val = du.BatchManV0(membrane_path_val, label_path_val,
+
+    bm.init_batch()
+
+    bm_val = BM(membrane_path_val, label=label_path_val,
                            height_gt=height_gt_path_val,
                            height_gt_key=height_gt_key_val,
                            raw=raw_path_val,
@@ -113,7 +116,7 @@ def train_script_v1():
                            patch_len=patch_len, global_edge_len=global_edge_len,
                            padding_b=False, gt_seeds_b=gt_seeds_b)
 
-    bm_val.init_train_path_batch()  # Training
+    bm_val.init_batch()  # Training
 
     # init a network folder where all images, models and hyper params are stored
     if save_net_b:
@@ -144,14 +147,14 @@ def train_script_v1():
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
         # predict val
-        membrane_val, gt, seeds_val, ids_val = bm_val.get_path_batches()
+        membrane_val, gt, seeds_val, ids_val = bm_val.get_batches()
         probs_val = probs_f(membrane_val)
-        bm_val.update_priority_path_queue(probs_val, seeds_val, ids_val)
+        bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
         # predict train
-        membrane, gt, seeds, ids = bm.get_path_batches()
+        membrane, gt, seeds, ids = bm.get_batches()
         probs = probs_f(membrane)
-        bm.update_priority_path_queue(probs, seeds, ids)
+        bm.update_priority_queue(probs, seeds, ids)
 
         # fine-tuning: update height difference errors
         if iteration % 100 == 0:
@@ -188,8 +191,8 @@ def train_script_v1():
                                         path=save_net_path + '/images/')
                     bm_val.draw_debug_image("val_iteration_%08i" % iteration,
                                             path=save_net_path + '/images/')
-                bm.init_train_path_batch()
-                bm_val.init_train_path_batch()
+                bm.init_batch()
+                bm_val.init_batch()
                 free_voxel = free_voxel_empty
 
         # reset bms
@@ -203,8 +206,8 @@ def train_script_v1():
                 "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
                 (iteration, bm.counter, free_voxel),
                 path=save_net_path + '/images/')
-            bm.init_train_path_batch()
-            bm_val.init_train_path_batch()
+            bm.init_batch()
+            bm_val.init_batch()
             free_voxel = free_voxel_empty
 
         # clear memory, do fine-tuning and reset image
