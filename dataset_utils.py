@@ -68,6 +68,21 @@ def make_array_cumulative(array):
     return cumulative_array
 
 
+def prepare_data_mc(segmentation):
+    """
+    input 2D segmentation in (x,y,z) returns 2D in (z, x, y) and non repeating
+    ids
+    :param segmentation:
+    :return:
+    """
+    max_id = 0
+    for slice in segmentation:
+        slice += max_id
+        max_id = np.max(slice) + 1
+    segmentation = np.swapaxes(segmentation, 0, 2).swapaxes(0, 1).astype(np.uint64)
+    return segmentation
+
+
 def segmentation_to_membrane(input_path,output_path):
     """
     compute a binary mask that indicates the boundary of two touching labels
@@ -296,7 +311,7 @@ class BatchManV0:
             # seeds in coord system of labels
             seeds = np.array(
                 peak_local_max(dist_trf[b, :, :], exclude_border=0,
-                                threshold_abs=1, min_distance=min_dist))
+                                threshold_abs=None, min_distance=min_dist))
             seeds += self.pad
             if len(seeds) == 0:
                 print 'WARNING no seeds found (no minima in global batch). ' \
@@ -1224,27 +1239,38 @@ class BatchMemento:
         self.counter = 0
 
 
-def generate_dummy_data(batch_size, edge_len, patch_len):
+def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
     raw = np.zeros((batch_size, edge_len, edge_len))
-    raw[:, ::edge_len/10, :] = 1.
+    dist_trf = np.zeros_like(raw)
+    raw[:, ::edge_len/10, :] = 100.
 
     membrane = np.zeros_like(raw)
-    membrane[:, ::edge_len/10, :] = 1
-    membrane[:, :, ::edge_len/10] = 1
+    membrane[:, ::edge_len/10, :] = 1.
+    membrane[:, :, ::edge_len/10] = 1.
+
+    for b in range(batch_size):
+        dist_trf[b] = distance_transform_edt(membrane[b] == 0)
+    dist_trf = np.max(dist_trf) - dist_trf
     gt = np.zeros_like(raw)
     gt[membrane == 0] = 1
     gt = label(gt)
     gt[:, 1:, :][gt[:, 1:, :] == 0] = gt[:, :-1, :][gt[:, 1:, :] == 0]
     gt[:, :, 1:][gt[:, :, 1:] == 0] = gt[:, :, :-1][gt[:, :, 1:] == 0]
-    gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
-    raw = gaussian_filter(raw, sigma=4)
-    membrane = gaussian_filter(membrane, sigma=4)
+    # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
 
-    fig, ax = plt.subplots(3)
-    ax[0].imshow(raw[1, :, :])
-    ax[1].imshow(membrane[1, :, :])
-    ax[2].imshow(gt[1, :, :])
-    plt.show()
+    raw = gaussian_filter(raw, sigma=4)
+    membrane = gaussian_filter(membrane, sigma=2)
+    membrane /= np.max(membrane)
+
+    if save_path is not None:
+        fig, ax = plt.subplots(2,2)
+        ax[0,0].imshow(raw[1, :, :])
+        ax[0,1].imshow(membrane[1, :, :])
+        ax[1,0].imshow(gt[1, :, :])
+        ax[1,1].imshow(dist_trf[1, :, :], cmap='gray')
+        # plt.show()
+        plt.savefig(save_path)
+    return raw, membrane, dist_trf, gt
 
 
 if __name__ == '__main__':

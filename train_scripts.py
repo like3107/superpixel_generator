@@ -22,7 +22,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash_v5_1'
+    net_name = 'trash_v5_2'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -44,6 +44,7 @@ def train_script_v1():
     global_edge_len = 300
     gt_seeds_b = False
     find_errors = True
+    dummy_data_b = True
     fine_tune_b = find_errors
 
 
@@ -68,8 +69,13 @@ def train_script_v1():
     target_t = T.ftensor4()
 
     l_in, l_in_direction, l_out, l_out_direction, patch_len = network()
-    du.generate_dummy_data(batch_size, global_edge_len, patch_len)
-    exit()
+
+    if dummy_data_b:
+        raw_path, membrane_path, height_gt_path, label_path = \
+            du.generate_dummy_data(batch_size, global_edge_len, patch_len)
+        raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
+            du.generate_dummy_data(batch_size, global_edge_len, patch_len)
+
 
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
