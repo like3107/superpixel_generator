@@ -150,10 +150,12 @@ class BatchManV0:
                 self.labels = label
             if isinstance(height_gt, str):
                 self.height_gt = load_h5(height_gt, h5_key=height_gt_key)[0]
-                maximum = np.max(self.height_gt)
-                self.height_gt = maximum - self.height_gt
             else:
                 self.height_gt = height_gt
+            if self.height_gt is not None:
+                np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
+                maximum = np.max(self.height_gt)
+                self.height_gt = maximum - self.height_gt
         else:
             self.height_gt = None
         # either pad raw or crop labels -> labels are always shifted by self.pad

@@ -60,7 +60,7 @@ def draw_image(image_info, target):
     if 'scatter' in image_info:
         if len(image_info['scatter']) > 0:
             centers = np.array(image_info['scatter'])
-            target.scatter(centers[:, 1], centers[:, 0], s=1, marker='.')
+            target.scatter(centers[:, 1], centers[:, 0], s=1, marker='.', color='r')
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
     target.axis('off')
 
