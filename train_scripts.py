@@ -1,6 +1,6 @@
 import matplotlib
 # matplotlib.use('Agg')
-matplotlib.use('Qt4Agg')
+matplotlib.use('Agg')
 import os
 from theano import tensor as T
 import theano
@@ -127,7 +127,7 @@ def train_script_v1():
 
     # everything is initialized now train and predict every once in a while....
     converged = False       # placeholder, this is not yet implemented
-    iteration = -1
+    iteration = 0
     losses = [[], [], []]
     fine_tune_losses = [[], []]
     iterations = []

@@ -801,6 +801,8 @@ class BatchManV0:
                              "large_direction": direction,
                              "large_id": Id,
                              "small_pos": [x, y],
+                             "small_direction": (direction + 2) % 4,
+                             "large_id": Id,
                              "small_id": c}
                         self.find_type_I_error()
                         self.find_source_of_II_error()
@@ -814,6 +816,7 @@ class BatchManV0:
                              "large_direction": (direction + 2) % 4,
                              # turns direction by 180 degrees
                              "large_id": c,
+                             "small_direction": direction,
                              "small_pos": [center_x, center_y],
                              "small_id": Id}
                         self.find_type_I_error()
@@ -1108,13 +1111,11 @@ class BatchManV0:
                 current_front = 0
                 for idx in ids:
                     if idx != last_id:
-                        print "id from ",current_back," to ", current_front
-                        # axis.plot(np.arange(current_pos, length),[0] * length, linewidth=6)
                         axis.axvspan(current_back, current_front, color=cmap(idx % 256), alpha=0.5)
                         last_id = idx
                         current_back = current_front
                     current_front += 1
-                axis.axvspan(current_back, current_front, color=cmap(idx/max_idx), alpha=0.5)
+                axis.axvspan(current_back, current_front, color=cmap(float(idx)/float(max_idx)), alpha=0.5)
 
 
         def fill_gt(axis, ids, cmap):
@@ -1128,11 +1129,15 @@ class BatchManV0:
         MAXLENGTH = 200
 
         for nume, error in enumerate(self.global_error_dict.values()):
-            f, ax=plt.subplots(ncols=2)
+            f, ax=plt.subplots(nrows=2)
             ax[1].imshow(self.global_label_batch[error["batch"], :, :], interpolation=None, cmap=cmap)
             pred = {}
             height = {}
             gt_id = {}
+            gt_height = {}
+
+            x_min_max_coord = [10000000,0]
+            y_min_max_coord = [10000000,0]
 
             color_sl = {"small_pos":"r", "large_pos":"g"}
 
@@ -1141,6 +1146,7 @@ class BatchManV0:
                 pred[e_name] = []
                 height[e_name] = []
                 gt_id[e_name] = []
+                gt_height[e_name] = []
 
                 prev_direction = None
                 # prev_pos = None
@@ -1164,44 +1170,64 @@ class BatchManV0:
                     gt_id[e_name].append(self.global_label_batch[error["batch"],
                                                     pos[0]-self.pad,
                                                     pos[1]-self.pad])
+                    gt_height[e_name].append(self.global_height_gt_batch[error["batch"],
+                                                    pos[0]-self.pad,
+                                                    pos[1]-self.pad])
                     prev_direction = d
 
                 pred[e_name].append(0)
-
                 pos_xy = np.array(pos_xy)-self.pad
+                x_min_max_coord[0] = min(x_min_max_coord[0], np.min(pos_xy[:,0]))
+                x_min_max_coord[1] = max(x_min_max_coord[1], np.max(pos_xy[:,0]))
+                y_min_max_coord[0] = min(y_min_max_coord[0], np.min(pos_xy[:,1]))
+                y_min_max_coord[1] = max(y_min_max_coord[1], np.max(pos_xy[:,1]))
                 ax[1].scatter(pos_xy[:,0],pos_xy[:,1], marker=',',color=color_sl[e_name])
 
             pred["small_pos"].reverse()
             height["small_pos"].reverse()
             gt_id["small_pos"].reverse()
+            gt_height["small_pos"].reverse()
 
-            print "pred small",pred["small_pos"]
-            print "pred large",pred["large_pos"]
-            print "height small",height["small_pos"]
-            print "height large",height["large_pos"]
-            print "gt id small",gt_id["small_pos"]
-            print "gt id large",gt_id["large_pos"]
+            height["small_pos"].append(self.global_prediction_map[error["batch"],
+                                               error["small_pos"][0]-self.pad,
+                                               error["small_pos"][1]-self.pad,
+                                               error["small_direction"]])
 
-            # if len(pred["small_pos"]) > MAXLENGTH:
-            #     base_offset = len(pred["small_pos"])-MAXLENGTH
+            height["large_pos"].insert(0, self.global_prediction_map[error["batch"],
+                                               error["large_pos"][0]-self.pad,
+                                               error["large_pos"][1]-self.pad,
+                                               error["large_direction"]])
 
-            # prediction=pred["small_pos"][-MAXLENGTH:]+pred["large_pos"][:MAXLENGTH]
             ax[0].plot(pred["small_pos"][-MAXLENGTH:], "r:")
             ax[0].plot(np.arange(len(pred["large_pos"][:MAXLENGTH])) + \
                                         len(pred["small_pos"][-MAXLENGTH:]) \
                                         ,pred["large_pos"][:MAXLENGTH], "g:")
-            # heights=height["small_pos"][-MAXLENGTH:]+height["large_pos"][:MAXLENGTH]
             ax[0].plot(height["small_pos"][-MAXLENGTH:], "r-")
+
             ax[0].plot(np.arange(len(height["large_pos"][:MAXLENGTH])) + \
-                                        len(height["small_pos"][-MAXLENGTH:]) \
+                                        len(height["small_pos"][-MAXLENGTH:])-2\
                                         ,height["large_pos"][:MAXLENGTH], "g-")
+
+            ax[0].plot(gt_height["small_pos"][-MAXLENGTH:], "k-")
+            ax[0].plot(np.arange(len(gt_height["large_pos"][:MAXLENGTH])) + \
+                                        len(gt_height["small_pos"][-MAXLENGTH:]) \
+                                        ,gt_height["large_pos"][:MAXLENGTH], "k-")
+
+
             ids = gt_id["small_pos"][-MAXLENGTH:]+gt_id["large_pos"][:MAXLENGTH]
-            print ids
             # fill_gt(ax, ids, cmap)
             draw_id_bar(ax[0], ids, cmap)
             ax[0].axvline(len(pred["small_pos"][-MAXLENGTH:])-0.5 , color='k', linestyle='-')
 
-            f.savefig(path + image_name + '_e%07d' % nume)
+            x_min_max_coord[0] -= self.pad
+            y_min_max_coord[0] -= self.pad
+            x_min_max_coord[1] += self.pad
+            y_min_max_coord[1] += self.pad
+
+            ax[1].set_xlim(x_min_max_coord)
+            ax[1].set_ylim(y_min_max_coord)
+
+            f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
 
 
