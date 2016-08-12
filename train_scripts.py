@@ -46,7 +46,6 @@ def train_script_v1():
     dummy_data_b = False
     fine_tune_b = find_errors
 
-
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')

@@ -771,9 +771,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         raw_batch = np.zeros((len(batches), 4, self.pl, self.pl),
                              dtype=theano.config.floatX)
         for i, (b, center, Id) in enumerate(zip(batches, centers, ids)):
-            raw_batch[b, 0, :, :] = self.crop_membrane(center, b)
-            raw_batch[b, 1, :, :] = self.crop_raw(center, b)
-            raw_batch[b, 2:4, :, :] = self.crop_mask_claimed(center, b, Id)
+            raw_batch[i, 0, :, :] = self.crop_membrane(center, b)
+            raw_batch[i, 1, :, :] = self.crop_raw(center, b)
+            raw_batch[i, 2:4, :, :] = self.crop_mask_claimed(center, b, Id)
 
         mask = self.crop_time_mask(centers, timepoint, batches)
         raw_batch[:, 2, :, :][mask] = 0
@@ -1026,31 +1026,25 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 y_min_max_coord[1] = max(y_min_max_coord[1], np.max(pos_xy[:, 1]))
                 ax[1].scatter(pos_xy[:, 0], pos_xy[:, 1], marker=',',
                               color=color_sl[e_name])
+                ax[1].scatter(pos_xy[:, 1], pos_xy[:, 0], marker=',',
+                              color="k")
 
             pred["small_pos"].reverse()
             height["small_pos"].reverse()
             gt_id["small_pos"].reverse()
             gt_height["small_pos"].reverse()
 
-            height["small_pos"].append(self.global_prediction_map[error["batch"],
-                                                                  error[
-                                                                      "small_pos"][
-                                                                      0] - self.pad,
-                                                                  error[
-                                                                      "small_pos"][
-                                                                      1] - self.pad,
-                                                                  error[
-                                                                      "small_direction"]])
+            height["small_pos"].append(
+                self.global_prediction_map[error["batch"],
+                                           error["small_pos"][0] - self.pad,
+                                           error["small_pos"][1] - self.pad,
+                                           error["small_direction"]])
 
-            height["large_pos"].insert(0, self.global_prediction_map[error["batch"],
-                                                                     error[
-                                                                         "large_pos"][
-                                                                         0] - self.pad,
-                                                                     error[
-                                                                         "large_pos"][
-                                                                         1] - self.pad,
-                                                                     error[
-                                                                         "large_direction"]])
+            height["large_pos"].insert(0,
+                self.global_prediction_map[error["batch"],
+                                           error["large_pos"][0] - self.pad,
+                                           error["large_pos"][1] - self.pad,
+                                           error["large_direction"]])
 
             ax[0].plot(pred["small_pos"][-MAXLENGTH:], "r:")
             ax[0].plot(np.arange(len(pred["large_pos"][:MAXLENGTH])) + \
@@ -1078,8 +1072,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             x_min_max_coord[1] += self.pad
             y_min_max_coord[1] += self.pad
 
-            ax[1].set_xlim(x_min_max_coord)
-            ax[1].set_ylim(y_min_max_coord)
+            # ax[1].set_xlim(x_min_max_coord)
+            # ax[1].set_ylim(y_min_max_coord)
 
             f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
