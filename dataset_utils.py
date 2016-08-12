@@ -1,6 +1,7 @@
 import h5py as h
 import numpy as np
 import random
+from os import makedirs
 from os.path import exists
 import matplotlib
 matplotlib.use('Agg')
@@ -427,7 +428,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  height_gt=None, height_gt_key=None,
                  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
-                 find_errors_b=True, clip_to_patch_view_b=True,
+                 find_errors_b=True, clip_method='clip',
                  ):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
@@ -446,11 +447,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         else:
             self.height_gt = height_gt
         if self.height_gt is not None:
-            if clip_to_patch_view_b:
+            if clip_method=='clip':
                 np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
-            maximum = np.max(self.height_gt)
-            self.height_gt *= -1.
-            self.height_gt += maximum
+                maximum = np.max(self.height_gt)
+                self.height_gt *= -1.
+                self.height_gt += maximum
+            elif clip_method[:3]=='exp':
+                dist = float(clip_method[3:])
+                self.height_gt = np.exp(np.square(self.height_gt) / (-2) / dist**2)
+                
         if not self.padding_b:
             # crop label
             self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]
@@ -815,6 +820,33 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                          error_batch_list)
         return reconst_e1, reconst_e2, np.array(error_I_direction), np.array(
             error_II_direction)
+
+    def serialize_to_h5(self, h5_filename, path="./data/nets/debug_serial/"):
+        if not exists(path):
+            makedirs(path)
+        with h5py.File(path+'/'+h5_filename, 'w') as out_h5:
+            out_h5.create_dataset("global_timemap",data=self.global_timemap ,compression="gzip")
+            out_h5.create_dataset("global_errormap",data=self.global_errormap ,compression="gzip")
+            out_h5.create_dataset("global_claims",data=self.global_claims ,compression="gzip")
+            out_h5.create_dataset("global_raw",data=self.global_raw ,compression="gzip")
+            out_h5.create_dataset("global_batch",data=self.global_batch ,compression="gzip")
+            out_h5.create_dataset("global_heightmap_batch",data=self.global_heightmap_batch ,compression="gzip")
+            out_h5.create_dataset("global_height_gt_batch",data=self.global_height_gt_batch ,compression="gzip")
+            out_h5.create_dataset("global_prediction_map",data=self.global_prediction_map ,compression="gzip")
+            out_h5.create_dataset("global_directionmap_batch",data=self.global_directionmap_batch ,compression="gzip")
+            
+            for error_name,error in self.global_error_dict.items():
+                for n,info in error.items():
+                    # try:
+                    print error_name
+                    print n
+                    print "error/"+str(error_name)+"/"+n,np.array(info)
+                    out_h5.create_dataset("error/"+str(error_name[0])+"_"+str(error_name[1])+"/"+n,data=np.array(info))
+                    # except:
+                    #     print "warning: could not serialize ",n, info
+
+
+
 
     def draw_batch(self, raw_batch, image_name, path='./data/nets/debug/images/',
                    save=True):

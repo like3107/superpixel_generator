@@ -21,7 +21,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash_v5_6'
+    net_name = 'trash_v5_debug'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -45,13 +45,14 @@ def train_script_v1():
     find_errors = False
     dummy_data_b = False
     fine_tune_b = find_errors
-    clip_to_patch_view_b=True
+    # clip_method="exp20"
+    clip_method="clip"
 
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')
-    pre_train_iter = 2000000
-    max_iter = 10000000000
+    pre_train_iter = 1000
+    max_iter = 1000000
     save_counter = 100000        # save every n iterations
     # fine tune
     margin = 10
@@ -103,7 +104,7 @@ def train_script_v1():
            patch_len=patch_len, global_edge_len=global_edge_len,
            padding_b=False,
            find_errors_b=find_errors,
-           clip_to_patch_view_b=clip_to_patch_view_b)
+           clip_method=clip_method)
     bm.init_batch()
 
     bm_val = BM(membrane_path_val, label=label_path_val,
@@ -114,7 +115,7 @@ def train_script_v1():
                 find_errors_b=find_errors,
                 patch_len=patch_len, global_edge_len=global_edge_len,
                 padding_b=False,
-                clip_to_patch_view_b=clip_to_patch_view_b)
+                clip_method=clip_method)
     bm_val.init_batch()  # Training
 
     # init a network folder where all images, models and hyper params are stored
@@ -129,7 +130,7 @@ def train_script_v1():
 
     # everything is initialized now train and predict every once in a while....
     converged = False       # placeholder, this is not yet implemented
-    iteration = -1
+    iteration = 0
     losses = [[], [], []]
     fine_tune_losses = [[], []]
     iterations = []
@@ -162,14 +163,16 @@ def train_script_v1():
                     and fine_tune_b:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
+
                 if bm.global_error_dict > 0:
                     Memento1.add_to_memory(error_b_type1, dir1)
                     Memento2.add_to_memory(error_b_type2, dir2)
 
-                    # print debug_f(error_b_type1, dir1)
-                    # print debug_f(error_b_type2, dir2)
-                    bm.draw_batch(error_b_type1,
-                                  "finetunging_error1_batch_%08i_counter_%i" %
+                    print debug_f(error_b_type1, dir1)
+                    print debug_f(error_b_type2, dir2)
+                    bm.serialize_to_h5("finetunging_ser_batch_%08i_counter_%i" %
+                            (iteration, bm.counter))
+                    bm.draw_batch(error_b_type1, "finetunging_error1_batch_%08i_counter_%i" %
                             (iteration, bm.counter),path=save_net_path + '/images/')
                     bm.draw_batch(error_b_type2,
                                   "finetunging_error2_batch_%08i_counter_%i" %
