@@ -427,7 +427,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  height_gt=None, height_gt_key=None,
                  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
-                 find_errors_b=True,
+                 find_errors_b=True, clip_to_patch_view_b=True,
                  **kwargs):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
@@ -447,9 +447,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         else:
             self.height_gt = height_gt
         if self.height_gt is not None:
-            np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
+            if clip_to_patch_view_b:
+                np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
             maximum = np.max(self.height_gt)
-            self.height_gt = maximum - self.height_gt
+            self.height_gt *= -1.
+            self.height_gt -= maximum
         if not self.padding_b:
             # crop label
             self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]
@@ -501,7 +503,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # assert(center[0]+self.pad < self.global_el - self.pl)
         # assert(center[1]+self.pad < self.global_el - self.pl)
 
-        return self.global_timemap[b,center[0]-self.pad:center[0]+self.pad,
+        return self.global_timemap[b, center[0]-self.pad:center[0]+self.pad,
                                    center[1]-self.pad:center[1]+self.pad]
 
     def crop_time_mask(self, centers, timepoint, batches):
@@ -509,11 +511,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         compute mask that is 1 if a voxel was not accessed before timepoint
         and zero otherwise
         """
-        mask = np.zeros((len(batches), self.pl, self.pl),dtype=bool)
+        mask = np.zeros((len(batches), self.pl, self.pl), dtype=bool)
         # fore lists to np.array so we can do array arithmetics
         centers = np.array(centers)
-        for i,b in enumerate(batches):
-            mask[i,:,:][self.crop_timemap(centers[i], b)>timepoint[i]] = 1
+        for i, b in enumerate(batches):
+            mask[i, :, :][self.crop_timemap(centers[i], b) > timepoint[i]] = 1
         return mask
 
     def init_batch(self, start=None):
@@ -650,9 +652,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                current_position[1]-self.pad]
             yield current_position, current_direction
 
-    def find_type_I_error(self, plateau_backtrace=True): # 2st crossing from own gt ID into other ID
+    # 2nd crossing from own gt ID into other ID
+    def find_type_I_error(self, plateau_backtrace=True):
         for error_I in self.global_error_dict.values():
-            if not "e1_pos" in error_I:
+            if "e1_pos" not in error_I:
                 start_position = error_I["large_pos"]
                 batch = error_I["batch"]
                 for pos, d in self.get_path_to_root(start_position, batch):
@@ -675,7 +678,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                                  pos[1]]
                         error_I["e1_direction"] = d
                 if plateau_backtrace:
-                    new_pos, new_d = self.find_end_of_plateau(error_I["e1_pos"], batch)
+                    new_pos, new_d = self.find_end_of_plateau(error_I["e1_pos"],
+                                                              batch)
                     error_I["e1_pos"] = new_pos
                     error_I["e1_time"] = self.global_timemap[batch,
                                                              new_pos[0],
@@ -704,7 +708,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def find_source_of_II_error(self):
       for error in self.global_error_dict.values():
-        if not "e2_pos" in error:
+        if "e2_pos" not in error:
             batch = error["batch"]
             start_position = error["small_pos"]
 
@@ -742,7 +746,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                              "large_id": Id,
                              "small_pos": [x, y],
                              "small_direction": (direction + 2) % 4,
-                             "large_id": Id,
                              "small_id": c}
                         self.find_type_I_error()
                         self.find_source_of_II_error()
@@ -753,8 +756,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             {"batch": b,
                              "touch_time": self.global_timemap[b, x, y],
                              "large_pos": [x, y],
-                             "large_direction": (direction + 2) % 4,
                              # turns direction by 180 degrees
+                             "large_direction": (direction + 2) % 4,
                              "large_id": c,
                              "small_direction": direction,
                              "small_pos": [center_x, center_y],
@@ -1144,18 +1147,21 @@ def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
     gt = np.zeros_like(raw)
     gt[membrane == 1] = 1
     gt = label(gt)
-    gt[:, 1:, :][gt[:, 1:, :] == 0] = gt[:, :-1, :][gt[:, 1:, :] == 0]
-    gt[:, :, 1:][gt[:, :, 1:] == 0] = gt[:, :, :-1][gt[:, :, 1:] == 0]
+    ov = 1
+    gt[:, ov:, :][gt[:, ov:, :] == 0] = gt[:, :-ov, :][gt[:, ov:, :] == 0]
+    gt[:, :, ov:][gt[:, :, ov:] == 0] = gt[:, :, :-ov][gt[:, :, ov:] == 0]
     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
 
     raw = gaussian_filter(raw, sigma=4)
-    # membrane = gaussian_filter(membrane, sigma=2)
-    # membrane /= np.max(membrane)
+    # membrane = membrane
+    membrane = 1. - membrane
+    membrane = gaussian_filter(membrane, sigma=1)
+    membrane = (membrane - np.min(membrane)) / np.max(membrane)
     dist_trf = np.max(dist_trf) - dist_trf
     if save_path is not None:
         fig, ax = plt.subplots(2,2)
         ax[0,0].imshow(raw[1, :, :])
-        ax[0,1].imshow(membrane[1, :, :])
+        ax[0,1].imshow(membrane[1, :, :], cmap='gray')
         ax[1,0].imshow(gt[1, :, :])
         ax[1,1].imshow(dist_trf[1, :, :], cmap='gray')
         plt.show()
@@ -1170,9 +1176,9 @@ def random_lines(bs, n_lines, edge_len):
         for i in range(n_lines):
             m = np.random.uniform() * 10 - 5
             c = np.random.uniform() * edge_len * 2 - edge_len
-            x = np.arange(0, edge_len-1, 0.01)
+            x = np.arange(0, edge_len-1, 0.1/edge_len)
             if np.random.random() < 0.3:
-                x = np.arange(edge_len/2, edge_len - 1, 1./edge_len)
+                x = np.arange(edge_len/2, edge_len - 1, 0.01/edge_len)
 
             y = m * x + c
             x = np.round(x[(y < edge_len) & (y >= 0)]).astype(np.int)

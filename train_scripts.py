@@ -1,6 +1,6 @@
 import matplotlib
-# matplotlib.use('Agg')
 matplotlib.use('Agg')
+# matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
 import theano
@@ -21,7 +21,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash_v5_3'
+    net_name = 'trash_v5_6'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -42,14 +42,15 @@ def train_script_v1():
     batch_size_ft = 1
     global_edge_len = 300
     gt_seeds_b = False
-    find_errors = True
+    find_errors = False
     dummy_data_b = False
     fine_tune_b = find_errors
+    clip_to_patch_view_b=False
 
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')
-    pre_train_iter = 10000
+    pre_train_iter = 2000000
     max_iter = 10000000000
     save_counter = 100000        # save every n iterations
     # fine tune
@@ -71,7 +72,7 @@ def train_script_v1():
     patch_len = 40
     if dummy_data_b:
         raw_path, membrane_path, height_gt_path, label_path = \
-            du.generate_dummy_data(batch_size, global_edge_len, patch_len)
+            du.generate_dummy_data(batch_size, global_edge_len, patch_len, '')
         raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
             du.generate_dummy_data(batch_size, global_edge_len, patch_len)
 
@@ -95,26 +96,25 @@ def train_script_v1():
 
     print 'Loading data and Priority queue init'
     bm = BM(membrane_path, label=label_path,
-                       height_gt=height_gt_path,
-                       height_gt_key=height_gt_key,
-                       raw=raw_path,
-                       batch_size=batch_size,
-                       patch_len=patch_len, global_edge_len=global_edge_len,
-                       padding_b=False,
-                       find_errors=find_errors and fine_tune_b,
-                       gt_seeds_b=gt_seeds_b)
-
-
+           height_gt=height_gt_path,
+           height_gt_key=height_gt_key,
+           raw=raw_path,
+           batch_size=batch_size,
+           patch_len=patch_len, global_edge_len=global_edge_len,
+           padding_b=False,
+           find_errors=find_errors and fine_tune_b,
+           gt_seeds_b=gt_seeds_b,
+           clip_to_patch_view_b=clip_to_patch_view_b)
     bm.init_batch()
 
     bm_val = BM(membrane_path_val, label=label_path_val,
-                           height_gt=height_gt_path_val,
-                           height_gt_key=height_gt_key_val,
-                           raw=raw_path_val,
-                           batch_size=batch_size,
-                           patch_len=patch_len, global_edge_len=global_edge_len,
-                           padding_b=False, gt_seeds_b=gt_seeds_b)
-
+               height_gt=height_gt_path_val,
+               height_gt_key=height_gt_key_val,
+               raw=raw_path_val,
+               batch_size=batch_size,
+               patch_len=patch_len, global_edge_len=global_edge_len,
+               padding_b=False, gt_seeds_b=gt_seeds_b, train_b=False,
+               clip_to_patch_view_b=clip_to_patch_view_b)
     bm_val.init_batch()  # Training
 
     # init a network folder where all images, models and hyper params are stored
@@ -166,11 +166,13 @@ def train_script_v1():
                     Memento1.add_to_memory(error_b_type1, dir1)
                     Memento2.add_to_memory(error_b_type2, dir2)
 
-                    print debug_f(error_b_type1, dir1)
-                    print debug_f(error_b_type2, dir2)
-                    bm.draw_batch(error_b_type1, "finetunging_error1_batch_%08i_counter_%i" %
+                    # print debug_f(error_b_type1, dir1)
+                    # print debug_f(error_b_type2, dir2)
+                    bm.draw_batch(error_b_type1,
+                                  "finetunging_error1_batch_%08i_counter_%i" %
                             (iteration, bm.counter),path=save_net_path + '/images/')
-                    bm.draw_batch(error_b_type2, "finetunging_error2_batch_%08i_counter_%i" %
+                    bm.draw_batch(error_b_type2,
+                                  "finetunging_error2_batch_%08i_counter_%i" %
                             (iteration, bm.counter),path=save_net_path + '/images/')
                     bm.draw_error_paths("finetuning_path_error_iter_%08i_counter_%i" %
                             (iteration, bm.counter),
@@ -217,9 +219,10 @@ def train_script_v1():
             batch_ft_t2, dir_t2 = Memento2.get_batch()
             batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
             batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
-
+            assert(np.any(batch_ft_t1 > batch_ft_t2))
             ft_loss_train_noreg = loss_valid_fine_f(batch_ft, batch_dir_ft)
             probs_fine = probs_fine_f(batch_ft, batch_dir_ft)
+
             ft_loss_train = loss_train_fine_f(batch_ft, batch_dir_ft)
             print "loss_train_fine %.4f" % ft_loss_train
             fine_tune_losses[0].append(ft_loss_train_noreg)
@@ -228,7 +231,6 @@ def train_script_v1():
             u.plot_train_val_errors(fine_tune_losses, range(ft_iteration),
                                     save_net_path + 'ft_training.png',
                                     ['ft loss no reg no dropout', 'ft loss'])
-
             Memento1.clear_memory()
             Memento2.clear_memory()
             bm_val.init_batch()
@@ -240,7 +242,7 @@ def train_script_v1():
 
         # monitor training and plot loss
         if iteration % 1000 == 0 and (iteration < pre_train_iter or not
-                                                                fine_tune_b):
+                fine_tune_b):
             loss_train_no_reg = float(loss_valid_f(membrane, gt))
             loss_valid = float(loss_valid_f(membrane_val, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
