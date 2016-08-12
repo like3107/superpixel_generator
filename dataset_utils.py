@@ -13,7 +13,6 @@ from scipy.ndimage import convolve, gaussian_filter
 from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
 from skimage.morphology import label
-import time
 import h5py
 
 
@@ -447,15 +446,16 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         else:
             self.height_gt = height_gt
         if self.height_gt is not None:
+
             if clip_method=='clip':
                 np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
-                maximum = np.max(self.height_gt)
-                self.height_gt *= -1.
-                self.height_gt += maximum
-            elif clip_method[:3]=='exp':
+            elif clip_method[:3] == 'exp':
                 dist = float(clip_method[3:])
-                self.height_gt = np.exp(np.square(self.height_gt) / (-2) / dist**2)
-                
+                self.height_gt = np.exp(
+                np.square(self.height_gt) / (-2) / dist ** 2)
+            maximum = np.max(self.height_gt)
+            self.height_gt *= -1.
+            self.height_gt += maximum
         if not self.padding_b:
             # crop label
             self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]
@@ -502,11 +502,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.global_id2gt.append(id2gt)
 
     def crop_timemap(self, center, b):
-        # assert(center[0]-self.pad > 0)
-        # assert(center[1]-self.pad > 0)
-        # assert(center[0]+self.pad < self.global_el - self.pl)
-        # assert(center[1]+self.pad < self.global_el - self.pl)
-
+        assert(center[0]-self.pad > 0)
+        assert(center[1]-self.pad > 0)
+        assert(center[0]+self.pad < self.global_el - self.pl)
+        assert(center[1]+self.pad < self.global_el - self.pl)
         return self.global_timemap[b, center[0]-self.pad:center[0]+self.pad,
                                    center[1]-self.pad:center[1]+self.pad]
 
@@ -527,7 +526,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                             dtype=theano.config.floatX)
         self.global_height_gt_batch = np.zeros(self.label_shape)
         super(HoneyBatcherPath, self).init_batch(start=start)
-
         self.global_timemap = np.empty_like(self.global_batch, dtype=np.int)
         self.global_timemap.fill(np.inf)
         self.global_time = 0
@@ -535,7 +533,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                          self.label_shape[1],
                                          self.label_shape[2]),
                                         dtype=np.bool)
-
         self.global_prediction_map = np.zeros((self.bs,
                                                self.label_shape[1],
                                                self.label_shape[2], 4))
@@ -548,6 +545,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
         for b in range(self.bs):
             gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+        assert (not np.any(gts < 0))
+        assert (np.any(np.isfinite(raw_batch)))
+        assert (not np.any(raw_batch < 0))
+        assert (np.any(np.isfinite(centers)))
+        assert (np.any(np.isfinite(ids)))
+        assert (np.any(np.isfinite(gts)))
         return raw_batch, gts, centers, ids
 
     def get_adjacent_heights(self, seed, batch):
@@ -565,6 +568,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def get_centers_from_queue(self):
         self.error_indicator_pass = np.zeros(self.bs, dtype=np.bool)
+        self.global_time += 1
         centers, ids, heights = \
             super(HoneyBatcherPath, self).get_centers_from_queue()
         return centers, ids, heights
@@ -834,7 +838,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             out_h5.create_dataset("global_height_gt_batch",data=self.global_height_gt_batch ,compression="gzip")
             out_h5.create_dataset("global_prediction_map",data=self.global_prediction_map ,compression="gzip")
             out_h5.create_dataset("global_directionmap_batch",data=self.global_directionmap_batch ,compression="gzip")
-            
+
             for error_name,error in self.global_error_dict.items():
                 for n,info in error.items():
                     # try:
