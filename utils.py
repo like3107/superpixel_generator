@@ -154,7 +154,7 @@ def plot_train_val_errors(all_y_values, x_values, save_path, names):
     plots = []
     for y_values in all_y_values:
         plot, = plt.plot(x_values, y_values)
-        if np.all(all_y_values > 0):
+        if np.any(all_y_values < 0):
             plt.yscale('log')
 
         plots.append(plot)
