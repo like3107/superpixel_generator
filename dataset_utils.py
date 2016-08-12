@@ -449,13 +449,16 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
             if clip_method=='clip':
                 np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
-            elif clip_method[:3] == 'exp':
+            elif isinstance(clip_method, basestring) and \
+                                len(clip_method) > 3 and \
+                                clip_method[:3]=='exp':
                 dist = float(clip_method[3:])
                 self.height_gt = np.exp(
                 np.square(self.height_gt) / (-2) / dist ** 2)
             maximum = np.max(self.height_gt)
             self.height_gt *= -1.
             self.height_gt += maximum
+
         if not self.padding_b:
             # crop label
             self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]

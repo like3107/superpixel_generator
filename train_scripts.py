@@ -11,6 +11,7 @@ import nets
 import dataset_utils as du
 import numpy as np
 from theano.sandbox import cuda as c
+import h5py
 
 
 def train_script_v1():
@@ -21,7 +22,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash_v5_debug'
+    net_name = 'trash_v7'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -51,7 +52,7 @@ def train_script_v1():
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')
-    pre_train_iter = 1000
+    pre_train_iter = 10000
     max_iter = 1000000
     save_counter = 100000        # save every n iterations
     # fine tune
@@ -154,6 +155,19 @@ def train_script_v1():
         # predict train
         membrane, gt, seeds, ids = bm.get_batches()
         probs = probs_f(membrane)
+
+        debug_path = save_net_path+"/"+str("batches")
+
+        if iteration % 100 == 0:
+            if not os.path.exists(debug_path):
+                os.makedirs(debug_path)
+            with h5py.File(debug_path+"/batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
+                out_h5.create_dataset("membrane",data=membrane ,compression="gzip")
+                out_h5.create_dataset("gt",data=gt ,compression="gzip")
+                out_h5.create_dataset("seeds",data=seeds ,compression="gzip")
+                out_h5.create_dataset("ids",data=ids ,compression="gzip")
+                out_h5.create_dataset("probs",data=probs ,compression="gzip")
+            
         bm.update_priority_queue(probs, seeds, ids)
 
         # fine-tuning: update height difference errors
@@ -264,6 +278,8 @@ def train_script_v1():
 
         # monitor growth on validation set tmp debug change train to val
         if iteration % 10000 == 0:
+            bm.serialize_to_h5("finetunging_ser_batch_%08i_counter_%i" %
+                (iteration, bm.counter))
             bm.draw_debug_image("train_iteration_%08i_counter_%i_freevoxel_%i" %
                                 (iteration, bm.counter, free_voxel),
                                 path=save_net_path + '/images/')
