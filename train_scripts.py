@@ -13,7 +13,6 @@ import numpy as np
 from theano.sandbox import cuda as c
 
 
-
 def train_script_v1():
     print 'train script v1'
     # data params:
@@ -39,12 +38,12 @@ def train_script_v1():
     load_net_path = './data/nets/cnn_path_v1_fine_tune/net_500000.h5'      # if load true
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
-    batch_size = 1         # > 4
+    batch_size = 4         # > 4
     batch_size_ft = 1
     global_edge_len = 300
     gt_seeds_b = False
     find_errors = True
-    dummy_data_b = True
+    dummy_data_b = False
     fine_tune_b = find_errors
 
 
@@ -130,7 +129,7 @@ def train_script_v1():
 
     # everything is initialized now train and predict every once in a while....
     converged = False       # placeholder, this is not yet implemented
-    iteration = 0
+    iteration = -1
     losses = [[], [], []]
     fine_tune_losses = [[], []]
     iterations = []
@@ -232,8 +231,8 @@ def train_script_v1():
 
             Memento1.clear_memory()
             Memento2.clear_memory()
-            bm_val.init_train_path_batch()
-            bm.init_train_path_batch()
+            bm_val.init_batch()
+            bm.init_batch()
             free_voxel = free_voxel_empty
 
         if iteration % 10 == 0 and iteration < pre_train_iter:
@@ -241,7 +240,7 @@ def train_script_v1():
 
         # monitor training and plot loss
         if iteration % 1000 == 0 and (iteration < pre_train_iter or not
-        fine_tune_b):
+                                                                fine_tune_b):
             loss_train_no_reg = float(loss_valid_f(membrane, gt))
             loss_valid = float(loss_valid_f(membrane_val, gt))
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
