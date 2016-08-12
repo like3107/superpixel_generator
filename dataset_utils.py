@@ -938,7 +938,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             plt.show()
 
     def draw_error_paths(self, image_name, path='./data/nets/debug/images/'):
-        def draw_id_bar(axis, ids, cmap):
+        def draw_id_bar(axis, ids, gt_label_image):
             # ax2 = axis.twinx()
             # ax2.plot(ids, linewidth=3)
             if len(ids) > 0:
@@ -948,13 +948,16 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 current_front = 0
                 for idx in ids:
                     if idx != last_id:
+                        color = gt_label_image.cmap(gt_label_image.norm(last_id))
                         axis.axvspan(current_back, current_front,
-                                     color=cmap(idx % 256), alpha=0.5)
+                                     color=color)
+                        axis.text(current_back, 0.5, str(int(last_id)), fontsize=12, rotation=90,va='bottom')
                         last_id = idx
                         current_back = current_front
                     current_front += 1
-                axis.axvspan(current_back, current_front,
-                             color=cmap(float(idx) / float(max_idx)), alpha=0.5)
+                color = gt_label_image.cmap(gt_label_image.norm(idx))
+                axis.text(current_back, 0.5, str(int(idx)), fontsize=12,rotation=90, va='bottom')
+                axis.axvspan(current_back, current_front,color=color)
 
         def fill_gt(axis, ids, cmap):
             print "fill with ", ids
@@ -968,7 +971,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         for nume, error in enumerate(self.global_error_dict.values()):
             f, ax = plt.subplots(nrows=2)
-            ax[1].imshow(self.global_label_batch[error["batch"], :, :],
+            gt_label_image = ax[1].imshow(self.global_label_batch[error["batch"], :, :],
                          interpolation=None, cmap=cmap)
             pred = {}
             height = {}
@@ -1024,10 +1027,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 x_min_max_coord[1] = max(x_min_max_coord[1], np.max(pos_xy[:, 0]))
                 y_min_max_coord[0] = min(y_min_max_coord[0], np.min(pos_xy[:, 1]))
                 y_min_max_coord[1] = max(y_min_max_coord[1], np.max(pos_xy[:, 1]))
-                ax[1].scatter(pos_xy[:, 0], pos_xy[:, 1], marker=',',
+                ax[1].plot(pos_xy[:, 1], pos_xy[:, 0], marker=',',
                               color=color_sl[e_name])
-                ax[1].scatter(pos_xy[:, 1], pos_xy[:, 0], marker=',',
-                              color="k")
 
             pred["small_pos"].reverse()
             height["small_pos"].reverse()
@@ -1063,7 +1064,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
             ids = gt_id["small_pos"][-MAXLENGTH:] + gt_id["large_pos"][:MAXLENGTH]
             # fill_gt(ax, ids, cmap)
-            draw_id_bar(ax[0], ids, cmap)
+            draw_id_bar(ax[0], ids, gt_label_image)
             ax[0].axvline(len(pred["small_pos"][-MAXLENGTH:]) - 0.5, color='k',
                           linestyle='-')
 
@@ -1072,8 +1073,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             x_min_max_coord[1] += self.pad
             y_min_max_coord[1] += self.pad
 
-            # ax[1].set_xlim(x_min_max_coord)
-            # ax[1].set_ylim(y_min_max_coord)
+            ax[1].set_xlim(x_min_max_coord)
+            ax[1].set_ylim(y_min_max_coord)
 
             f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
