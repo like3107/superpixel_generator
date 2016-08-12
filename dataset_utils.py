@@ -428,15 +428,14 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_to_patch_view_b=True,
-                 **kwargs):
+                 ):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
                                                raw=raw, raw_key=raw_key,
                                                batch_size=batch_size,
                                                global_edge_len=global_edge_len,
                                                patch_len=patch_len,
-                                               padding_b=padding_b,
-                                               **kwargs)
+                                               padding_b=padding_b)
 
         if isinstance(label, str):
             self.labels = load_h5(label, h5_key=label_key)[0]
@@ -451,7 +450,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
             maximum = np.max(self.height_gt)
             self.height_gt *= -1.
-            self.height_gt -= maximum
+            self.height_gt += maximum
         if not self.padding_b:
             # crop label
             self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]

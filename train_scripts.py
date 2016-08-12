@@ -45,7 +45,7 @@ def train_script_v1():
     find_errors = False
     dummy_data_b = False
     fine_tune_b = find_errors
-    clip_to_patch_view_b=False
+    clip_to_patch_view_b=True
 
     # training parameter
     BM = du.HoneyBatcherPath
@@ -102,19 +102,19 @@ def train_script_v1():
            batch_size=batch_size,
            patch_len=patch_len, global_edge_len=global_edge_len,
            padding_b=False,
-           find_errors=find_errors and fine_tune_b,
-           gt_seeds_b=gt_seeds_b,
+           find_errors_b=find_errors,
            clip_to_patch_view_b=clip_to_patch_view_b)
     bm.init_batch()
 
     bm_val = BM(membrane_path_val, label=label_path_val,
-               height_gt=height_gt_path_val,
-               height_gt_key=height_gt_key_val,
-               raw=raw_path_val,
-               batch_size=batch_size,
-               patch_len=patch_len, global_edge_len=global_edge_len,
-               padding_b=False, gt_seeds_b=gt_seeds_b, train_b=False,
-               clip_to_patch_view_b=clip_to_patch_view_b)
+                height_gt=height_gt_path_val,
+                height_gt_key=height_gt_key_val,
+                raw=raw_path_val,
+                batch_size=batch_size,
+                find_errors_b=find_errors,
+                patch_len=patch_len, global_edge_len=global_edge_len,
+                padding_b=False,
+                clip_to_patch_view_b=clip_to_patch_view_b)
     bm_val.init_batch()  # Training
 
     # init a network folder where all images, models and hyper params are stored
