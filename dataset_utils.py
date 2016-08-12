@@ -9,7 +9,7 @@ import theano
 from Queue import PriorityQueue
 import utils as u
 from scipy.ndimage import convolve, gaussian_filter
-from scipy.ndimage.morphology import distance_transform_edt, binary_dilation
+from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
 from skimage.morphology import label
 import time
@@ -699,7 +699,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                     < current_height:
                 return pos,d
         print "WARNING: plateau ended at root node"
-        return pos,d
+        return pos, d
 
     def find_source_of_II_error(self):
       for error in self.global_error_dict.values():
@@ -770,7 +770,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
         raw_batch = np.zeros((len(batches), 4, self.pl, self.pl),
                              dtype=theano.config.floatX)
-        print 'b', len(centers), len(ids)
         for b, center, Id in zip(batches, centers, ids):
             raw_batch[b, 0, :, :] = self.crop_membrane(center, b)
             raw_batch[b, 1, :, :] = self.crop_raw(center, b)
@@ -1144,10 +1143,10 @@ def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
     membrane = random_lines(batch_size, 40, edge_len)
 
     for b in range(batch_size):
-        dist_trf[b] = distance_transform_edt(membrane[b] == 0)
+        dist_trf[b] = distance_transform_edt(membrane[b] == 1)
     dist_trf = np.max(dist_trf) - dist_trf
     gt = np.zeros_like(raw)
-    gt[membrane == 0] = 1
+    gt[membrane == 1] = 1
     gt = label(gt)
     gt[:, 1:, :][gt[:, 1:, :] == 0] = gt[:, :-1, :][gt[:, 1:, :] == 0]
     gt[:, :, 1:][gt[:, :, 1:] == 0] = gt[:, :, :-1][gt[:, :, 1:] == 0]
@@ -1156,7 +1155,7 @@ def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
     raw = gaussian_filter(raw, sigma=4)
     # membrane = gaussian_filter(membrane, sigma=2)
     # membrane /= np.max(membrane)
-
+    dist_trf = np.max(dist_trf) - dist_trf
     if save_path is not None:
         fig, ax = plt.subplots(2,2)
         ax[0,0].imshow(raw[1, :, :])
@@ -1169,7 +1168,7 @@ def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
 
 
 def random_lines(bs, n_lines, edge_len):
-    memb = np.zeros((bs, edge_len, edge_len))
+    memb = np.ones((bs, edge_len, edge_len))
     print 'edge len', edge_len
     for b in range(bs):
         for i in range(n_lines):
@@ -1177,13 +1176,13 @@ def random_lines(bs, n_lines, edge_len):
             c = np.random.uniform() * edge_len * 2 - edge_len
             x = np.arange(0, edge_len-1, 0.01)
             if np.random.random() < 0.3:
-                x = np.arange(edge_len/2, edge_len - 1, 0.01)
+                x = np.arange(edge_len/2, edge_len - 1, 1./edge_len)
 
             y = m * x + c
             x = np.round(x[(y < edge_len) & (y >= 0)]).astype(np.int)
             y = y[(y < edge_len) & (y >= 0)].astype(np.int)
-            memb[b, x, y] = 1.
-    memb = binary_dilation(memb)
+            memb[b, x, y] = 0.
+    memb = binary_erosion(memb)
     # rand_mask = np.random.randint(0, 100, size=(b, edge_len, edge_len))
     # rand_bool_mask = np.random.ra
     # rand_bool_mask[rand_mask > 5] = True
