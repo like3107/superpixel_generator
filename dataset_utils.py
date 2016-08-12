@@ -297,6 +297,7 @@ class HoneyBatcherPredict(object):
                  seed[1] - self.pad:seed[1] + self.pad]
         claimed = np.zeros((2, self.pl, self.pl), dtype=theano.config.floatX)
         claimed[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
+        claimed[0, :, :][labels == -1] = 0  # the others
         claimed[1, :, :][labels == Id] = 1  # me
         return claimed
 
@@ -1073,8 +1074,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             x_min_max_coord[1] += self.pad
             y_min_max_coord[1] += self.pad
 
-            ax[1].set_xlim(x_min_max_coord)
-            ax[1].set_ylim(y_min_max_coord)
+            ax[1].set_xlim(y_min_max_coord)
+            ax[1].set_ylim(x_min_max_coord)
 
             f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
