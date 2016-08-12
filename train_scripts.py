@@ -83,7 +83,8 @@ def train_script_v1():
 
     debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
                     [lasagne.layers.get_output(l_out, deterministic=True),
-                    lasagne.layers.get_output(l_out_direction, deterministic=True)])
+                    lasagne.layers.get_output(l_out_direction, deterministic=True)],
+                              allow_input_downcast=True)
 
     if fine_tune_b:
         print 'compiling theano finetuningfunctions'
@@ -166,8 +167,8 @@ def train_script_v1():
                     Memento1.add_to_memory(error_b_type1, dir1)
                     Memento2.add_to_memory(error_b_type2, dir2)
 
-                    # print debug_f(error_b_type1, dir1)
-                    # print debug_f(error_b_type2, dir2)
+                    print debug_f(error_b_type1, dir1)
+                    print debug_f(error_b_type2, dir2)
                     bm.draw_batch(error_b_type1, "finetunging_error1_batch_%08i_counter_%i" %
                             (iteration, bm.counter),path=save_net_path + '/images/')
                     bm.draw_batch(error_b_type2, "finetunging_error2_batch_%08i_counter_%i" %

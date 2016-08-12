@@ -279,10 +279,10 @@ class HoneyBatcherPredict(object):
             dirs.append(d)
         return np.array(seeds_x), np.array(seeds_y), np.array(d)
 
-    def crop_membrane(self, seed, batch_counter):
-        membrane = self.global_batch[batch_counter,
-                   seed[0] - self.pad:seed[0] + self.pad,
-                   seed[1] - self.pad:seed[1] + self.pad]
+    def crop_membrane(self, seed, b):
+        membrane = self.global_batch[b,
+                                     seed[0] - self.pad:seed[0] + self.pad,
+                                     seed[1] - self.pad:seed[1] + self.pad]
         return membrane
 
     def crop_raw(self, seed, batch_counter):
@@ -770,11 +770,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
         raw_batch = np.zeros((len(batches), 4, self.pl, self.pl),
                              dtype=theano.config.floatX)
-        for i, b in enumerate(batches):
-            raw_batch[b, 0, :, :] = self.crop_membrane(centers[b], b)
-            raw_batch[b, 1, :, :] = self.crop_raw(centers[b], b)
-            raw_batch[b, 2:4, :, :] = self.crop_mask_claimed(
-                centers[b], b, ids[b])
+        print 'b', len(centers), len(ids)
+        for b, center, Id in zip(batches, centers, ids):
+            raw_batch[b, 0, :, :] = self.crop_membrane(center, b)
+            raw_batch[b, 1, :, :] = self.crop_raw(center, b)
+            raw_batch[b, 2:4, :, :] = self.crop_mask_claimed(center, b, Id)
 
         mask = self.crop_time_mask(centers, timepoint, batches)
         raw_batch[:, 2, :, :][mask] = 0
@@ -898,9 +898,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                          save=True, b=0, inheritance=False):
         plot_images = super(HoneyBatcherPath, self).\
             draw_debug_image(image_name=image_name,
-                               path=path,
-                               save=False,
-                               inherite_code=True)
+                             path=path,
+                             save=False,
+                             b=b,
+                             inherite_code=True)
 
         plot_images.append({"title": "Heightmap Ground Truth",
                             'im': self.global_height_gt_batch[b, :, :],
