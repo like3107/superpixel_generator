@@ -237,12 +237,8 @@ class HoneyBatcherPredict(object):
 
     def get_seed_ids(self):
         assert (self.global_seeds is not None)  # call get seeds first
-        self.global_seed_ids = []
-        seed_ids = []
-        for b, seeds in enumerate(self.global_seeds):
-            for id_counter, seed in enumerate(seeds):
-                seed_ids.append(id_counter + 1)
-            self.global_seed_ids.append(seed_ids)
+        self.global_seed_ids = [np.arange(start=1,stop=len(s)+1)
+                                        for s in self.global_seeds]
 
     def initialize_priority_queue(self):
         """
