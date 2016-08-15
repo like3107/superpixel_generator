@@ -755,57 +755,63 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                error["e2_pos"][0],
                                                error["e2_pos"][1]]
 
-    def check_type_II_errors(self, center_x, center_y, error_index, Id, b):
+    def check_type_II_errors(self, center_x, center_y, Id, b):
+        def error_index(b, id1, id2):
+            return b, min(id1, id2), max(id1, id2)
         for x, y, direction in self.walk_cross_coords([center_x,
                                                        center_y]):
-
             c = int(self.global_claims[b, x, y])  # neighbor label
-            if c > 0 and not error_index(b, Id, c) \
-                    in self.global_error_dict:
+            if c > 0:
                 claimId = int(self.global_id2gt[b][c])
                 gtId = int(self.global_id2gt[b][Id])
-                if claimId > 0 and claimId != gtId:  # neighbor claimed
-                    center_intruder_b = \
-                        self.global_errormap[b, 1, center_x - self.pad,
-                                             center_y - self.pad]
-                    neighbor_intruder_b = \
-                        self.global_errormap[b, 1, x - self.pad,
-                                             y - self.pad]
-                    if center_intruder_b and not neighbor_intruder_b:
-                        # print "fast intrusion"
-                        self.current_type = 'fastI'
-                        self.global_error_dict[error_index(b, Id, c)] = \
-                            {"batch": b,
-                             "touch_time": self.global_timemap[b, x, y],
-                             "large_pos": [center_x, center_y],
-                             "large_direction": direction,
-                             "large_id": Id,
-                             "small_pos": [x, y],
-                             "small_direction": (direction + 2) % 4,
-                             "small_id": c}
-                        self.find_type_I_error()
-                        self.find_source_of_II_error()
-                    elif not center_intruder_b and neighbor_intruder_b:
-                        # print "slow intrusion"
-                        self.current_type = 'slowI'
-                        self.global_error_dict[error_index(b, Id, c)] = \
-                            {"batch": b,
-                             "touch_time": self.global_timemap[b, x, y],
-                             "large_pos": [x, y],
-                             # turns direction by 180 degrees
-                             "large_direction": (direction + 2) % 4,
-                             "large_id": c,
-                             "small_direction": direction,
-                             "small_pos": [center_x, center_y],
-                             "small_id": Id}
-                        self.find_type_I_error()
-                        self.find_source_of_II_error()
-                    elif center_intruder_b and neighbor_intruder_b:
-                        # raise Exception('error type 3 found')
-                        # print 'type 3 error not yet implemented'
-                        # self.find_type_I_error()
-                        # self.find_source_of_II_error()
-                        pass
+                if not error_index(b, gtId, claimId) \
+                    in self.global_error_dict:
+                    if claimId > 0 and claimId != gtId:  # neighbor claimed
+                        center_intruder_b = \
+                            self.global_errormap[b, 1, center_x - self.pad,
+                                                 center_y - self.pad]
+                        neighbor_intruder_b = \
+                            self.global_errormap[b, 1, x - self.pad,
+                                                 y - self.pad]
+                        if center_intruder_b and not neighbor_intruder_b:
+                            # print "fast intrusion"
+                            self.current_type = 'fastI'
+                            self.global_error_dict[error_index(b, gtId, claimId)] = \
+                                {"batch": b,
+                                 "touch_time": self.global_timemap[b, x, y],
+                                 "large_pos": [center_x, center_y],
+                                 "large_direction": direction,
+                                 "large_id": Id,
+                                 "large_gtid": gtId,
+                                 "small_pos": [x, y],
+                                 "small_direction": (direction + 2) % 4,
+                                 "small_gtid": claimId,
+                                 "small_id": c}
+                            self.find_type_I_error()
+                            self.find_source_of_II_error()
+                        elif not center_intruder_b and neighbor_intruder_b:
+                            # print "slow intrusion"
+                            self.current_type = 'slowI'
+                            self.global_error_dict[error_index(b, gtId, claimId)] = \
+                                {"batch": b,
+                                 "touch_time": self.global_timemap[b, x, y],
+                                 "large_pos": [x, y],
+                                 # turns direction by 180 degrees
+                                 "large_direction": (direction + 2) % 4,
+                                 "large_id": c,
+                                 "large_gtid": claimId,
+                                 "small_direction": direction,
+                                 "small_pos": [center_x, center_y],
+                                 "small_gtid": gtId,
+                                 "small_id": Id}
+                            self.find_type_I_error()
+                            self.find_source_of_II_error()
+                        elif center_intruder_b and neighbor_intruder_b:
+                            # raise Exception('error type 3 found')
+                            # print 'type 3 error not yet implemented'
+                            # self.find_type_I_error()
+                            # self.find_source_of_II_error()
+                            pass
 
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
         raw_batch = np.zeros((len(batches), 4, self.pl, self.pl),
