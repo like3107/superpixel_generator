@@ -91,7 +91,7 @@ def build_net_v5():
     l_8 = L.Conv2DLayer(l_7, n_filt[3], 1,
                         nonlinearity=las.nonlinearities.rectify)
     l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
-                        nonlinearity=las.nonlinearities.elu,
+                        nonlinearity=las.nonlinearities.rectify,
                         b=np.random.random(4)*10+10.)
     return l_in, l_9, fov
 
