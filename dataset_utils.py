@@ -617,7 +617,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         elif self.global_id2gt[b][Id] != \
                 self.global_label_batch[b, center_x - self.pad,
                                         center_y - self.pad]:
-            self.global_errormap[b, 0, center_x - self.pad,
+            self.global_errormap[b, :2, center_x - self.pad,
                                  center_y - self.pad] = 1
             self.error_indicator_pass[b] = True
 
@@ -686,6 +686,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             if "e1_pos" not in error_I:
                 start_position = error_I["large_pos"]
                 batch = error_I["batch"]
+                #  keep track of output direction
+                current_direction = error_I["large_direction"]
+                prev_in_other_region = self.global_errormap[batch, 1,
+                                         start_position[0] - self.pad,
+                                         start_position[1] - self.pad] 
+
                 for pos, d in self.get_path_to_root(start_position, batch):
                     # debug
                     # shortest path of error type II to root (1st crossing)
@@ -694,8 +700,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                          pos[1] - self.pad] = True
                     # debug
                     # remember type I error on path
-                    if self.global_errormap[batch, 0, pos[0]-self.pad,
-                                            pos[1]-self.pad]:
+                    in_other_region = self.global_errormap[batch, 1, pos[0]-self.pad,
+                                            pos[1]-self.pad]
+                    #  detect transition from "others" region to "me" region
+                    if prev_in_other_region and not in_other_region:
                         original_error = np.array(pos)
                         # print 'found crossing. type II linked to type I. Error #',\
                         #     self.counter
@@ -704,47 +712,59 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                         error_I["e1_time"] = self.global_timemap[batch,
                                                                  pos[0],
                                                                  pos[1]]
-                        error_I["e1_direction"] = d
+                        error_I["e1_direction"] = current_direction
+                        assert(current_direction >= 0)
+                    current_direction = d
+                    prev_in_other_region = in_other_region
                 if plateau_backtrace:
                     new_pos, new_d = self.find_end_of_plateau(error_I["e1_pos"],
+                                                              error_I["e1_direction"],
                                                               batch)
                     error_I["e1_pos"] = new_pos
                     error_I["e1_time"] = self.global_timemap[batch,
                                                              new_pos[0],
                                                              new_pos[1]]
                     error_I["e1_direction"] = new_d
+                    assert(new_d >= 0)
         # debug
         # self.draw_debug_image("%i_walk_%i_type_%s" % (self.counter,
         #                                               len(self.global_error_dict),
         #                                               self.current_type),
         #                       save=True)
-        self.counter += 1
+                self.counter += 1
         # self.draw_error_reconst("reconst_"+str(len(self.global_error_dict)))
 
-    def find_end_of_plateau(self, start_position, batch):
+    def find_end_of_plateau(self, start_position, start_direction, batch):
         current_height = self.global_heightmap_batch[batch,
                                                          start_position[0]-self.pad,
                                                 start_position[1]-self.pad]
+        current_direction = start_direction
         for pos, d in self.get_path_to_root(start_position, batch):
             # check if the slope is not zero
             if self.global_heightmap_batch[batch, pos[0]-self.pad, \
                                             pos[1]-self.pad] \
                                     < current_height:
-                return pos,d
-        print "WARNING: plateau ended at root node"
-        return pos, d
+                return pos,current_direction
+            if d >= 0:
+                # not at the end of the path
+                current_direction = d
+        return pos, start_direction
 
     def find_source_of_II_error(self):
-      for error in self.global_error_dict.values():
-        if "e2_pos" not in error:
-            batch = error["batch"]
-            start_position = error["small_pos"]
+        for error in self.global_error_dict.values():
+            if "e2_pos" not in error:
+                batch = error["batch"]
+                start_position = error["small_pos"]
+                start_direction = error["small_direction"]
 
-            error["e2_pos"], error["e2_direction"] = \
-                            self.find_end_of_plateau(start_position, batch)
-            error["e2_time"] = self.global_timemap[batch,
-                                           error["e2_pos"][0],
-                                           error["e2_pos"][1]]
+                error["e2_pos"], error["e2_direction"] = \
+                                self.find_end_of_plateau(start_position,
+                                start_direction,
+                                batch)
+                assert(error["e2_direction"] >= 0)
+                error["e2_time"] = self.global_timemap[batch,
+                                               error["e2_pos"][0],
+                                               error["e2_pos"][1]]
 
     def check_type_II_errors(self, center_x, center_y, error_index, Id, b):
         for x, y, direction in self.walk_cross_coords([center_x,
@@ -865,7 +885,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     print error_name
                     print n
                     print "error/"+str(error_name)+"/"+n,np.array(info)
-                    out_h5.create_dataset("error/"+str(error_name[0])+"_"+str(error_name[1])+"/"+n,data=np.array(info))
+                    out_h5.create_dataset("error/"+str(error_name[0])+"_"+str(error_name[1])+"_"+str(error_name[2])+"/"+n,data=np.array(info))
                     # except:
                     #     print "warning: could not serialize ",n, info
 
