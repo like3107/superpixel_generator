@@ -1,10 +1,15 @@
+import matplotlib
+# try:
+#     matplotlib.use('Qt4Agg')
+# except:
+matplotlib.use('Agg')
+
 import h5py as h
 import numpy as np
 import random
 from os import makedirs
 from os.path import exists
-import matplotlib
-matplotlib.use('Agg')
+
 from matplotlib import pyplot as plt
 import theano
 from Queue import PriorityQueue
@@ -14,7 +19,7 @@ from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
 from skimage.morphology import label
 import h5py
-
+from cv2 import dilate, erode
 
 def load_h5(path, h5_key=None, group=None, group2=None):
     if not exists(path):
@@ -134,6 +139,7 @@ class HoneyBatcherPredict(object):
             self.raw = load_h5(raw, h5_key=raw_key)[0]
         else:
             self.raw = raw
+        self.raw /= 256. - 0.5
 
         # either pad raw or crop labels -> labels are always shifted by self.pad
         self.padding_b = padding_b
@@ -168,9 +174,10 @@ class HoneyBatcherPredict(object):
         self.priority_queue = None
 
         # debug
+        self.max_batch = 0
         self.counter = 0
 
-    def prepare_global_batch(self, start=None, reuse_code=False):
+    def prepare_global_batch(self, start=None, inherit_code=False):
         # initialize two global batches = region where CNNs compete
         # against each other
 
@@ -198,7 +205,7 @@ class HoneyBatcherPredict(object):
                 self.raw[ind_b[b],
                          ind_x[b]:ind_x[b] + self.global_el,
                          ind_y[b]:ind_y[b] + self.global_el]
-        if reuse_code:
+        if inherit_code:
             return ind_b, ind_x, ind_y
 
     def get_seed_coords(self, sigma=2, min_dist=8, thresh=0.3):
@@ -285,8 +292,8 @@ class HoneyBatcherPredict(object):
                                      seed[1] - self.pad:seed[1] + self.pad]
         return membrane
 
-    def crop_raw(self, seed, batch_counter):
-        raw = self.global_raw[batch_counter,
+    def crop_raw(self, seed, b):
+        raw = self.global_raw[b,
               seed[0] - self.pad:seed[0] + self.pad,
               seed[1] - self.pad:seed[1] + self.pad]
         return raw
@@ -301,11 +308,17 @@ class HoneyBatcherPredict(object):
         claimed[1, :, :][labels == Id] = 1  # me
         return claimed
 
+    def crop_height_map(self, seed, b):
+        height = self.global_heightmap_batch[b,
+              seed[0] - self.pad:seed[0] + self.pad,
+              seed[1] - self.pad:seed[1] + self.pad]
+        return height
+
     def init_batch(self, start=None):
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype=theano.config.floatX)
         self.global_raw = np.zeros((self.bs, self.global_el, self.global_el),
-                                     dtype=theano.config.floatX)
+                                   dtype=theano.config.floatX)
 
         # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims = np.empty((self.bs, self.global_el, self.global_el))
@@ -338,7 +351,7 @@ class HoneyBatcherPredict(object):
             if self.priority_queue[b].empty():
                 raise Exception('priority queue empty. All pixels labeled')
             height, _, center_x, center_y, Id, direction, error_indicator, \
-            time_put = self.priority_queue[b].get()
+                time_put = self.priority_queue[b].get()
             if self.global_claims[b, center_x, center_y] == 0:
                 already_claimed = False
         assert (self.global_claims[b, center_x, center_y] == 0)
@@ -354,8 +367,7 @@ class HoneyBatcherPredict(object):
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
             raw_batch[b, 0, :, :] = self.crop_membrane(center, b)
             raw_batch[b, 1, :, :] = self.crop_raw(center, b)
-            raw_batch[b, 2:4, :, :] = self.crop_mask_claimed(center, b,
-                                                             Id)
+            raw_batch[b, 2:4, :, :] = self.crop_mask_claimed(center, b, Id)
             # check whether already pulled
             assert (self.global_claims[b, center[0], center[1]] == 0)
             self.global_claims[b, center[0], center[1]] = Id
@@ -406,11 +418,14 @@ class HoneyBatcherPredict(object):
                             'cmap': "rand",
                             'im': self.global_claims[b, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1]})
-        plot_images.append({"title": "Raw Input",
+        plot_images.append({"title": "Memb Input",
                             'im': self.global_batch[b, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1]})
         plot_images.append({"title": "Heightmap Prediciton",
                             'im': self.global_heightmap_batch[b, :, :]})
+        plot_images.append({"title": "Raw Input",
+                            'im': self.global_raw[b, self.pad:-self.pad - 1,
+                                  self.pad:-self.pad - 1]})
         if not inherite_code:
             if save:
                 u.save_images(plot_images, path=path, name=image_name)
@@ -451,7 +466,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
             elif isinstance(clip_method, basestring) and \
                                 len(clip_method) > 3 and \
-                                clip_method[:3]=='exp':
+                                clip_method[:3] == 'exp':
                 dist = float(clip_method[3:])
                 self.height_gt = np.exp(
                 np.square(self.height_gt) / (-2) / dist ** 2)
@@ -462,8 +477,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         if not self.padding_b:
             # crop label
             self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]
-            self.height_gt = self.height_gt[:, self.pad:-self.pad,
-                             self.pad:-self.pad]
+            self.height_gt = self.height_gt[:,
+                                            self.pad:-self.pad,
+                                            self.pad:-self.pad]
 
         # private
         self.global_directionmap_batch = None  # no padding
@@ -478,10 +494,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.error_indicator_pass = None
         self.global_time = 0
 
-    def prepare_global_batch(self, start=None, reuse_code=False):
+    def prepare_global_batch(self, start=None, inherit_code=False):
         ind_b, ind_x, ind_y = \
             super(HoneyBatcherPath, self).prepare_global_batch(start=start,
-                                                               reuse_code=True)
+                                                               inherit_code=True)
         for b in range(self.bs):
             self.global_height_gt_batch[b, :, :] = \
                 self.height_gt[ind_b[b],
@@ -505,10 +521,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.global_id2gt.append(id2gt)
 
     def crop_timemap(self, center, b):
-        assert(center[0]-self.pad > 0)
-        assert(center[1]-self.pad > 0)
-        assert(center[0]+self.pad < self.global_el - self.pl)
-        assert(center[1]+self.pad < self.global_el - self.pl)
+        assert(center[0]-self.pad >= 0)
+        assert(center[1]-self.pad >= 0)
+        print 'change me crop time in du'
+        # assert(center[0]+self.pad < self.global_el - self.pad)
+        # assert(center[1]+self.pad < self.global_el - self.pad)
         return self.global_timemap[b, center[0]-self.pad:center[0]+self.pad,
                                    center[1]-self.pad:center[1]+self.pad]
 
@@ -554,16 +571,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         assert (np.any(np.isfinite(centers)))
         assert (np.any(np.isfinite(ids)))
         assert (np.any(np.isfinite(gts)))
+
         return raw_batch, gts, centers, ids
 
     def get_adjacent_heights(self, seed, batch):
         seeds_x, seeds_y, _ = self.get_cross_coords(seed,
                                                     global_offset=-self.pad)
-
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         assert (np.any(self.rl - self.pl > seeds_x) or
                 np.any(self.rl - self.pl > seeds_y))
-
         # boundary conditions
         ground_truth = \
             self.global_height_gt_batch[batch, seeds_x, seeds_y].flatten()
@@ -587,7 +603,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.global_directionmap_batch[b,
                                        center_x - self.pad,
                                        center_y - self.pad] = direction
-
         self.global_timemap[b,
                             center_x,
                             center_y] = time_put
@@ -610,6 +625,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         if self.find_errors_b:
             self.check_type_II_errors(center_x, center_y, error_index, Id,
                                       b)
+        # print 'b', b, 'height', height, 'centerxy', center_x, center_y, 'Id', Id, \
+        #     direction, error_indicator, time_put
         return height, _, center_x, center_y, Id, direction, error_indicator, \
                     time_put
 
@@ -852,11 +869,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     # except:
                     #     print "warning: could not serialize ",n, info
 
-
-
-
     def draw_batch(self, raw_batch, image_name, path='./data/nets/debug/images/',
-                   save=True):
+                   save=True, gt=None, probs=None):
         plot_images = []
         for b in range(raw_batch.shape[0]):
             plot_images.append({"title": "membrane",
@@ -1172,67 +1186,106 @@ class BatchMemento:
         self.counter = 0
 
 
+class DummyBM:
+    def __init__(self, batch_size, patch_len, n_channels):
+        self.bs = batch_size
+        self.pl = patch_len
+        self.n_ch = n_channels
+        self.gt = None
+
+    def init_batch(self):
+        self.batch = \
+            np.random.random(size=(self.bs, self.n_ch,
+                                    self.pl, self.pl)).astype(theano.config.floatX)
+        self.gt = np.zeros((self.bs, 4, 1, 1)).astype(theano.config.floatX)
+        self.batch[:self.bs/2, 0, :, 0] = 1.
+        self.gt[:self.bs/2, 0, 0, 0] = 1.
+
+    def get_bach(self):
+        self.init_batch()
+        return self.batch, self.gt
+
+
+
+
 def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
     raw = np.zeros((batch_size, edge_len, edge_len))
     dist_trf = np.zeros_like(raw)
-    raw[:, ::edge_len/10, :] = 100.
+    # raw[:, ::edge_len/10, :] = 100.
 
-    membrane = random_lines(batch_size, 40, edge_len)
+    # get membrane gt
+    membrane_gt = random_lines(n_lines=20, bs=batch_size, edge_len=edge_len,
+                               rand=False, granularity=10./edge_len)
+    # get membrane probs
+    membrane_prob = random_lines(n_lines=8, input_array=membrane_gt.copy(),
+                                 rand=True, granularity=0.1)
+    raw = random_lines(n_lines=8, input_array=membrane_gt.copy(),
+                                 rand=True, granularity=0.1)
 
-    for b in range(batch_size):
-        dist_trf[b] = distance_transform_edt(membrane[b] == 1)
-    dist_trf = np.max(dist_trf) - dist_trf
-    gt = np.zeros_like(raw)
-    gt[membrane == 1] = 1
-    gt = label(gt)
-    ov = 1
-    gt[:, ov:, :][gt[:, ov:, :] == 0] = gt[:, :-ov, :][gt[:, ov:, :] == 0]
-    gt[:, :, ov:][gt[:, :, ov:] == 0] = gt[:, :, :-ov][gt[:, :, ov:] == 0]
+    raw = gaussian_filter(raw, sigma=1)
+    raw /= np.max(raw)
+    membrane_prob = gaussian_filter(membrane_prob, sigma=1)
+    membrane_prob /= np.max(membrane_prob)
+
+    # get label gt and dist trf
+    gt = np.ones_like(membrane_gt)
+    gt[membrane_gt == 1] = 0
+    for i in range(membrane_gt.shape[0]):
+        dist_trf[i] = distance_transform_edt(gt[i])
+        gt[i] = label(gt[i], background=0)
+        gt[i] = dilate(gt[i], kernel=np.ones((4,4)), iterations=1)
+
+    # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
 
-    raw = gaussian_filter(raw, sigma=4)
-    # membrane = membrane
-    membrane = 1. - membrane
-    membrane = gaussian_filter(membrane, sigma=1)
-    membrane = (membrane - np.min(membrane)) / np.max(membrane)
-    dist_trf = np.max(dist_trf) - dist_trf
-    if save_path is not None:
-        fig, ax = plt.subplots(2,2)
-        ax[0,0].imshow(raw[1, :, :])
-        ax[0,1].imshow(membrane[1, :, :], cmap='gray')
-        ax[1,0].imshow(gt[1, :, :])
-        ax[1,1].imshow(dist_trf[1, :, :], cmap='gray')
+    if isinstance(save_path, str):
+        fig, ax = plt.subplots(2, 5)
+        ax[0, 0].imshow(membrane_gt[0], cmap='gray')
+        ax[1, 0].imshow(membrane_gt[1], cmap='gray')
+        ax[0, 1].imshow(membrane_prob[0], cmap='gray')
+        ax[1, 1].imshow(membrane_prob[1], cmap='gray')
+        ax[0, 2].imshow(gt[0])
+        ax[1, 2].imshow(gt[1])
+        ax[0, 3].imshow(dist_trf[0], cmap='gray')
+        ax[1, 3].imshow(dist_trf[1], cmap='gray')
+        ax[0, 4].imshow(raw[0], cmap='gray')
+        ax[1, 4].imshow(raw[0], cmap='gray')
+        plt.savefig(save_path)
         plt.show()
-        # plt.savefig(save_path)
-    return raw, membrane, dist_trf, gt
+
+    return raw, membrane_prob, dist_trf, gt
 
 
-def random_lines(bs, n_lines, edge_len):
-    memb = np.ones((bs, edge_len, edge_len))
-    print 'edge len', edge_len
+def random_lines(n_lines, bs=None, edge_len=None, input_array=None, rand=False,
+                 granularity=0.1):
+    if input_array is None:
+        input_array = np.zeros((bs, edge_len, edge_len))
+    else:
+        bs = input_array.shape[0]
+        edge_len = input_array.shape[1]
+
     for b in range(bs):
         for i in range(n_lines):
             m = np.random.uniform() * 10 - 5
             c = np.random.uniform() * edge_len * 2 - edge_len
-            x = np.arange(0, edge_len-1, 0.1/edge_len)
-            if np.random.random() < 0.3:
-                x = np.arange(edge_len/2, edge_len - 1, 0.01/edge_len)
-
+            if rand:
+                rand_n = np.random.random()
+                start = (edge_len - 1)/2 * rand_n
+                x = np.arange(start, edge_len - start - 1, granularity)
+            else:
+                x = np.arange(0, edge_len-1, 0.1/edge_len)
             y = m * x + c
             x = np.round(x[(y < edge_len) & (y >= 0)]).astype(np.int)
             y = y[(y < edge_len) & (y >= 0)].astype(np.int)
-            memb[b, x, y] = 0.
-    memb = binary_erosion(memb)
-    # rand_mask = np.random.randint(0, 100, size=(b, edge_len, edge_len))
-    # rand_bool_mask = np.random.ra
-    # rand_bool_mask[rand_mask > 5] = True
-    return memb
+            input_array[b, x, y] = 1.
+    return input_array
 
 if __name__ == '__main__':
 
+    generate_dummy_data(20, 300, 40, save_path='')
 
     # loading of cremi
-    path = './data/sample_A_20160501.hdf'
+    # path = './data/sample_A_20160501.hdf'
     # /da
     # a = make_array_cumulative(a)
     # save_h5('./data/label_a.h5', 'labels', a, 'w')

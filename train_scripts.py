@@ -1,6 +1,6 @@
 import matplotlib
-matplotlib.use('Agg')
-# matplotlib.use('Qt4Agg')
+# matplotlib.use('Agg')
+matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
 import theano
@@ -22,7 +22,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'trash_v7'
+    net_name = 'trash_v5_debug_clip_quad_lowreg_freevoxel200_rawreg_ft2'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -39,27 +39,27 @@ def train_script_v1():
     load_net_path = './data/nets/cnn_path_v1_fine_tune/net_500000.h5'      # if load true
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
-    batch_size = 4         # > 4
-    batch_size_ft = 1
+    batch_size = 16         # > 4
+    batch_size_ft = 2
     global_edge_len = 300
-    gt_seeds_b = False
-    find_errors = False
     dummy_data_b = False
+    val_b = False
+    find_errors = True
     fine_tune_b = find_errors
     # clip_method="exp20"
-    clip_method="clip"
+    clip_method = 'clip'
 
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')
-    pre_train_iter = 10000
-    max_iter = 1000000
+    pre_train_iter = 100
+    max_iter = 10000000000
     save_counter = 100000        # save every n iterations
     # fine tune
-    margin = 10
+    margin = 0.5
 
     # choose your network from nets.py
-    regularization = 10**-4
+    regularization = 10**-7
     network = nets.build_ID_v5_hydra
     loss = nets.loss_updates_probs_v0
     loss_fine = nets.loss_updates_hydra_v5
@@ -74,7 +74,7 @@ def train_script_v1():
     patch_len = 40
     if dummy_data_b:
         raw_path, membrane_path, height_gt_path, label_path = \
-            du.generate_dummy_data(batch_size, global_edge_len, patch_len, '')
+            du.generate_dummy_data(batch_size, global_edge_len, patch_len)
         raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
             du.generate_dummy_data(batch_size, global_edge_len, patch_len)
 
@@ -108,16 +108,17 @@ def train_script_v1():
            clip_method=clip_method)
     bm.init_batch()
 
-    bm_val = BM(membrane_path_val, label=label_path_val,
-                height_gt=height_gt_path_val,
-                height_gt_key=height_gt_key_val,
-                raw=raw_path_val,
-                batch_size=batch_size,
-                find_errors_b=find_errors,
-                patch_len=patch_len, global_edge_len=global_edge_len,
-                padding_b=False,
-                clip_method=clip_method)
-    bm_val.init_batch()  # Training
+    if val_b:
+        bm_val = BM(membrane_path_val, label=label_path_val,
+                    height_gt=height_gt_path_val,
+                    height_gt_key=height_gt_key_val,
+                    raw=raw_path_val,
+                    batch_size=batch_size,
+                    find_errors_b=find_errors,
+                    patch_len=patch_len, global_edge_len=global_edge_len,
+                    padding_b=False,
+                    clip_method=clip_method)
+        bm_val.init_batch()  # Training
 
     # init a network folder where all images, models and hyper params are stored
     if save_net_b:
@@ -131,7 +132,7 @@ def train_script_v1():
 
     # everything is initialized now train and predict every once in a while....
     converged = False       # placeholder, this is not yet implemented
-    iteration = 0
+    iteration = -1
     losses = [[], [], []]
     fine_tune_losses = [[], []]
     iterations = []
@@ -148,17 +149,19 @@ def train_script_v1():
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
         # predict val
-        membrane_val, gt, seeds_val, ids_val = bm_val.get_batches()
-        probs_val = probs_f(membrane_val)
-        bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
+        if val_b:
+            membrane_val, gt, seeds_val, ids_val = bm_val.get_batches()
+            probs_val = probs_f(membrane_val)
+            bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
         # predict train
         membrane, gt, seeds, ids = bm.get_batches()
         probs = probs_f(membrane)
+        bm.update_priority_queue(probs, seeds, ids)
 
-        debug_path = save_net_path+"/"+str("batches")
-
-        if iteration % 100 == 0:
+        # debug
+        if False and iteration % 100 == 0:
+            debug_path = save_net_path + "/" + str("batches")
             if not os.path.exists(debug_path):
                 os.makedirs(debug_path)
             with h5py.File(debug_path+"/batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
@@ -167,13 +170,11 @@ def train_script_v1():
                 out_h5.create_dataset("seeds",data=seeds ,compression="gzip")
                 out_h5.create_dataset("ids",data=ids ,compression="gzip")
                 out_h5.create_dataset("probs",data=probs ,compression="gzip")
-            
-        bm.update_priority_queue(probs, seeds, ids)
 
         # fine-tuning: update height difference errors
         if iteration % 100 == 0:
-            if (len(bm.global_error_dict) >= batch_size_ft or
-                    free_voxel < 101) and iteration > pre_train_iter \
+            if (len(bm.global_error_dict) >= batch_size_ft)\
+                    and iteration > pre_train_iter \
                     and fine_tune_b:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
@@ -207,25 +208,28 @@ def train_script_v1():
                     bm.draw_error_paths("train_path_error_iter_%08i_counter_%i" %
                                         (iteration, bm.counter),
                                         path=save_net_path + '/images/')
-                    bm_val.draw_debug_image("val_iteration_%08i" % iteration,
-                                            path=save_net_path + '/images/')
+                    if val_b:
+                        bm_val.draw_debug_image("val_iteration_%08i" % iteration,
+                                                path=save_net_path + '/images/')
                 bm.init_batch()
-                bm_val.init_batch()
+                if val_b:
+                    bm_val.init_batch()
                 free_voxel = free_voxel_empty
 
         # reset bms
-        if (free_voxel <= 100 or (free_voxel_empty / 4)  % (iteration + 1) == 0)\
-                and free_voxel_empty - free_voxel > 10000:
+        if (free_voxel <= 201 or (free_voxel_empty / 4)  % (iteration + 1) == 0)\
+                and free_voxel_empty - free_voxel > 1000:
             bm.draw_debug_image(
                 "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
                 (iteration, bm.counter, free_voxel),
                 path=save_net_path + '/images/')
-            bm_val.draw_debug_image(
-                "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
-                (iteration, bm.counter, free_voxel),
-                path=save_net_path + '/images/')
+            if val_b:
+                bm_val.draw_debug_image(
+                    "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
+                    (iteration, bm.counter, free_voxel),
+                    path=save_net_path + '/images/')
+                bm_val.init_batch()
             bm.init_batch()
-            bm_val.init_batch()
             free_voxel = free_voxel_empty
 
         # clear memory, do fine-tuning and reset image
@@ -237,12 +241,14 @@ def train_script_v1():
             batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
             batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
             assert(np.any(batch_ft_t1 > batch_ft_t2))
-            ft_loss_train_noreg = loss_valid_fine_f(batch_ft, batch_dir_ft)
+            if val_b:
+                ft_loss_train_noreg = loss_valid_fine_f(batch_ft, batch_dir_ft)
             probs_fine = probs_fine_f(batch_ft, batch_dir_ft)
 
             ft_loss_train = loss_train_fine_f(batch_ft, batch_dir_ft)
             print "loss_train_fine %.4f" % ft_loss_train
-            fine_tune_losses[0].append(ft_loss_train_noreg)
+            # fine_tune_losses[0].append(ft_loss_train_noreg)
+            fine_tune_losses[0].append(1)
             fine_tune_losses[1].append(ft_loss_train)
 
             u.plot_train_val_errors(fine_tune_losses, range(ft_iteration),
@@ -250,7 +256,8 @@ def train_script_v1():
                                     ['ft loss no reg no dropout', 'ft loss'])
             Memento1.clear_memory()
             Memento2.clear_memory()
-            bm_val.init_batch()
+            if val_b:
+                bm_val.init_batch()
             bm.init_batch()
             free_voxel = free_voxel_empty
 
@@ -261,7 +268,10 @@ def train_script_v1():
         if iteration % 1000 == 0 and (iteration < pre_train_iter or not
                 fine_tune_b):
             loss_train_no_reg = float(loss_valid_f(membrane, gt))
-            loss_valid = float(loss_valid_f(membrane_val, gt))
+            if val_b:
+                loss_valid = float(loss_valid_f(membrane_val, gt))
+            else:
+                loss_valid = 100.
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
                   'loss_validation %.4f, iteration %i' % \
                   (loss_train, loss_train_no_reg, loss_valid, iteration),
@@ -278,11 +288,22 @@ def train_script_v1():
 
         # monitor growth on validation set tmp debug change train to val
         if iteration % 10000 == 0:
-            bm.serialize_to_h5("finetunging_ser_batch_%08i_counter_%i" %
-                (iteration, bm.counter))
-            bm.draw_debug_image("train_iteration_%08i_counter_%i_freevoxel_%i" %
-                                (iteration, bm.counter, free_voxel),
-                                path=save_net_path + '/images/')
+            for b in range(0, batch_size, 8):
+                bm.draw_debug_image(
+                    "train_iteration_%08i_counter_%i_freevoxel_%i_b_%i" %
+                    (iteration, bm.counter, free_voxel, b),
+                    path=save_net_path + '/images/', b=b)
+            bm.draw_batch(membrane,
+                          path=save_net_path+ '/images/',
+                          image_name='bat_in_%i_b' % (iteration),
+                          gt=gt,
+                          probs=probs)
+        # if iteration % 10000 == 0:
+            # bm.serialize_to_h5("finetunging_ser_batch_%08i_counter_%i" %
+            #     (iteration, bm.counter))
+            # bm.draw_debug_image("train_iteration_%08i_counter_%i_freevoxel_%i" %
+            #                     (iteration, bm.counter, free_voxel),
+            #                     path=save_net_path + '/images/')
 
 
 if __name__ == '__main__':
