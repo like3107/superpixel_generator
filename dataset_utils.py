@@ -707,7 +707,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                         original_error = np.array(pos)
                         # print 'found crossing. type II linked to type I. Error #',\
                         #     self.counter
-
                         error_I["e1_pos"] = original_error
                         error_I["e1_time"] = self.global_timemap[batch,
                                                                  pos[0],
@@ -726,13 +725,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                              new_pos[1]]
                     error_I["e1_direction"] = new_d
                     assert(new_d >= 0)
-        # debug
-        # self.draw_debug_image("%i_walk_%i_type_%s" % (self.counter,
-        #                                               len(self.global_error_dict),
-        #                                               self.current_type),
-        #                       save=True)
                 self.counter += 1
-        # self.draw_error_reconst("reconst_"+str(len(self.global_error_dict)))
 
     def find_end_of_plateau(self, start_position, start_direction, batch):
         current_height = self.global_heightmap_batch[batch,
@@ -784,7 +777,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                              y - self.pad]
                     if center_intruder_b and not neighbor_intruder_b:
                         # print "fast intrusion"
-                        # debug
                         self.current_type = 'fastI'
                         self.global_error_dict[error_index(b, Id, c)] = \
                             {"batch": b,
@@ -869,25 +861,28 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         if not exists(path):
             makedirs(path)
         with h5py.File(path+'/'+h5_filename, 'w') as out_h5:
-            out_h5.create_dataset("global_timemap",data=self.global_timemap ,compression="gzip")
-            out_h5.create_dataset("global_errormap",data=self.global_errormap ,compression="gzip")
-            out_h5.create_dataset("global_claims",data=self.global_claims ,compression="gzip")
-            out_h5.create_dataset("global_raw",data=self.global_raw ,compression="gzip")
-            out_h5.create_dataset("global_batch",data=self.global_batch ,compression="gzip")
-            out_h5.create_dataset("global_heightmap_batch",data=self.global_heightmap_batch ,compression="gzip")
-            out_h5.create_dataset("global_height_gt_batch",data=self.global_height_gt_batch ,compression="gzip")
-            out_h5.create_dataset("global_prediction_map",data=self.global_prediction_map ,compression="gzip")
-            out_h5.create_dataset("global_directionmap_batch",data=self.global_directionmap_batch ,compression="gzip")
+            out_h5.create_dataset("global_timemap",
+                        data=self.global_timemap ,compression="gzip")
+            out_h5.create_dataset("global_errormap",
+                        data=self.global_errormap ,compression="gzip")
+            out_h5.create_dataset("global_claims",
+                        data=self.global_claims ,compression="gzip")
+            out_h5.create_dataset("global_raw",
+                        data=self.global_raw ,compression="gzip")
+            out_h5.create_dataset("global_batch",
+                        data=self.global_batch ,compression="gzip")
+            out_h5.create_dataset("global_heightmap_batch",
+                        data=self.global_heightmap_batch ,compression="gzip")
+            out_h5.create_dataset("global_height_gt_batch",
+                        data=self.global_height_gt_batch ,compression="gzip")
+            out_h5.create_dataset("global_prediction_map",
+                        data=self.global_prediction_map ,compression="gzip")
+            out_h5.create_dataset("global_directionmap_batch",
+                        data=self.global_directionmap_batch ,compression="gzip")
 
             for error_name,error in self.global_error_dict.items():
                 for n,info in error.items():
-                    # try:
-                    print error_name
-                    print n
-                    print "error/"+str(error_name)+"/"+n,np.array(info)
                     out_h5.create_dataset("error/"+str(error_name[0])+"_"+str(error_name[1])+"_"+str(error_name[2])+"/"+n,data=np.array(info))
-                    # except:
-                    #     print "warning: could not serialize ",n, info
 
     def draw_batch(self, raw_batch, image_name, path='./data/nets/debug/images/',
                    save=True, gt=None, probs=None):
@@ -921,10 +916,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                                       "small_id"]],
                                                                  [error["batch"]])
 
-                # plot_images.append({"title":"Raw Input",
-                #                     'im':reconst_e1[i, 0, :, :]})
-                # plot_images.append({"title":"timemap",
-                #                     'im':self.crop_timemap(np.array(error["e1_pos"]), error_I_batch_list[i])})
                 plot_images.append({"title": "Ground Truth Label",
                                     "cmap": "rand",
                                     'im': self.global_label_batch[error["batch"],
@@ -981,9 +972,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         plot_images.append({"title": "Heightmap Ground Truth",
                             'im': self.global_height_gt_batch[b, :, :],
                             'scatter': np.array(self.global_seeds[b]) - self.pad})
-        # print self.global_error_dict
-        # print [np.array(e["e1_pos"])-self.pad for e in self.global_error_dict.values() if "e1_pos" in e]
-        # print [np.array(e["e1_pos"])-self.pad for e in self.global_error_dict.values() if "e1_pos" in e and e["batch"] == b]
 
         plot_images.append({"title": "Ground Truth Label",
                             'scatter': np.array(
