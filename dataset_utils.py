@@ -21,7 +21,8 @@ from skimage.morphology import label
 import h5py
 from cv2 import dilate, erode
 
-def load_h5(path, h5_key=None, group=None, group2=None):
+
+def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
     if not exists(path):
         error = 'path: %s does not exist, check' % path
         raise Exception(error)
@@ -44,6 +45,9 @@ def load_h5(path, h5_key=None, group=None, group2=None):
             output.append(np.array(g[key], dtype=theano.config.floatX))
     else:
         raise Exception('h5 key type is not supported')
+    if slices is not None:
+        output = [output[0][slices[0]:slices[1]]]
+    f.close()
     return output
 
 
@@ -118,7 +122,8 @@ def segmenation_to_membrane_core(label_image):
 class HoneyBatcherPredict(object):
     def __init__(self, membranes, raw=None, raw_key=None,
                  membrane_key=None,  batch_size=10,
-                 global_edge_len=110, patch_len=40, padding_b=False, **kwargs):
+                 global_edge_len=110, patch_len=40, padding_b=False,
+                 slices=None, **kwargs):
 
         """
         batch loader. Use either for predict. For valId and train use:
@@ -132,11 +137,12 @@ class HoneyBatcherPredict(object):
         """
 
         if isinstance(membranes, str):
-            self.membranes = load_h5(membranes, h5_key=membrane_key)[0]
+            self.membranes = load_h5(membranes, h5_key=membrane_key,
+                                     slices=slices)[0]
         else:
             self.membranes = membranes
         if isinstance(raw, str):
-            self.raw = load_h5(raw, h5_key=raw_key)[0]
+            self.raw = load_h5(raw, h5_key=raw_key, slices=slices)[0]
         else:
             self.raw = raw
         self.raw /= 256. - 0.5
