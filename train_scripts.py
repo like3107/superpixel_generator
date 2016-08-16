@@ -18,9 +18,9 @@ def train_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = True
+    load_net_b = False
 
-    net_name = 'path_test_large'
+    net_name = 'augment_all_the_things'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -35,11 +35,16 @@ def train_script_v1():
     load_net_path = './data/nets/rough/net_2500000'      # if load true
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
     load_net_path = './data/nets/path_test/net_5200000'      # if load true
+    debug_path = save_net_path + "/" + str("batches")
+    if not os.path.exists(debug_path):
+        os.makedirs(debug_path)
+    if not os.path.exists(debug_path):
+        os.makedirs(debug_path)
 
     tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     batch_size_ft = 8
-    global_edge_len = 1000
+    global_edge_len = 300
     dummy_data_b = False
     val_b = False
     find_errors = True
@@ -48,11 +53,13 @@ def train_script_v1():
     fine_tune_b = find_errors
     # clip_method="exp20"
     clip_method = 'clip'
+    augment_pretraining = True
+    augment_ft = True
 
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')
-    pre_train_iter = 10
+    pre_train_iter = 100000
     max_iter = 10000000000
     save_counter = 100000        # save every n iterations
     # fine tune
@@ -124,6 +131,7 @@ def train_script_v1():
     if save_net_b:
         if not os.path.exists(save_net_path):
             os.mkdir(save_net_path)
+        if not os.path.exists(save_net_path + '/images'):
             os.mkdir(save_net_path + '/images')
 
     if load_net_b:
@@ -161,9 +169,6 @@ def train_script_v1():
 
         # debug
         if False and iteration % 100 == 0:
-            debug_path = save_net_path + "/" + str("batches")
-            if not os.path.exists(debug_path):
-                os.makedirs(debug_path)
             with h5py.File(debug_path+"/batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
                 out_h5.create_dataset("membrane",data=membrane ,compression="gzip")
                 out_h5.create_dataset("gt",data=gt ,compression="gzip")
@@ -220,8 +225,14 @@ def train_script_v1():
                 ft_iteration += 1
                 batch_ft_t1, dir_t1 = Memento1.get_batch()
                 batch_ft_t2, dir_t2 = Memento2.get_batch()
+
+                if augment_ft:
+                    batch_ft_t1, dir_t1 = du.augment_batch(batch_ft_t1, direction=dir_t1)
+                    batch_ft_t2, dir_t2 = du.augment_batch(batch_ft_t2, direction=dir_t2)
+
                 batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
                 batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
+
                 assert(np.any(batch_ft_t1 > batch_ft_t2))
                 if val_b:
                     ft_loss_train_noreg = loss_valid_fine_f(batch_ft, batch_dir_ft)
@@ -261,7 +272,11 @@ def train_script_v1():
 
         # pretraining
         if iteration % 10 == 0 and iteration < pre_train_iter:
-            loss_train = float(loss_train_f(membrane, gt))
+            if augment_pretraining:
+                a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
+                loss_train = float(loss_train_f(a_membrane, a_gt))
+            else:
+                loss_train = float(loss_train_f(membrane, gt))
 
         # reset bms
         if free_voxel <= 201 \

@@ -214,7 +214,7 @@ class HoneyBatcherPredict(object):
         if inherit_code:
             return ind_b, ind_x, ind_y
 
-    def get_seed_coords(self, sigma=2, min_dist=8, thresh=0.3):
+    def get_seed_coords(self, sigma=1.5, min_dist=4, thresh=0.3):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
@@ -1294,6 +1294,148 @@ def random_lines(n_lines, bs=None, edge_len=None, input_array=None, rand=False,
             y = y[(y < edge_len) & (y >= 0)].astype(np.int)
             input_array[b, x, y] = 1.
     return input_array
+
+
+# TODO: make this loopy (maybe with lambdas and slices ???)
+def augment_batch(batch, gt=None, direction=None):
+
+    augment_shape = list(batch.shape)
+    bs = batch.shape[0]
+    augment_shape[0] *= 7
+    augmented_batch = np.empty(augment_shape, dtype=theano.config.floatX)
+
+    # original
+    ac = 0
+    augmented_batch[ac*bs:(ac+1)*bs] = batch
+    # flip x
+    ac = 1
+    augmented_batch[ac*bs:(ac+1)*bs] = batch[:,:,::-1,:]
+    # flip y
+    ac = 2
+    augmented_batch[ac*bs:(ac+1)*bs] = batch[:,:,:,::-1]
+    # turn 180
+    ac = 3
+    augmented_batch[ac*bs:(ac+1)*bs] = batch[:,:,::-1,::-1]
+
+    transpose = np.transpose(batch, (0,1,3,2))
+    ac = 4
+    augmented_batch[ac*bs:(ac+1)*bs] = transpose
+    # rot 90 by transpose and flipx
+    ac = 5
+    augmented_batch[ac*bs:(ac+1)*bs] = transpose[:,:,::-1,:]
+    # rot -90 by transpose and flipy 
+    ac = 6
+    augmented_batch[ac*bs:(ac+1)*bs] = transpose[:,:,::-1,:]
+
+    if gt!=None:
+        # apply inverse transform on gt batch
+        augment_gt_shape = list(gt.shape)
+        augment_gt_shape[0] *= 7
+        augmented_gt = np.empty(augment_gt_shape, dtype=theano.config.floatX)
+
+        dgt = {}
+        dgt["left"] = gt[:,0,:,:]
+        dgt["up"] = gt[:,1,:,:]
+        dgt["right"] = gt[:,2,:,:]
+        dgt["down"] = gt[:,3,:,:]
+        # original
+        ac = 0
+        augmented_gt[ac*bs:(ac+1)*bs] = gt
+        # flip x
+        ac = 1
+        augmented_gt[ac*bs:(ac+1)*bs] = np.stack([dgt["right"],
+                                                     dgt["up"],
+                                                     dgt["left"],
+                                                     dgt["down"]
+                                                    ]).swapaxes(0,1)
+        # flip y
+        ac = 2
+        augmented_gt[ac*bs:(ac+1)*bs] = np.stack([dgt["left"],
+                                                     dgt["down"],
+                                                     dgt["right"],
+                                                     dgt["up"]
+                                                    ]).swapaxes(0,1)
+        # turn 180
+        ac = 3
+        augmented_gt[ac*bs:(ac+1)*bs] = np.stack([dgt["left"],
+                                                     dgt["up"],
+                                                     dgt["right"],
+                                                     dgt["down"]
+                                                    ]).swapaxes(0,1)
+        # transpose
+        ac = 4
+        augmented_gt[ac*bs:(ac+1)*bs] = np.stack([dgt["up"],
+                                                     dgt["left"],
+                                                     dgt["down"],
+                                                     dgt["right"]
+                                                    ]).swapaxes(0,1)
+        # rot 90 by transpose and flipx
+        ac = 5
+        augmented_gt[ac*bs:(ac+1)*bs] = np.stack([dgt["down"],
+                                                  dgt["left"],
+                                                  dgt["up"],
+                                                  dgt["right"]
+                                                    ]).swapaxes(0,1)
+        # rot -90 by transpose and flipy 
+        ac = 6
+        augmented_gt[ac*bs:(ac+1)*bs] = np.stack([dgt["up"],
+                                                  dgt["right"],
+                                                  dgt["down"],
+                                                  dgt["left"]
+                                                    ]).swapaxes(0,1)
+        return augmented_batch, augmented_gt
+
+    if direction != None:
+        # apply inverse transform to direction
+        augment_dir_shape = list(direction.shape)
+        augment_dir_shape[0] *= 7
+        augmented_dir = np.empty(augment_shape, dtype=np.int32)
+
+            # original
+        ac = 0
+        augmented_dir[ac*bs:(ac+1)*bs] = direction
+        # flip x
+        ac = 1
+        augmented_dir[ac*bs:(ac+1)*bs] = direction
+        augmented_dir[ac*bs:(ac+1)*bs][direction == 0] = 2
+        augmented_dir[ac*bs:(ac+1)*bs][direction == 2] = 0
+        # flip y
+        ac = 2
+        augmented_dir[ac*bs:(ac+1)*bs] = direction
+        augmented_dir[ac*bs:(ac+1)*bs][direction == 1] = 3
+        augmented_dir[ac*bs:(ac+1)*bs][direction == 3] = 1
+
+        # turn 180
+        ac = 3
+        augmented_dir[ac*bs:(ac+1)*bs] = (direction + 2) % 4
+
+        ac = 4
+        augmented_dir[ac*bs:(ac+1)*bs][direction == 0] = 1
+        augmented_dir[ac*bs:(ac+1)*bs][direction == 1] = 0
+        augmented_dir[ac*bs:(ac+1)*bs][direction == 2] = 3
+        augmented_dir[ac*bs:(ac+1)*bs][direction == 3] = 2
+
+        # rot 90 by transpose and flipx
+        ac = 5
+        augmented_dir[ac*bs:(ac+1)*bs] = (direction + 3) % 4
+        # rot -90 by transpose and flipy 
+        ac = 6
+        augmented_dir[ac*bs:(ac+1)*bs] = (direction + 1) % 4
+        return augmented_batch, augmented_dir
+
+    return augmented_batch
+
+    def average_ouput(output):
+        augm_out = output.reshape(-1,7,4,1,1)
+        output_shape = list(augm_out.shape)
+        del output_shape[1]
+        mean_out = np.empty(output_shape)
+        c = np.arange(7)
+        mean_out[:,0,:,:] = np.mean(augm_out[:,c,[0,2,0,2,1,3,1],:,:],axis=1)
+        mean_out[:,1,:,:] = np.mean(augm_out[:,c,[1,1,3,3,0,0,2],:,:],axis=1)
+        mean_out[:,2,:,:] = np.mean(augm_out[:,c,[2,0,2,0,3,1,3],:,:],axis=1)
+        mean_out[:,3,:,:] = np.mean(augm_out[:,c,[3,3,1,1,2,2,4],:,:],axis=1)
+        return mean_out
 
 if __name__ == '__main__':
 
