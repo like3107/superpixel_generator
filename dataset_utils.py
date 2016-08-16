@@ -596,9 +596,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def get_center_i_from_queue(self, b):
 
-        def error_index(b, id1, id2):
-            return b, min(id1, id2), max(id1, id2)
-
         height, _, center_x, center_y, Id, direction, error_indicator, \
             time_put = super(HoneyBatcherPath, self).get_center_i_from_queue(b)
 
@@ -625,8 +622,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         # check for errors in neighbor regions, type II
         if self.find_errors_b:
-            self.check_type_II_errors(center_x, center_y, error_index, Id,
-                                      b)
+            self.check_type_II_errors(center_x, center_y, Id, b)
         # print 'b', b, 'height', height, 'centerxy', center_x, center_y, 'Id', Id, \
         #     direction, error_indicator, time_put
         return height, _, center_x, center_y, Id, direction, error_indicator, \
@@ -717,6 +713,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                         assert(current_direction >= 0)
                     current_direction = d
                     prev_in_other_region = in_other_region
+
                 if plateau_backtrace:
                     new_pos, new_d = self.find_end_of_plateau(error_I["e1_pos"],
                                                               error_I["e1_direction"],
@@ -990,6 +987,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_label_batch[b, :, :]})
         plot_images.append({"title": "Error Map",
                             'im': self.global_errormap[b, 0, :, :]})
+        plot_images.append({"title": "Overflow Map",
+                            'im': self.global_errormap[b, 1, :, :]})
         plot_images.append({"title": "path Map",
                             'scatter': np.array(
                                 [np.array(e["large_pos"]) - self.pad for e in
