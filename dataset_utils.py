@@ -214,7 +214,7 @@ class HoneyBatcherPredict(object):
         if inherit_code:
             return ind_b, ind_x, ind_y
 
-    def get_seed_coords(self, sigma=1.5, min_dist=4, thresh=0.3):
+    def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.25):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
@@ -1389,7 +1389,7 @@ def augment_batch(batch, gt=None, direction=None):
         # apply inverse transform to direction
         augment_dir_shape = list(direction.shape)
         augment_dir_shape[0] *= 7
-        augmented_dir = np.empty(augment_shape, dtype=np.int32)
+        augmented_dir = np.empty(augment_dir_shape, dtype=np.int32)
 
             # original
         ac = 0

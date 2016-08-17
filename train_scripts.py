@@ -20,7 +20,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'augment_all_the_things'
+    net_name = 'augment_all_the_things_2'
     label_path = './data/volumes/label_a.h5'
     label_path_val = './data/volumes/label_b.h5'
     height_gt_path = './data/volumes/height_a.h5'
@@ -61,7 +61,7 @@ def train_script_v1():
     c.use('gpu0')
     pre_train_iter = 100000
     max_iter = 10000000000
-    save_counter = 100000        # save every n iterations
+    save_counter = 10000        # save every n iterations
     # fine tune
     margin = 0.5
 
@@ -100,8 +100,12 @@ def train_script_v1():
         loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
             loss_fine(l_in, l_in_direction, l_out_direction,
                           L1_weight=regularization, margin=margin)
-        Memento1 = du.BatchMemento(batch_size_ft, 100)
-        Memento2 = du.BatchMemento(batch_size_ft, 100)
+        if augment_ft:
+            Memento1 = du.BatchMemento(7*batch_size_ft, 2*7*batch_size_ft)
+            Memento2 = du.BatchMemento(7*batch_size_ft, 2*7*batch_size_ft)
+        else:
+            Memento1 = du.BatchMemento(batch_size_ft, 2*batch_size_ft)
+            Memento2 = du.BatchMemento(batch_size_ft, 2*batch_size_ft)
 
     print 'Loading data and Priority queue init'
     bm = BM(membrane_path, label=label_path,
@@ -335,11 +339,11 @@ def train_script_v1():
                     "train_iteration_%08i_counter_%i_freevoxel_%i_b_%i" %
                     (iteration, bm.counter, free_voxel, b),
                     path=save_net_path + '/images/', b=b)
-            bm.draw_batch(membrane,
-                          path=save_net_path+ '/images/',
-                          image_name='bat_in_%i_b' % (iteration),
-                          gt=gt,
-                          probs=probs)
+            # bm.draw_batch(membrane,
+            #               path=save_net_path+ '/images/',
+            #               image_name='bat_in_%i_b' % (iteration),
+            #               gt=gt,
+            #               probs=probs)
 
         # if iteration % 100000 == 0:
         #     bm.serialize_to_h5("finetunging_ser_batch_%08i_counter_%i" %
