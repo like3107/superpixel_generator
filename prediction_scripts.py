@@ -74,13 +74,12 @@ def pred_script_v2(
                data=prediction)
     exit()
 
-
 def pred_script_v2_wrapper(
-        chunk_size=16,
+        chunk_size=32,
         slices_total=64,
-        net_path='./data/nets/cnn_v5/',
-        net_number='net_1300000',
-        net_name='cnn_v5',
+        net_path='./data/nets/cnn_v5_ft/',
+        net_number='net_finetuning',
+        net_name='cnn_v5_ft',
         global_edge_len=300,
         membrane_path='./data/volumes/membranes_first_repr.h5',
         raw_path='./data/volumes/raw_first_repr.h5',
@@ -88,7 +87,10 @@ def pred_script_v2_wrapper(
 
     assert (slices_total % chunk_size == 0)
     assert (os.path.exists(net_path))
-    pred_save_folder = net_path + '/preds_0/'
+    assert (os.path.exists(membrane_path))
+    assert (os.path.exists(raw_path))
+
+    pred_save_folder = net_path + '/preds_small_0/'
 
     if not os.path.exists(pred_save_folder):
         os.mkdir(pred_save_folder)
