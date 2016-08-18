@@ -1401,7 +1401,7 @@ def augment_batch(batch, gt=None, direction=None):
     augmented_batch[ac*bs:(ac+1)*bs] = batch
     # flip x
     ac = 1
-    augmented_batch[ac*bs:(ac+1)*bs] = batch[:,:,::-1,:]
+    augmented_batch[ac*bs:(ac+1)*bs] = batch[:, :, ::-1, :]
     # flip y
     ac = 2
     augmented_batch[ac*bs:(ac+1)*bs] = batch[:,:,:,::-1]
@@ -1419,7 +1419,7 @@ def augment_batch(batch, gt=None, direction=None):
     ac = 6
     augmented_batch[ac*bs:(ac+1)*bs] = transpose[:,:,::-1,:]
 
-    if gt!=None:
+    if gt is not None:
         # apply inverse transform on gt batch
         augment_gt_shape = list(gt.shape)
         augment_gt_shape[0] *= 7

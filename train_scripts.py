@@ -1,5 +1,6 @@
 import matplotlib
 matplotlib.use('Agg')
+# matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
 import theano
@@ -12,6 +13,7 @@ import numpy as np
 from theano.sandbox import cuda as c
 import h5py
 
+
 def train_script_v1():
     print 'train script v1'
     # data params:
@@ -20,17 +22,15 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'augment_all_the_things_2'
-    label_path = './data/volumes/label_a.h5'
-    label_path_val = './data/volumes/label_b.h5'
-    height_gt_path = './data/volumes/height_a.h5'
-    height_gt_key = 'height'
-    height_gt_path_val = './data/volumes/height_b.h5'
-    height_gt_key_val = 'height'
-    raw_path = './data/volumes/raw_a.h5'
-    raw_path_val = './data/volumes/raw_b.h5'
-    membrane_path = './data/volumes/membranes_a.h5'
-    membrane_path_val = './data/volumes/membranes_b.h5'
+    net_name = 'cnn_v5_augm'
+    label_path = './data/volumes/label_second.h5'
+    label_path_val = './data/volumes/label_first_repr.h5'
+    height_gt_path = './data/volumes/height_second.h5'
+    height_gt_path_val = './data/volumes/height_first_repr.h5'
+    raw_path = './data/volumes/raw_second.h5'
+    raw_path_val = './data/volumes/raw_first_repr.h5'
+    membrane_path = './data/volumes/membranes_second.h5'
+    membrane_path_val = './data/volumes/membranes_first_repr.h5'
     save_net_path = './data/nets/' + net_name + '/'
     load_net_path = './data/nets/rough/net_2500000'      # if load true
     load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
@@ -59,9 +59,9 @@ def train_script_v1():
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')
-    pre_train_iter = 100000
+    pre_train_iter = 10000000000
     max_iter = 10000000000
-    save_counter = 10000        # save every n iterations
+    save_counter = 100000        # save every n iterations
     # fine tune
     margin = 0.5
 
@@ -90,10 +90,10 @@ def train_script_v1():
     loss_train_f, loss_valid_f, probs_f = \
         loss(l_in, target_t, l_out, L1_weight=regularization)
 
-    debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
-                    [lasagne.layers.get_output(l_out, deterministic=True),
-                    lasagne.layers.get_output(l_out_direction, deterministic=True)],
-                              allow_input_downcast=True)
+    # debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
+    #                 [lasagne.layers.get_output(l_out, deterministic=True),
+    #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
+    #                           allow_input_downcast=True)
 
     if fine_tune_b:
         print 'compiling theano finetuningfunctions'
@@ -110,7 +110,6 @@ def train_script_v1():
     print 'Loading data and Priority queue init'
     bm = BM(membrane_path, label=label_path,
            height_gt=height_gt_path,
-           height_gt_key=height_gt_key,
            raw=raw_path,
            batch_size=batch_size,
            patch_len=patch_len, global_edge_len=global_edge_len,
@@ -122,7 +121,6 @@ def train_script_v1():
     if val_b:
         bm_val = BM(membrane_path_val, label=label_path_val,
                     height_gt=height_gt_path_val,
-                    height_gt_key=height_gt_key_val,
                     raw=raw_path_val,
                     batch_size=batch_size,
                     find_errors_b=find_errors,
@@ -133,10 +131,7 @@ def train_script_v1():
 
     # init a network folder where all images, models and hyper params are stored
     if save_net_b:
-        if not os.path.exists(save_net_path):
-            os.mkdir(save_net_path)
-        if not os.path.exists(save_net_path + '/images'):
-            os.mkdir(save_net_path + '/images')
+        u.create_network_folder_structure(save_net_path)
 
     if load_net_b:
         print "loading network parameters from ",load_net_path

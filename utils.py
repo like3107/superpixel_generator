@@ -3,6 +3,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 import lasagne as las
 import dataset_utils as du
+import os
+
 np.random.seed(1234)
 fixed_rand = np.random.rand(256, 3)
 import multiprocessing
@@ -136,6 +138,19 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
     du.save_h5(save_path + net_name, h5_keys, h5_values, overwrite='w')
 
 
+def create_network_folder_structure(save_net_path, train_mode=True):
+    if not os.path.exists(save_net_path):
+        os.mkdir(save_net_path)
+    if not os.path.exists(save_net_path + '/images'):
+        os.mkdir(save_net_path + '/images')
+    if train_mode:
+        code_save_folder = '/code_train'
+    else:
+        code_save_folder = '/code_predict'
+    if not os.path.exists(save_net_path + code_save_folder):
+        os.mkdir(save_net_path + code_save_folder)
+    os.system('cp -rf *.py ' + save_net_path + code_save_folder)
+
 def load_network(load_path, l_last):
     h5_keys = []
     all_params = las.layers.get_all_params(l_last)
@@ -165,9 +180,11 @@ def plot_train_val_errors(all_y_values, x_values, save_path, names):
     return
 
 if __name__ == '__main__':
-    print random_color_map()
-    a = np.random.randint(0, 2, size=(100, 100))
-    print a.shape
-
-    plt.imshow(a, interpolation='none', cmap=random_color_map())
-    plt.show()
+    path = './data/nets/cnn_v5/preds_0'
+    concat_h5_in_folder(path, 8, 64, 300)
+    # print random_color_map()
+    # a = np.random.randint(0, 2, size=(100, 100))
+    # print a.shape
+    #
+    # plt.imshow(a, interpolation='none', cmap=random_color_map())
+    # plt.show()
