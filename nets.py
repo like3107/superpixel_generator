@@ -281,13 +281,15 @@ def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5,
             last_layer,
             las.regularization.l1)
 
-    loss_train = T.mean((l_out_train - target)**2) + L1_weight * L1_norm
-    loss_valid = T.mean((l_out_valid - target)**2)
+    loss_individual_batch = (l_out_train - target)**2
+
+    loss_train = T.mean(loss_individual_batch) + L1_weight * L1_norm
+    loss_valid = T.mean(loss_individual_batch)
     if update == 'adam':
         updates = las.updates.adam(loss_train, all_params)
     if update == 'sgd':
         updates = las.updates.sgd(loss_train, all_params, 0.0001)
-    loss_train_f = theano.function([l_in.input_var, target], loss_train,
+    loss_train_f = theano.function([l_in.input_var, target], [loss_train, loss_individual_batch],
                                    updates=updates)
 
     loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
@@ -345,17 +347,18 @@ def loss_updates_hydra_v5(l_in_data, l_in_direction, last_layer,
                                                      las.regularization.l1)
 
     # typeII - typeI + m
-    loss_train = T.mean((l_out_train[bs/2:] - l_out_train[:bs/2] + margin)**2)
+    individual_batch = (l_out_train[bs/2:] - l_out_train[:bs/2] + margin)**2
+    loss_train = T.mean(individual_batch)
     loss_train += L1_weight * L1_norm
 
-    loss_valid = T.mean((l_out_train[bs/2:] - l_out_train[:bs/2] + margin)**2)
+    loss_valid = T.mean(individual_batch)
 
     updates = las.updates.adam(loss_train, all_params)
 
     # theano funcs
     loss_train_f = theano.function([l_in_data.input_var,
                                     l_in_direction.input_var],
-                                   loss_train,
+                                   [loss_train, individual_batch],
                                    updates=updates)
     loss_valid_f = theano.function([l_in_data.input_var,
                                     l_in_direction.input_var],
