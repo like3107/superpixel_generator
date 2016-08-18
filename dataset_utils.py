@@ -537,7 +537,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         if isinstance(height_gt, str):
             self.height_gt = load_h5(height_gt, h5_key=height_gt_key,
-                                     slices=self.n_slices)[0]
+                                     slices=self.slices)[0]
         else:
             self.height_gt = height_gt
             if self.slices is not None:
