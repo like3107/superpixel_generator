@@ -9,7 +9,7 @@ import numpy as np
 import random
 from os import makedirs
 from os.path import exists
-
+from ws_timo import wsDtseeds
 from matplotlib import pyplot as plt
 import theano
 from Queue import PriorityQueue
@@ -19,7 +19,8 @@ from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
 from skimage.morphology import label
 import h5py
-from cv2 import dilate, erode
+# from cv2 import dilate, erode
+
 
 
 def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
@@ -90,6 +91,7 @@ def prepare_data_mc(segmentation):
         max_id = np.max(slice) + 1
     segmentation = np.swapaxes(segmentation, 0, 2).swapaxes(0, 1).astype(np.uint64)
     return segmentation
+
 
 def cut_consti_data(vol_path, names=['raw', 'label', 'membranes', 'height'],
                     h5_key=None, label=False):
@@ -189,7 +191,7 @@ class HoneyBatcherPredict(object):
     def __init__(self, membranes, raw=None, raw_key=None,
                  membrane_key=None,  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
-                 slices=None, **kwargs):
+                 slices=None, timos_seeds_b=True, **kwargs):
 
         """
         batch loader. Use either for predict. For valId and train use:
@@ -224,6 +226,7 @@ class HoneyBatcherPredict(object):
             self.raw = mirror_cube(self.raw, self.pad)
             self.membranes = mirror_cube(self.membranes, self.pad)
 
+        self.timos_seeds_b = timos_seeds_b
         self.rl = self.membranes.shape[1]  # includes padding
         self.n_slices = len(self.membranes)
         self.bs = batch_size
@@ -259,13 +262,11 @@ class HoneyBatcherPredict(object):
     def prepare_global_batch(self, start=0, inherit_code=False):
         # initialize two global batches = region where CNNs compete
         # against each other
-
         # get indices for global batches in raw/ label cubes
         if start is None:
             ind_b = np.random.permutation(self.n_slices)[:self.bs]
         else:
             ind_b = np.arange(start + self.bs)
-
         # indices to raw, correct for label which edge len is -self.pl shorter
         ind_x = np.random.randint(0,
                                   self.rl - self.global_el + 1,
@@ -273,8 +274,6 @@ class HoneyBatcherPredict(object):
         ind_y = np.random.randint(0,
                                   self.rl - self.global_el + 1,
                                   size=self.bs)
-
-        # slice from the data cubes
         for b in range(self.bs):
             self.global_batch[b, :, :] = \
                 self.membranes[ind_b[b],
@@ -292,27 +291,39 @@ class HoneyBatcherPredict(object):
         Seeds by minima of dist trf of thresh of memb prob
         :return:
         """
-        bin_membrane = np.ones(self.label_shape, dtype=np.bool)
-        dist_trf = np.zeros(self.label_shape)
-        self.global_seeds = []
-        for b in range(self.bs):
-            bin_membrane[b, :, :][self.global_batch
-                                  [b,
-                                   self.pad:-self.pad,
-                                   self.pad:-self.pad] > thresh] = 0
-            dist_trf[b, :, :] = gaussian_filter(
-                distance_transform_edt(bin_membrane[b, :, :]), sigma=sigma)
-            # seeds in coord system of labels
-            seeds = np.array(
-                peak_local_max(dist_trf[b, :, :], exclude_border=0,
-                                threshold_abs=None, min_distance=min_dist))
-            seeds += self.pad
-            if len(seeds) == 0:
-                print 'WARNING no seeds found (no minima in global batch). ' \
-                      'Setting seed to middle'
-                seeds = np.array([self.global_el / 2, self.global_el / 2])
+        if not self.timos_seeds_b:
+            # own seed algo
+            bin_membrane = np.ones(self.label_shape, dtype=np.bool)
+            dist_trf = np.zeros(self.label_shape)
+            self.global_seeds = []
+            for b in range(self.bs):
+                bin_membrane[b, :, :][self.global_batch
+                                      [b,
+                                       self.pad:-self.pad,
+                                       self.pad:-self.pad] > thresh] = 0
+                dist_trf[b, :, :] = gaussian_filter(
+                    distance_transform_edt(bin_membrane[b, :, :]), sigma=sigma)
+                # seeds in coord system of labels
+                seeds = np.array(
+                    peak_local_max(dist_trf[b, :, :], exclude_border=0,
+                                    threshold_abs=None, min_distance=min_dist))
+                seeds += self.pad
+                if len(seeds) == 0:
+                    print 'WARNING no seeds found (no minima in global batch). ' \
+                          'Setting seed to middle'
+                    seeds = np.array([self.global_el / 2, self.global_el / 2])
 
-            self.global_seeds.append(seeds)
+                self.global_seeds.append(seeds)
+        else:
+            print 'timos seeds'
+            self.global_seeds = []
+            for b in range(self.bs):
+                x, y = wsDtseeds(
+                    self.global_batch[b, self.pad:-self.pad, self.pad:-self.pad],
+                    thresh, 15, 1.6, groupSeeds=True)
+                seeds = \
+                    [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
+                self.global_seeds.append(seeds)
 
     def get_seed_ids(self):
         assert (self.global_seeds is not None)  # call get seeds first
@@ -518,14 +529,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_method='clip',
-                 ):
+                 timos_seeds_b=True):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
                                                raw=raw, raw_key=raw_key,
                                                batch_size=batch_size,
                                                global_edge_len=global_edge_len,
                                                patch_len=patch_len,
-                                               padding_b=padding_b)
+                                               padding_b=padding_b,
+                                               timos_seeds_b=timos_seeds_b)
 
         if isinstance(label, str):
             self.labels = load_h5(label, h5_key=label_key,

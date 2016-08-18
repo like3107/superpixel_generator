@@ -22,19 +22,25 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'cnn_v5_augm'
-    label_path = './data/volumes/label_second.h5'
-    label_path_val = './data/volumes/label_first_repr.h5'
-    height_gt_path = './data/volumes/height_second.h5'
-    height_gt_path_val = './data/volumes/height_first_repr.h5'
-    raw_path = './data/volumes/raw_second.h5'
-    raw_path_val = './data/volumes/raw_first_repr.h5'
-    membrane_path = './data/volumes/membranes_second.h5'
-    membrane_path_val = './data/volumes/membranes_first_repr.h5'
+    net_name = 'trash'
+
+    train_version = 'first_repr'
+    raw_path = './data/volumes/raw_%s.h5' % train_version
+    membrane_path = './data/volumes/membranes_%s.h5' % train_version
+    label_path = './data/volumes/label_%s.h5' % train_version
+    height_gt_path = './data/volumes/height_%s.h5' % train_version
+    timos_seeds_b = True
+
+    valid_version = 'first_repr'
+    label_path_val = './data/volumes/label_%s.h5' % valid_version
+    height_gt_path_val = './data/volumes/height_%s.h5' % valid_version
+    raw_path_val = './data/volumes/raw_%s.h5' % valid_version
+    membrane_path_val = './data/volumes/membranes_%s.h5' % valid_version
+
     save_net_path = './data/nets/' + net_name + '/'
-    load_net_path = './data/nets/rough/net_2500000'      # if load true
-    load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
     load_net_path = './data/nets/path_test/net_5200000'      # if load true
+
+
     debug_path = save_net_path + "/" + str("batches")
     if not os.path.exists(debug_path):
         os.makedirs(debug_path)
@@ -85,7 +91,6 @@ def train_script_v1():
         raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
             du.generate_dummy_data(batch_size, global_edge_len, patch_len)
 
-
     print 'compiling theano functions'
     loss_train_f, loss_valid_f, probs_f = \
         loss(l_in, target_t, l_out, L1_weight=regularization)
@@ -115,7 +120,7 @@ def train_script_v1():
            patch_len=patch_len, global_edge_len=global_edge_len,
            padding_b=False,
            find_errors_b=find_errors,
-           clip_method=clip_method)
+           clip_method=clip_method, timos_seeds_b=timos_seeds_b)
     bm.init_batch()
 
     if val_b:
@@ -126,7 +131,9 @@ def train_script_v1():
                     find_errors_b=find_errors,
                     patch_len=patch_len, global_edge_len=global_edge_len,
                     padding_b=False,
-                    clip_method=clip_method)
+                    clip_method=clip_method,
+                    timos_seeds_b=timos_seeds_b)
+
         bm_val.init_batch()  # Training
 
     # init a network folder where all images, models and hyper params are stored
@@ -157,7 +164,7 @@ def train_script_v1():
 
         # predict val
         if val_b:
-            membrane_val, gt, seeds_val, ids_val = bm_val.get_batches()
+            membrane_val, gt_val, seeds_val, ids_val = bm_val.get_batches()
             probs_val = probs_f(membrane_val)
             bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
@@ -310,7 +317,7 @@ def train_script_v1():
                 fine_tune_b):
             loss_train_no_reg = float(loss_valid_f(membrane, gt))
             if val_b:
-                loss_valid = float(loss_valid_f(membrane_val, gt))
+                loss_valid = float(loss_valid_f(membrane_val, gt_val))
             else:
                 loss_valid = 100.
             print '\r loss train %.4f, loss train_noreg %.4f, ' \
