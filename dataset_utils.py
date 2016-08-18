@@ -1449,10 +1449,10 @@ def augment_batch(batch, gt=None, direction=None):
                                                     ]).swapaxes(0,1)
         # turn 180
         ac = 3
-        augmented_gt[ac*bs:(ac+1)*bs] = np.stack([dgt["left"],
-                                                     dgt["up"],
-                                                     dgt["right"],
-                                                     dgt["down"]
+        augmented_gt[ac*bs:(ac+1)*bs] = np.stack([dgt["right"],
+                                                     dgt["down"],
+                                                     dgt["left"],
+                                                     dgt["up"]
                                                     ]).swapaxes(0,1)
         # transpose
         ac = 4
