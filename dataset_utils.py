@@ -1243,55 +1243,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
 
 
-class BatchMemento:
-    """
-    Remembers slices for CNN in style bc01
-    """
-    def __init__(self, bs, memory_size, memorize_direction=True,
-                 random_return=False):
-        self.bs = bs
-        self.ms = memory_size
-        self.memory = None
-        self.full_b = False
-        self.counter = 0
-        self.memorize_dir_b = memorize_direction
-        self.direction_memory = None
-
-    def add_to_memory(self, mini_b, dir_b):
-        if self.memory is None:
-            self.memory = np.zeros(([self.ms] + list(mini_b.shape[-3:])),
-                                   dtype=theano.config.floatX)
-            self.direction_memory = np.zeros((self.ms), dtype=np.int32)
-        if len(mini_b.shape) == 3:  # if single slice
-
-            slices_to_add = 1
-        else:
-            slices_to_add = mini_b.shape[0]
-
-        if self.counter+slices_to_add > self.ms:
-            np.roll(self.memory, self.ms - self.counter+slices_to_add, axis=0)
-            np.roll(self.direction_memory, self.ms - self.counter+slices_to_add, axis=0)
-            self.counter = self.ms - slices_to_add
-
-        self.memory[self.counter:self.counter+slices_to_add, :, :, :] = \
-            mini_b
-        self.direction_memory[self.counter:self.counter+slices_to_add] = \
-            dir_b
-        self.counter += slices_to_add
-
-    def is_ready(self):
-        return self.counter >= self.bs
-
-    def get_batch(self):
-        assert(self.is_ready())
-        return self.memory[self.counter-self.bs:self.counter], \
-               self.direction_memory[self.counter-self.bs:self.counter]
-
-    def clear_memory(self):
-        self.memory = None
-        self.direction_memory = None
-        self.counter = 0
-
 
 class DummyBM:
     def __init__(self, batch_size, patch_len, n_channels):
@@ -1517,17 +1468,24 @@ def augment_batch(batch, gt=None, direction=None):
 
     return augmented_batch
 
-    def average_ouput(output):
-        augm_out = output.reshape(-1,7,4,1,1)
-        output_shape = list(augm_out.shape)
-        del output_shape[1]
-        mean_out = np.empty(output_shape)
+def average_ouput(output, ft=False):
+    aug_out_shape = list(output.shape)
+    aug_out_shape[0] = 7
+    aug_out_shape.insert(0,-1)
+    augm_out = output.reshape(aug_out_shape)
+    output_shape = list(augm_out.shape)
+    del output_shape[1]
+    mean_out = np.empty(output_shape)
+
+    if ft:
+        mean_out = np.mean(augm_out,axis=1)
+    else:
         c = np.arange(7)
         mean_out[:,0,:,:] = np.mean(augm_out[:,c,[0,2,0,2,1,3,1],:,:],axis=1)
         mean_out[:,1,:,:] = np.mean(augm_out[:,c,[1,1,3,3,0,0,2],:,:],axis=1)
         mean_out[:,2,:,:] = np.mean(augm_out[:,c,[2,0,2,0,3,1,3],:,:],axis=1)
-        mean_out[:,3,:,:] = np.mean(augm_out[:,c,[3,3,1,1,2,2,4],:,:],axis=1)
-        return mean_out
+        mean_out[:,3,:,:] = np.mean(augm_out[:,c,[3,3,1,1,2,2,0],:,:],axis=1)
+    return mean_out
 
 if __name__ == '__main__':
 

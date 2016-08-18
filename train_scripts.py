@@ -11,7 +11,9 @@ import nets
 import dataset_utils as du
 import numpy as np
 from theano.sandbox import cuda as c
+import experience_replay as exp
 import h5py
+import sys
 
 
 def train_script_v1():
@@ -22,7 +24,7 @@ def train_script_v1():
     save_net_b = True
     load_net_b = False
 
-    net_name = 'cnn_v5_augm'
+    net_name = 'augment_all_the_things_2'
     label_path = './data/volumes/label_second.h5'
     label_path_val = './data/volumes/label_first_repr.h5'
     height_gt_path = './data/volumes/height_second.h5'
@@ -46,7 +48,7 @@ def train_script_v1():
     batch_size_ft = 8
     global_edge_len = 300
     dummy_data_b = False
-    val_b = False
+    val_b = True
     find_errors = True
     reset_after_fine_tune = False
     fast_reset = False
@@ -55,11 +57,14 @@ def train_script_v1():
     clip_method = 'clip'
     augment_pretraining = True
     augment_ft = True
+    exp_bs = 48
+    exp_ft_bs = 8
+    exp_warmstart = 1000
 
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')
-    pre_train_iter = 10000000000
+    pre_train_iter = 10000
     max_iter = 10000000000
     save_counter = 100000        # save every n iterations
     # fine tune
@@ -95,17 +100,14 @@ def train_script_v1():
     #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
     #                           allow_input_downcast=True)
 
+    Memento = exp.BatchMemento()
+
     if fine_tune_b:
         print 'compiling theano finetuningfunctions'
         loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
             loss_fine(l_in, l_in_direction, l_out_direction,
                           L1_weight=regularization, margin=margin)
-        if augment_ft:
-            Memento1 = du.BatchMemento(7*batch_size_ft, 2*7*batch_size_ft)
-            Memento2 = du.BatchMemento(7*batch_size_ft, 2*7*batch_size_ft)
-        else:
-            Memento1 = du.BatchMemento(batch_size_ft, 2*batch_size_ft)
-            Memento2 = du.BatchMemento(batch_size_ft, 2*batch_size_ft)
+        Memento_ft = exp.BatchMemento()
 
     print 'Loading data and Priority queue init'
     bm = BM(membrane_path, label=label_path,
@@ -157,7 +159,7 @@ def train_script_v1():
 
         # predict val
         if val_b:
-            membrane_val, gt, seeds_val, ids_val = bm_val.get_batches()
+            membrane_val, gt_val, seeds_val, ids_val = bm_val.get_batches()
             probs_val = probs_f(membrane_val)
             bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
@@ -177,14 +179,17 @@ def train_script_v1():
 
         # fine-tuning: update height difference errors
         if iteration % 100 == 0:
-            if (Memento1.counter + len(bm.global_error_dict) >= batch_size_ft)\
-                    and iteration > pre_train_iter \
-                    and fine_tune_b:
+            if fine_tune_b \
+                    and (Memento_ft.count_new() + len(bm.global_error_dict) >= batch_size_ft)\
+                    and iteration > pre_train_iter:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
 
-                Memento1.add_to_memory(error_b_type1, dir1)
-                Memento2.add_to_memory(error_b_type2, dir2)
+                print "mem size ", len(Memento_ft), Memento_ft.count_new(), len(bm.global_error_dict)
+
+                Memento_ft.add_to_memory(
+                    exp.stack_batch(error_b_type1, error_b_type2),
+                    exp.stack_batch(dir1, dir2))
 
                 # print debug_f(error_b_type1, dir1)
                 # print debug_f(error_b_type2, dir2)
@@ -217,27 +222,29 @@ def train_script_v1():
                                                 path=save_net_path + '/images/')
 
                 # fine tuning
-                assert(Memento1.is_ready())
-                assert(Memento2.is_ready())
-
                 print 'Finetuning...'
                 ft_iteration += 1
-                batch_ft_t1, dir_t1 = Memento1.get_batch()
-                batch_ft_t2, dir_t2 = Memento2.get_batch()
+                batch_ft, dir_ft, mem_choice_ft = Memento_ft.get_batch(batch_size_ft+exp_ft_bs)
 
                 if augment_ft:
-                    batch_ft_t1, dir_t1 = du.augment_batch(batch_ft_t1, direction=dir_t1)
-                    batch_ft_t2, dir_t2 = du.augment_batch(batch_ft_t2, direction=dir_t2)
+                    batch_ft_t1, dir_t1 = du.augment_batch(batch_ft[:,0], direction=dir_ft[:,0])
+                    batch_ft_t2, dir_t2 = du.augment_batch(batch_ft[:,1], direction=dir_ft[:,1])
+                    batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
+                    batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
+                else:
+                    batch_ft = exp.flatten_stack(batch_ft)
+                    dir_ft = exp.flatten_stack(dir_ft)
 
-                batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
-                batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
-
-                assert(np.any(batch_ft_t1 > batch_ft_t2))
                 if val_b:
                     ft_loss_train_noreg = loss_valid_fine_f(batch_ft, batch_dir_ft)
                 probs_fine = probs_fine_f(batch_ft, batch_dir_ft)
 
-                ft_loss_train = loss_train_fine_f(batch_ft, batch_dir_ft)
+                ft_loss_train, individual_loss_fine = loss_train_fine_f(batch_ft, batch_dir_ft)
+
+                if augment_ft:
+                    individual_loss_fine = du.average_ouput(individual_loss_fine, ft=True)
+
+                Memento_ft.update_loss(individual_loss_fine, mem_choice_ft)
 
                 with h5py.File(debug_path+"/ft_batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
                     out_h5.create_dataset("dir_t1",data=dir_t1 ,compression="gzip")
@@ -255,8 +262,6 @@ def train_script_v1():
                 u.plot_train_val_errors(fine_tune_losses, range(ft_iteration),
                                         save_net_path + 'ft_training.png',
                                         ['ft loss no reg no dropout', 'ft loss'])
-                Memento1.clear_memory()
-                Memento2.clear_memory()
 
                 if val_b:
                     bm_val.init_batch()
@@ -271,11 +276,26 @@ def train_script_v1():
 
         # pretraining
         if iteration % 10 == 0 and iteration < pre_train_iter:
+
+            if exp_bs > 0:
+                Memento.add_to_memory(membrane, gt)
+                # start using exp replay only after #exp_warmstart iterations
+                if exp_warmstart < iteration:
+                    membrane, gt, mem_choice = Memento.get_batch(batch_size+exp_bs)
+
             if augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
-                loss_train = float(loss_train_f(a_membrane, a_gt))
+                loss_train, individual_loss = loss_train_f(a_membrane, a_gt)
+                individual_loss = du.average_ouput(individual_loss)
             else:
-                loss_train = float(loss_train_f(membrane, gt))
+                loss_train, individual_loss = loss_train_f(membrane, gt)
+
+            if exp_bs > 0 and exp_warmstart < iteration:
+                Memento.update_loss(individual_loss, mem_choice)
+
+                if iteration % 1000 == 0:
+                    Memento.forget()
+
 
         # reset bms
         if free_voxel <= 201 \
@@ -289,8 +309,9 @@ def train_script_v1():
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
 
-                Memento1.add_to_memory(error_b_type1, dir1)
-                Memento2.add_to_memory(error_b_type2, dir2)
+                Memento_ft.add_to_memory(
+                    exp.stack_batch(error_b_type1, error_b_type2),
+                    exp.stack_batch(dir1, dir2))
 
             bm.draw_debug_image(
                 "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
@@ -306,16 +327,17 @@ def train_script_v1():
             free_voxel = free_voxel_empty
 
         # monitor training and plot loss
-        if iteration % 1000 == 0 and (iteration < pre_train_iter or not
+        if iteration % 100 == 0 and (iteration < pre_train_iter or not
                 fine_tune_b):
             loss_train_no_reg = float(loss_valid_f(membrane, gt))
             if val_b:
-                loss_valid = float(loss_valid_f(membrane_val, gt))
+                loss_valid = float(loss_valid_f(membrane_val, gt_val))
             else:
                 loss_valid = 100.
-            print '\r loss train %.4f, loss train_noreg %.4f, ' \
+            print '\x1b[2K\r loss train %.4f, loss train_noreg %.4f, ' \
                   'loss_validation %.4f, iteration %i' % \
                   (loss_train, loss_train_no_reg, loss_valid, iteration),
+            sys.stdout.flush()
             if save_net_b:
                 iterations.append(iteration)
                 losses[0].append(loss_train)

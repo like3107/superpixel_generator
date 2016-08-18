@@ -1,5 +1,5 @@
 import numpy as np
-
+import random
 
 class BatchMemento:
     """
@@ -40,7 +40,6 @@ class BatchMemento:
 
         # if there is space left in the batch add from memory
         residual = batchsize-len(choices)
-        print "choices",choices
         if residual > 0:
             choices += np.random.choice(np.arange(len(self)),
                                            size=residual,
@@ -56,7 +55,7 @@ class BatchMemento:
 
     def update_loss(self, loss ,choices):
         for l,c in zip(loss, choices):
-            self.memory[c]["loss"] = l
+            self.memory[c]["loss"] = np.mean(l)
 
     def get_priority(self):
         # the epsilon offset ensures that all samples have a non zero chance
@@ -65,13 +64,26 @@ class BatchMemento:
                             else m["loss"]+self.epsilon\
                             for m in self.memory],dtype=np.float32)
 
-
         priority /= np.sum(priority)
         return priority
+
+    def count_new(self):
+        return len([0 for m in self.memory if m["loss"] is None])
+
+    def forget(self, p=0.1):
+        random.shuffle(self.memory)
+        self.memory = self.memory[:int(p*len(self))]
 
     def clear_memory(self):
         self.memory = []
         self.priority = []
+
+def stack_batch(b1, b2):
+    return np.stack((b1,b2)).swapaxes(0,1)
+
+def flatten_stack(batch):
+    return np.concatenate((batch[:,0],batch[:,1]),axis=0)
+
 
 
 if __name__ == '__main__':
