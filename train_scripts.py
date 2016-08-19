@@ -22,9 +22,9 @@ def train_script_v1():
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
     save_net_b = True
-    load_net_b = False
+    load_net_b = True
 
-    net_name = 'trash'
+    net_name = 'exp_replay_path'
 
     train_version = 'first_repr'
     raw_path = './data/volumes/raw_%s.h5' % train_version
@@ -40,10 +40,7 @@ def train_script_v1():
     membrane_path_val = './data/volumes/membranes_%s.h5' % valid_version
 
     save_net_path = './data/nets/' + net_name + '/'
-    load_net_path = './data/nets/rough/net_2500000'      # if load true
-    load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
-    load_net_path = './data/nets/path_test/net_5200000'      # if load true
-
+    load_net_path = './data/nets/exp_replay/net_4500000'      # if load true
 
     debug_path = save_net_path + "/" + str("batches")
     if not os.path.exists(debug_path):
@@ -51,7 +48,6 @@ def train_script_v1():
     if not os.path.exists(debug_path):
         os.makedirs(debug_path)
 
-    tmp_path = '/media/liory/ladata/bla'        # debugging
     batch_size = 16         # > 4
     batch_size_ft = 8
     global_edge_len = 300
@@ -72,8 +68,8 @@ def train_script_v1():
     # training parameter
     BM = du.HoneyBatcherPath
     c.use('gpu0')
-    pre_train_iter = 10000
-    max_iter = 10000000000
+    pre_train_iter = 10
+    max_iter = 1000000000000
     save_counter = 100000        # save every n iterations
     # fine tune
     margin = 0.5
@@ -275,8 +271,6 @@ def train_script_v1():
 
                 if val_b:
                     bm_val.init_batch()
-                bm.init_batch()
-                free_voxel = free_voxel_empty
 
                 if reset_after_fine_tune:
                     bm.init_batch()
