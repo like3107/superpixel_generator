@@ -616,11 +616,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.global_id2gt.append(id2gt)
 
     def crop_timemap(self, center, b):
-        assert(center[0]-self.pad >= 0)
-        assert(center[1]-self.pad >= 0)
-        print 'change me crop time in du'
-        # assert(center[0]+self.pad < self.global_el - self.pad)
-        # assert(center[1]+self.pad < self.global_el - self.pad)
+        assert(0 <= center[0]-self.pad <= self.global_el - self.pad)
+        assert(0 <= center[1]-self.pad <= self.global_el - self.pad)
         return self.global_timemap[b, center[0]-self.pad:center[0]+self.pad,
                                    center[1]-self.pad:center[1]+self.pad]
 
