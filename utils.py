@@ -4,6 +4,7 @@ import numpy as np
 import lasagne as las
 import dataset_utils as du
 import os
+import sys
 
 np.random.seed(1234)
 fixed_rand = np.random.rand(256, 3)
@@ -108,6 +109,14 @@ def linear_growth(iteration, maximum=60**2-50, y_intercept=50,
         m = (maximum - y_intercept) / float(iterations_to_max)
         return int(m * iteration + y_intercept)
 
+def make_bash_executable(base_path,add_option=''):
+    script_file_name = base_path+'/code_train/run_training.sh'
+    f = open(script_file_name, 'w')
+    f.write("#!/bin/bash\n")
+    f.write("cd "+os.getcwd()+"\n")
+    f.write("python "+" ".join(sys.argv))
+    f.write(" "+add_option)
+    f.close()
 
 def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
                  n_filter=None):
