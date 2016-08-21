@@ -38,6 +38,10 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         print 'Adapted Rand error           :, %.3f ,+- %.3f' % (all_means[2], all_vars[2])
         print 'Adapted Rand error precision :, %.3f ,+- %.3f' % (all_means[3], all_vars[3])
         print 'Adapted Rand error recall    :, %.3f ,+- %.3f' % (all_means[4], all_vars[4])
+        # string for easy copy to google doc
+    	print ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
+    	return make_val_dic(all_means, all_vars)
+
     else:
         # variational information of split and merge error,  i.e., H(X|Y) and H(Y|X)
         split, merge = voi(pred.copy(), gt.copy())
@@ -396,14 +400,28 @@ def xlogx(x, out=None, in_place=False):
     z[nz] *= np.log2(z[nz])
     return y
 
+def make_val_dic(all_means, all_vars):
+    val_dic = {}
+    val_dic['Variational information split'] = all_means[0]
+    val_dic['Variational information split_error'] = all_vars[0]
+    val_dic['Variational information merge'] = all_means[1]
+    val_dic['Variational information merge_error'] = all_vars[1]
+    val_dic['Adapted Rand error'] = all_means[2]
+    val_dic['Adapted Rand error_error'] = all_vars[2]
+    val_dic['Adapted Rand error precision'] = all_means[3]
+    val_dic['Adapted Rand error precision_error'] = all_vars[3]
+    val_dic['Adapted Rand error recall'] = all_means[4]
+    val_dic['Adapted Rand error recall_error'] = all_vars[4]
+    return val_dic
+
 
 if __name__ == '__main__':
     print   
     # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
-    pred_path='./data/preds/ws_3D_timo_b.h5'
+    pred_path='./data/nets/exp_replay/preds_many_seeds9/pred_final_exp_replay_net_5100000.h5'
     # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './data/volumes/label_b.h5'
+    gt_path = './data/volumes/label_first_repr.h5'
 
 
     print pred_path

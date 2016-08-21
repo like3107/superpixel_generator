@@ -11,8 +11,8 @@ import os
 def pred_script_v2_wrapper(
         chunk_size=16,
         slices_total=64,
-        net_number='net_780000',
-        net_name='cnn_v5_augment_noft',
+        net_number='net_1300000',
+        net_name='exp_replay_path',
         global_edge_len=300,
         membrane_path='./data/volumes/membranes_first_repr.h5',
         raw_path='./data/volumes/raw_first_repr.h5',
@@ -23,11 +23,12 @@ def pred_script_v2_wrapper(
 
     assert (slices_total % chunk_size == 0)
     assert (os.path.exists(net_path))
+    print net_path + net_number
     assert (os.path.exists(net_path + net_number))
     assert (os.path.exists(membrane_path))
     assert (os.path.exists(raw_path))
 
-    pred_save_folder = net_path + '/preds_many_seeds9/'
+    pred_save_folder = net_path + '/preds_'+net_number+'/'
 
     create_network_folder_structure(pred_save_folder)
 
@@ -60,7 +61,6 @@ def pred_script_v2_wrapper(
         print 'joining'
         p.join()
 
-
     import dataset_utils as du
     import glob
     def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len,
@@ -80,7 +80,7 @@ def pred_script_v2_wrapper(
     #            'data', data=prediction, overwrite='w')
     #
     import validation_scripts as vs
-    vs.validate_segmentation(pred_path=pred_save_folder + pred_save_name,
+    return vs.validate_segmentation(pred_path=pred_save_folder + pred_save_name,
                              gt_path=gt_path)
 
 
@@ -99,7 +99,6 @@ def pred_script_v2(
         slices=None,      # do not change here
         n_slices=None,       # do not change here
         timos_seeds_b=None
-
         ):
 
     # import within script du to multi-processing and GPU usage
@@ -170,5 +169,30 @@ def create_network_folder_structure(save_pred_path, train_mode=True):
 
 if __name__ == '__main__':
     # slice = sys.argv[1]
-    prediction = pred_script_v2_wrapper()
+    import configargparse
+
+    p = configargparse.ArgParser(default_config_files=['./validation.conf'])
+    p.add('-c', '--my-config', is_config_file=True, help='config file path')
+    p.add('--chunk_size', default=16)
+    p.add('--slices_total', default=64)
+    p.add('--net_number', default='net_1300000',type=str)
+    p.add('--net_name', default='exp_replay_path',type=str)
+    p.add('--global_edge_len', default=300)
+    p.add('--membrane_path', default='./data/volumes/membranes_first_repr.h5')
+    p.add('--raw_path', default='./data/volumes/raw_first_repr.h5')
+    p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
+    p.add('--timos_seeds_b', default=True)
+    options = p.parse_args()
+    print options
+
+    prediction = pred_script_v2_wrapper(
+                        chunk_size=options.chunk_size,
+                        slices_total=options.slices_total,
+                        net_number=options.net_number,
+                        net_name=options.net_name,
+                        global_edge_len=options.global_edge_len,
+                        membrane_path=options.membrane_path,
+                        raw_path=options.raw_path,
+                        gt_path=options.gt_path,
+                        timos_seeds_b=options.timos_seeds_b)
 
