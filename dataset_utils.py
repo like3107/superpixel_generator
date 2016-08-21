@@ -500,18 +500,18 @@ class HoneyBatcherPredict(object):
                          path='./data/nets/debug/images/',
                          save=True, b=0, inherite_code=False):
         plot_images = []
-        plot_images.append({"title": "Claims",
-                            'cmap': "rand",
-                            'im': self.global_claims[b, self.pad:-self.pad - 1,
+        plot_images.append({"title": "Raw Input",
+                            'im': self.global_raw[b, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1]})
         plot_images.append({"title": "Memb Input",
                             'im': self.global_batch[b, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1]})
+        plot_images.append({"title": "Claims",
+                            'cmap': "rand",
+                            'im': self.global_claims[b, self.pad:-self.pad - 1,
+                                  self.pad:-self.pad - 1]})
         plot_images.append({"title": "Heightmap Prediciton",
                             'im': self.global_heightmap_batch[b, :, :]})
-        plot_images.append({"title": "Raw Input",
-                            'im': self.global_raw[b, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]})
         if not inherite_code:
             if save:
                 u.save_images(plot_images, path=path, name=image_name)
