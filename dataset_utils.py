@@ -1074,32 +1074,40 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                              b=b,
                              inherite_code=True)
 
-        plot_images.append({"title": "Heightmap Ground Truth",
-                            'im': self.global_height_gt_batch[b, :, :],
-                            'scatter': np.array(self.global_seeds[b]) - self.pad})
+        plot_images.insert(2,{"title": "Error Map",
+                            'im': self.global_errormap[b, 0, :, :]})
 
-        plot_images.append({"title": "Ground Truth Label",
+        plot_images.insert(3,{"title": "Ground Truth Label",
                             'scatter': np.array(
                                 [np.array(e["e1_pos"]) - self.pad for e in
                                  self.global_error_dict.values() if
                                  "e1_pos" in e and e["batch"] == 4]),
                             "cmap": "rand",
                             'im': self.global_label_batch[b, :, :]})
-        plot_images.append({"title": "Error Map",
-                            'im': self.global_errormap[b, 0, :, :]})
-        plot_images.append({"title": "Overflow Map",
+
+        plot_images.insert(5,{"title": "Overflow Map",
                             'im': self.global_errormap[b, 1, :, :]})
-        plot_images.append({"title": "path Map",
+        
+        plot_images.insert(6,{"title": "Heightmap GT",
+                            'im': self.global_height_gt_batch[b, :, :],
+                            'scatter': np.array(self.global_seeds[b]) - self.pad})
+
+        plot_images.insert(8,{"title": "Height Differences",
+                            'im': self.global_heightmap_batch[b, :, :] - self.global_errormap[b, 0, :, :]})
+
+        plot_images.insert(9,{"title": "Direction Map",
+                            'im': self.global_directionmap_batch[b, :, :]})
+
+        plot_images.insert(10,{"title": "Path Map",
                             'scatter': np.array(
                                 [np.array(e["large_pos"]) - self.pad for e in
                                  self.global_error_dict.values() if
                                  e["batch"] == b]),
                             'im': self.global_errormap[b, 2, :, :]})
-        plot_images.append({"title": "Direction Map",
-                            'im': self.global_directionmap_batch[b, :, :]})
+
         timemap = np.array(self.global_timemap[b, :, :])
         timemap[timemap < 0] = 0
-        plot_images.append({"title": "Time Map ",
+        plot_images.insert(11,{"title": "Time Map ",
                                 'im': timemap})
 
         if save:
