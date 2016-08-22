@@ -191,7 +191,7 @@ class HoneyBatcherPredict(object):
     def __init__(self, membranes, raw=None, raw_key=None,
                  membrane_key=None,  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
-                 slices=None, timos_seeds_b=True, **kwargs):
+                 slices=None, timos_seeds_b=True):
 
         """
         batch loader. Use either for predict. For valId and train use:
@@ -528,7 +528,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_method='clip',
-                 timos_seeds_b=True):
+                 timos_seeds_b=True, slices=None):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
                                                raw=raw, raw_key=raw_key,
@@ -536,7 +536,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                global_edge_len=global_edge_len,
                                                patch_len=patch_len,
                                                padding_b=padding_b,
-                                               timos_seeds_b=timos_seeds_b)
+                                               timos_seeds_b=timos_seeds_b,
+                                               slices=slices)
 
         if isinstance(label, str):
             self.labels = load_h5(label, h5_key=label_key,
@@ -1089,7 +1090,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'scatter': np.array(self.global_seeds[b]) - self.pad})
 
         plot_images.insert(8,{"title": "Height Differences",
-                            'im': self.global_heightmap_batch[b, :, :] - self.global_errormap[b, 0, :, :]})
+                            'im': self.global_heightmap_batch[b, :, :] -
+                                  self.global_height_gt_batch[b, 0, :, :]})
 
         plot_images.insert(9,{"title": "Direction Map",
                             'im': self.global_directionmap_batch[b, :, :]})
