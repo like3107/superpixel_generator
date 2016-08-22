@@ -13,7 +13,7 @@ class BatchMemento:
     def __len__(self):
         return len(self.memory)
 
-    def add_to_memory(self, batch_first, batch_second, **kwargs):
+    def add_to_memory(self, batch_first, batch_second, add_info=None):
         """
         adds a batch with additional information (batch_second) to the
         memory.
@@ -26,7 +26,8 @@ class BatchMemento:
             sample = {"first":batch_first[i],
                                 "second":batch_second[i],
                                 "loss":None}
-            sample.update(**kwargs)
+            if not add_info is None:
+                sample.update(**add_info[i])
             self.memory.append(sample)
 
     def get_batch(self, batchsize):
@@ -55,14 +56,13 @@ class BatchMemento:
                                             .astype(self.second_type),\
                choices
 
-    def get_evenheight_batch():
+    def get_evenheight_batch(self, batchsize):
         num_samples = len(self) 
-        choices += np.random.choice(np.arange(len(self)),
-                                       size=len(self),
+        choices = np.random.choice(np.arange(len(self)),
+                                       size=batchsize,
                                        replace=False,
                                        p=self.get_evenheight_priority()).tolist()
 
-        assert(len(choices)==batchsize)
         return np.stack([self.memory[i]["first"] for i in choices])\
                                             .astype(self.first_type),\
                np.stack([self.memory[i]["second"] for i in choices])\
@@ -83,18 +83,14 @@ class BatchMemento:
         priority /= np.sum(priority)
         return priority
 
-    def get_evenheight_priority():
+    def get_evenheight_priority(self):
         heights = np.array([m["height"] for m in self.memory])
         maxheight = np.amax(heights)
         minheight = np.amin(heights)
         steps = np.linspace(minheight, maxheight, 10)
         digit = np.digitize(heights, steps)
-        bincount = hnp.bincount(digit)
+        bincount = np.bincount(digit)
         priority = [1./bincount[s] for s in digit]
-        print np.sum(priority),maxheight,minheight
-        print heights[30:]
-        print bincount[30:]
-        print priority[30:]
         priority /= np.sum(priority)
         return priority
 

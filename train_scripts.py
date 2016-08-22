@@ -237,10 +237,10 @@ def train_script_v1(options):
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
 
             if options.exp_bs > 0:
-                Memento.add_to_memory(membrane, gt)
+                Memento.add_to_memory(membrane, gt, [{"height":gt.mean()} for g in gt])
                 # start using exp replay only after #options.exp_warmstart iterations
                 if options.exp_warmstart < iteration:
-                    if exp_height:
+                    if options.exp_height:
                         membrane, gt, mem_choice = Memento.get_evenheight_batch(options.batch_size+options.exp_bs)
                     else:
                         membrane, gt, mem_choice = Memento.get_batch(options.batch_size+options.exp_bs)
@@ -404,7 +404,7 @@ if __name__ == '__main__':
     p.add('--augment_ft', action='store_true')
     p.add('--exp_bs', default = 16, type=int)
     p.add('--exp_ft_bs', default = 8, type=int)
-    p.add('--exp_warmstart', default = 1000, type=int)
+    p.add('--exp_warmstart', default = 0, type=int)
     p.add('--exp_height', action='store_true')
 
     p.add('--pre_train_iter', default = 100000, type=int)
