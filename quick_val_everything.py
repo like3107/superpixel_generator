@@ -23,7 +23,7 @@ if __name__ == '__main__':
                 os.makedirs(ouput_path)
                 print "calling ",'python prediction_scripts.py --net_number '+net_number+' --net_name '+net_name
                 call(['python prediction_scripts.py --net_number='+net_number+\
-                    ' --net_name='+net_name], shell=True)
+                    ' --net_name='+net_name+" --save_validation=\""+subdir+'/preds_'+net_number+"/score.txt\""], shell=True)
                 # call('python somescript.py', shell=True)
                 # call(['python', 'prediction_scripts.py','--net_number='+net_number+\
                     # ' --net_name='+net_name])#, env=os.environ.copy())

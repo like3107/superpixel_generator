@@ -182,6 +182,7 @@ if __name__ == '__main__':
     p.add('--raw_path', default='./data/volumes/raw_first_repr.h5')
     p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
     p.add('--timos_seeds_b', default=True)
+    p.add('--save_validation', default="",type=str)
     options = p.parse_args()
     print options
 
@@ -195,4 +196,28 @@ if __name__ == '__main__':
                         raw_path=options.raw_path,
                         gt_path=options.gt_path,
                         timos_seeds_b=options.timos_seeds_b)
+
+
+    if not options.save_validation.empty():
+        f = open(options.save_validation,'w')
+        f.write(prediction['Variational information split'])
+        f.write("+-")
+        f.write(prediction['Variational information split_error'])
+        f.write(",") 
+        f.write(prediction['Variational information merge'])
+        f.write("+-")
+        f.write(prediction['Variational information merge_error'])
+        f.write(",") 
+        f.write(prediction['Adapted Rand error'])
+        f.write("+-")
+        f.write(prediction['Adapted Rand error_error'])
+        f.write(",") 
+        f.write(prediction['Adapted Rand error precision'])
+        f.write("+-") 
+        f.write(prediction['Adapted Rand error precision_error'])
+        f.write(",")
+        f.write(prediction['Adapted Rand error recall'])
+        f.write("+-") 
+        f.write(prediction['Adapted Rand error recall_error'])
+        f.close()
 

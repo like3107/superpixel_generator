@@ -335,8 +335,13 @@ def train_script_v1(options):
 
 if __name__ == '__main__':
     p = configargparse.ArgParser(default_config_files=['./training.conf'])
+<<<<<<< HEAD
     p.add('--save_net_b', default=True, type=bool)
     p.add('--load_net_b', default=False, type=bool)
+=======
+    p.add('--save_net_b', default = True, type=bool)
+    p.add('--load_net_b', action='store_true')
+>>>>>>> add: validation text file with scores
 
     def_net_name = 'V5_trash'
     p.add('--net_name', default=def_net_name)
@@ -391,11 +396,19 @@ if __name__ == '__main__':
 
     # experience replay
     # clip_method="exp20"
-    p.add('--exp_bs', default=16, type=int)
-    p.add('--exp_ft_bs', default=8, type=int)
-    p.add('--exp_warmstart', default=1000, type=int)
+    p.add('--clip_method', default = 'clip')
+    p.add('--augment_pretraining', action='store_true')
+    p.add('--augment_ft', action='store_true')
+    p.add('--exp_bs', default = 16, type=int)
+    p.add('--exp_ft_bs', default = 8, type=int)
+    p.add('--exp_warmstart', default = 1000, type=int)
+    p.add('--exp_height', action='store_true')
 
-    p.add('--max_iter', default=10000000000000, type=int)
+    p.add('--pre_train_iter', default = 100000, type=int)
+    p.add('--max_iter', default = 10000000000000, type=int)
+    p.add('--save_counter', default = 10000, type=int)
+    p.add('--margin', default = 0.5, type=float)
+    p.add('--regularization', default = 10**-9,type=float)
     p.add('--no_bash_backup', action='store_true')
 
     options = p.parse_args()
