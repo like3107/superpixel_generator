@@ -568,6 +568,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             maximum = np.max(self.height_gt)
             self.height_gt *= -1.
             self.height_gt += maximum
+            self.height_gt *= 100.
 
         if not self.padding_b:
             # crop label
@@ -1091,7 +1092,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         plot_images.insert(8,{"title": "Height Differences",
                             'im': self.global_heightmap_batch[b, :, :] -
-                                  self.global_height_gt_batch[b, 0, :, :]})
+                                  self.global_height_gt_batch[b, :, :]})
 
         plot_images.insert(9,{"title": "Direction Map",
                             'im': self.global_directionmap_batch[b, :, :]})

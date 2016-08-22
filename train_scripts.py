@@ -20,7 +20,6 @@ def train_script_v1(options):
     # dictions and train, val... are saved
 
     BM = du.HoneyBatcherPath
-    c.use('gpu0')
 
     save_net_path = './data/nets/' + options.net_name + '/'
 
@@ -37,6 +36,13 @@ def train_script_v1(options):
     # all params entered.......................
 
     # initialize the net
+    # init a network folder where all images, models and hyper params are stored
+    if options.save_net_b:
+        u.create_network_folder_structure(save_net_path)
+        if not options.no_bash_backup:
+            u.make_bash_executable(save_net_path, add_option="--no_bash_backup")
+    c.use('gpu0')
+
     print 'initializing network graph for net ', options.net_name
     target_t = T.ftensor4()
 
@@ -91,12 +97,6 @@ def train_script_v1(options):
 
         bm_val.init_batch()  # Training
 
-    # init a network folder where all images, models and hyper params are stored
-    if options.save_net_b:
-        u.create_network_folder_structure(save_net_path)
-        if not options.no_bash_backup:
-            u.make_bash_executable(save_net_path, add_option="--no_bash_backup")
-
     if options.load_net_b:
         print "loading network parameters from ",options.load_net_path
         u.load_network(options.load_net_path, l_out)
@@ -117,7 +117,10 @@ def train_script_v1(options):
         iteration += 1
         free_voxel -= 1
 
+        # tmp
         if iteration % options.save_counter == 0 and options.save_net_b:
+        # if (iteration % options.save_counter == 0 or free_voxel <= 201)\
+        #         and options.save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
         # predict val
@@ -258,10 +261,9 @@ def train_script_v1(options):
                 if iteration % 1000 == 0:
                     Memento.forget()
 
-
         # reset bms
         if free_voxel <= 201 \
-            or  (options.fast_reset \
+            or (options.fast_reset \
                 and (free_voxel_empty / 4)  % (iteration + 1) == 0 \
                 and free_voxel_empty - free_voxel > 1000):
 
@@ -316,7 +318,7 @@ def train_script_v1(options):
                     names=['loss train', 'loss train no reg', 'loss valid'])
 
         # monitor growth on validation set tmp debug change train to val
-        if iteration % 10000 == 0:
+        if iteration % options.save_counter == 0:
             for b in range(0, options.batch_size, 8):
                 bm.draw_debug_image(
                     "train_iteration_%08i_counter_%i_freevoxel_%i_b_%i" %
@@ -338,13 +340,7 @@ def train_script_v1(options):
 
 if __name__ == '__main__':
     p = configargparse.ArgParser(default_config_files=['./training.conf'])
-<<<<<<< HEAD
     p.add('--save_net_b', default=True, type=bool)
-    p.add('--load_net_b', default=False, type=bool)
-=======
-    p.add('--save_net_b', default = True, type=bool)
-    p.add('--load_net_b', action='store_true')
->>>>>>> add: validation text file with scores
 
     def_net_name = 'V5_trash'
     p.add('--net_name', default=def_net_name)
@@ -374,7 +370,8 @@ if __name__ == '__main__':
           default='./data/volumes/membranes_%s.h5' % def_valid_version)
 
     # reload existing net
-    p.add('--load_net_path', default='./data/nets/V5_exp_aug_noft/net_3000000')
+    p.add('--load_net_b', action='store_true')
+    p.add('--load_net_path', default='./data/nets/V5_heighttimes100/net_60000')
 
     # training general
     p.add('--val_b', default=True)
@@ -383,35 +380,27 @@ if __name__ == '__main__':
     p.add('--global_edge_len', default=300, type=int)
     p.add('--fast_reset', default=False, type=bool)
     p.add('--clip_method', default='clip')
-    p.add('--augment_pretraining', default=True, type=bool)
 
     # pre-training
     p.add('--pre_train_iter', default=100000, type=int)
     p.add('--regularization', default=10 ** -9, type=float)
     p.add('--batch_size', default=16, type=int)
+    p.add('--augment_pretraining', action='store_true')
 
     # fine-tuning
     p.add('--batch_size_ft', default=8, type=int)
     p.add('--reset_after_fine_tune', default=False, type=bool)
     p.add('--fine_tune_b', default=True, type=bool)
-    p.add('--augment_ft', default=True, type=bool)
     p.add('--margin', default=0.5, type=float)
+    p.add('--augment_ft', action='store_true')
 
     # experience replay
     # clip_method="exp20"
-    p.add('--clip_method', default = 'clip')
-    p.add('--augment_pretraining', action='store_true')
-    p.add('--augment_ft', action='store_true')
-    p.add('--exp_bs', default = 16, type=int)
-    p.add('--exp_ft_bs', default = 8, type=int)
-    p.add('--exp_warmstart', default = 0, type=int)
-    p.add('--exp_height', action='store_true')
+    p.add('--exp_bs', default=16, type=int)
+    p.add('--exp_ft_bs', default=8, type=int)
+    p.add('--exp_warmstart', default=1000, type=int)
 
-    p.add('--pre_train_iter', default = 100000, type=int)
-    p.add('--max_iter', default = 10000000000000, type=int)
-    p.add('--save_counter', default = 10000, type=int)
-    p.add('--margin', default = 0.5, type=float)
-    p.add('--regularization', default = 10**-9,type=float)
+    p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')
 
     options = p.parse_args()
