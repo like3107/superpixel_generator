@@ -3,6 +3,7 @@ matplotlib.use('Agg')
 # matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
+import theano
 import utils as u
 import nets
 import dataset_utils as du
@@ -98,6 +99,7 @@ def train_script_v1(options):
         bm_val.init_batch()  # Training
 
     if options.load_net_b:
+        np.random.seed(651)     # change seed so different images for retrain
         print "loading network parameters from ",options.load_net_path
         u.load_network(options.load_net_path, l_out)
 
@@ -117,10 +119,8 @@ def train_script_v1(options):
         iteration += 1
         free_voxel -= 1
 
-        # tmp
-        if iteration % options.save_counter == 0 and options.save_net_b:
-        # if (iteration % options.save_counter == 0 or free_voxel <= 201)\
-        #         and options.save_net_b:
+        if (iteration % options.save_counter == 0 or free_voxel <= 201)\
+                and options.save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
         # predict val
@@ -213,9 +213,9 @@ def train_script_v1(options):
                 Memento_ft.update_loss(individual_loss_fine, mem_choice_ft)
 
                 with h5py.File(debug_path+"/ft_batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
-                    out_h5.create_dataset("batch_ft",data=batch_ft ,compression="gzip")
-                    out_h5.create_dataset("batch_dir_ft",data=batch_dir_ft ,compression="gzip")
-                    out_h5.create_dataset("probs_fine",data=probs_fine ,compression="gzip")
+                    out_h5.create_dataset("batch_ft",data=batch_ft, compression="gzip")
+                    out_h5.create_dataset("batch_dir_ft",data=batch_dir_ft, compression="gzip")
+                    out_h5.create_dataset("probs_fine",data=probs_fine, compression="gzip")
                     out_h5.create_dataset("ft_loss_train",data=ft_loss_train)
 
                 print "loss_train_fine %.4f" % ft_loss_train
@@ -340,9 +340,9 @@ def train_script_v1(options):
 
 if __name__ == '__main__':
     p = configargparse.ArgParser(default_config_files=['./training.conf'])
-    p.add('--save_net_b', default=True, type=bool)
 
-    def_net_name = 'V5_BN_2'
+    p.add('--save_net_b', default=True, type=bool)
+    def_net_name = 'V5_BN_times100_2'
     p.add('--net_name', default=def_net_name)
 
     # train data paths
@@ -370,8 +370,8 @@ if __name__ == '__main__':
           default='./data/volumes/membranes_%s.h5' % def_valid_version)
 
     # reload existing net
-    p.add('--load_net_b', default=False, action='store_true')
-    p.add('--load_net_path', default='./data/nets/V5_BN/net_60000')
+    p.add('--load_net_b', default=True, action='store_true')
+    p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
 
     # training general
     p.add('--val_b', default=True)
@@ -382,7 +382,7 @@ if __name__ == '__main__':
     p.add('--clip_method', default='clip')
 
     # pre-training
-    p.add('--pre_train_iter', default=100000, type=int)
+    p.add('--pre_train_iter', default=1000000, type=int)
     p.add('--regularization', default=10 ** -9, type=float)
     p.add('--batch_size', default=16, type=int)
     p.add('--augment_pretraining', action='store_true')
@@ -399,7 +399,7 @@ if __name__ == '__main__':
     p.add('--exp_bs', default=16, type=int)
     p.add('--exp_ft_bs', default=8, type=int)
     p.add('--exp_warmstart', default=1000, type=int)
-    p.add('--exp_height', action='store_true')
+    p.add('--exp_height', default=True, action='store_true')
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')

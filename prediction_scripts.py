@@ -110,7 +110,6 @@ def pred_script_v2(
     BM = du.HoneyBatcherPredict
     network = nets.build_net_v5_BN     # hydra only needs build_ID_v0
     probs_funcs = nets.prob_funcs   # hydra, multichannel
-
     print 'pred script v2 start %i till %i' % (slices[0], slices[-1])
 
     load_net_path = './data/nets/' + net_name + '/' + net_number
@@ -155,7 +154,7 @@ def pred_script_v2(
                                   bm.pad:-bm.pad].astype(np.uint64)
     du.save_h5(pred_save_folder + net_name + '_final_slice_%03i.h5' % slices[0],
                'data',
-               data=prediction)
+               data=prediction, overwrite='w')
     exit()
 
 
@@ -182,8 +181,8 @@ if __name__ == '__main__':
     p.add('--chunk_size', default=16)
     p.add('--slices_total', default=64)     # number z slices
     # network params
-    p.add('--net_number', default='net_60000',type=str)
-    p.add('--net_name', default='V5_BN', type=str)
+    p.add('--net_number', default='net_120000',type=str)
+    p.add('--net_name', default='V5_BN_times100_2', type=str)
 
     # data params
     p.add('--global_edge_len', default=300) # should be same as max(x)=max(y)
