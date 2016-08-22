@@ -9,29 +9,28 @@ import os
 
 
 def pred_script_v2_wrapper(
-        chunk_size=16,
-        slices_total=64,
-        net_number='net_1300000',
-        net_name='exp_replay_path',
-        global_edge_len=300,
-        membrane_path='./data/volumes/membranes_first_repr.h5',
-        raw_path='./data/volumes/raw_first_repr.h5',
-        gt_path = './data/volumes/label_first_repr.h5',
-        timos_seeds_b=True
+        chunk_size=None,
+        slices_total=None,
+        net_number='',
+        net_name='',
+        global_edge_len=None,
+        membrane_path='',
+        raw_path='',
+        gt_path = '',
+        timos_seeds_b=None
         ):
     net_path = './data/nets/' + net_name + '/'
 
     assert (slices_total % chunk_size == 0)
     assert (os.path.exists(net_path))
-    print net_path + net_number
     assert (os.path.exists(net_path + net_number))
     assert (os.path.exists(membrane_path))
     assert (os.path.exists(raw_path))
 
-    pred_save_folder = net_path + '/preds_'+net_number+'/'
+    pred_save_folder = net_path + '/preds'+net_number+'/'
 
     create_network_folder_structure(pred_save_folder)
-
+    print 'net', net_name, net_number
 
     processes = []
     q = Queue()
@@ -109,7 +108,7 @@ def pred_script_v2(
     c.use('gpu0')
 
     BM = du.HoneyBatcherPredict
-    network = nets.build_net_v5     # hydra only needs build_ID_v0
+    network = nets.build_net_v5_BN     # hydra only needs build_ID_v0
     probs_funcs = nets.prob_funcs   # hydra, multichannel
 
     print 'pred script v2 start %i till %i' % (slices[0], slices[-1])
@@ -126,7 +125,12 @@ def pred_script_v2(
     bm = BM(membrane_path,
             batch_size=batch_size, raw=raw_path,
             patch_len=patch_len, global_edge_len=global_edge_len,
-            padding_b=True, slices=slices, timos_seeds_b=timos_seeds_b)
+            padding_b=True, timos_seeds_b=timos_seeds_b, slices=slices,
+            #tmp
+            # label='./data/volumes/label_first_repr.h5',
+            # height_gt='./data/volumes/height_first_repr.h5'
+
+            )
 
     u.load_network(load_net_path, l_out)
 
@@ -135,6 +139,7 @@ def pred_script_v2(
     for j in range((bm.global_el - bm.pl) ** 2):
         print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
         raw, centers, ids = bm.get_batches()
+        # raw, _, centers, ids = bm.get_batches()
         probs = probs_f(raw)
         bm.update_priority_queue(probs, centers, ids)
         if j % (global_edge_len ** 2/ 4) == 0:
@@ -166,18 +171,22 @@ def create_network_folder_structure(save_pred_path, train_mode=True):
     os.system('cp -rf *.py ' + save_pred_path + code_save_folder)
 
 
-
 if __name__ == '__main__':
     # slice = sys.argv[1]
     import configargparse
 
     p = configargparse.ArgParser(default_config_files=['./validation.conf'])
     p.add('-c', '--my-config', is_config_file=True, help='config file path')
+
+    # multiprocessing params
     p.add('--chunk_size', default=16)
-    p.add('--slices_total', default=64)
-    p.add('--net_number', default='net_1300000',type=str)
-    p.add('--net_name', default='exp_replay_path',type=str)
-    p.add('--global_edge_len', default=300)
+    p.add('--slices_total', default=64)     # number z slices
+    # network params
+    p.add('--net_number', default='net_60000',type=str)
+    p.add('--net_name', default='V5_BN', type=str)
+
+    # data params
+    p.add('--global_edge_len', default=300) # should be same as max(x)=max(y)
     p.add('--membrane_path', default='./data/volumes/membranes_first_repr.h5')
     p.add('--raw_path', default='./data/volumes/raw_first_repr.h5')
     p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
@@ -185,7 +194,7 @@ if __name__ == '__main__':
     p.add('--save_validation', default="",type=str)
     options = p.parse_args()
     print options
-
+    print
     prediction = pred_script_v2_wrapper(
                         chunk_size=options.chunk_size,
                         slices_total=options.slices_total,

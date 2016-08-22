@@ -537,8 +537,8 @@ if __name__ == '__main__':
                               thresh_seg_cc, sigma_dist_trf,
                               somethingunimportant,
                               groupSeeds=groupSeeds)
-
+    segmentation = segmentation.astype(np.uint64)
     # save_h5('./data/preds/ws_2D_timo_b.h5', 'pred', segmentation, 'w')
-    # save_h5('./data/preds/timo_seeds_frist_repr.h5', 'pred', all_seeds, 'w')
-    f = open('./data/preds/timo_seeds_%s.pkl' % version, mode='w`')
-    pickle.dump(all_seeds, f)
+    save_h5('./data/preds/timo_seeds_frist_repr.h5', 'pred', segmentation, 'w')
+    # f = open('./data/preds/timo_seeds_%s.pkl' % version, mode='w`')
+    # pickle.dump(all_seeds, f)

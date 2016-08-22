@@ -32,6 +32,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         all_measures = np.array(all_measures)
         all_vars = np.var(all_measures, 1)
         all_means = np.mean(all_measures, 1)
+        all_means[2] = 1. - all_means[2]
 
         print 'Variational information split:, %.3f ,+- %.3f' % (all_means[0], all_vars[0])
         print 'Variational information merge:, %.3f ,+- %.3f' % (all_means[1], all_vars[1])
@@ -400,6 +401,7 @@ def xlogx(x, out=None, in_place=False):
     z[nz] *= np.log2(z[nz])
     return y
 
+
 def make_val_dic(all_means, all_vars):
     val_dic = {}
     val_dic['Variational information split'] = all_means[0]
@@ -415,13 +417,15 @@ def make_val_dic(all_means, all_vars):
     return val_dic
 
 
+
+
 if __name__ == '__main__':
     print   
     # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
-    pred_path='./data/nets/exp_replay/preds_many_seeds9/pred_final_exp_replay_net_5100000.h5'
+    pred_path='./data/preds/ws_3D_timo_b.h5'
     # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './data/volumes/label_first_repr.h5'
+    gt_path = './data/volumes/label_b.h5'
 
 
     print pred_path

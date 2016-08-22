@@ -29,7 +29,7 @@ def train_script_v1(options):
     if not os.path.exists(debug_path):
         os.makedirs(debug_path)
 
-    network = nets.build_ID_v5_hydra
+    network = nets.build_ID_v5_hydra_BN
     loss = nets.loss_updates_probs_v0
     loss_fine = nets.loss_updates_hydra_v5
 
@@ -342,7 +342,7 @@ if __name__ == '__main__':
     p = configargparse.ArgParser(default_config_files=['./training.conf'])
     p.add('--save_net_b', default=True, type=bool)
 
-    def_net_name = 'V5_trash'
+    def_net_name = 'V5_BN_2'
     p.add('--net_name', default=def_net_name)
 
     # train data paths
@@ -370,8 +370,8 @@ if __name__ == '__main__':
           default='./data/volumes/membranes_%s.h5' % def_valid_version)
 
     # reload existing net
-    p.add('--load_net_b', action='store_true')
-    p.add('--load_net_path', default='./data/nets/V5_heighttimes100/net_60000')
+    p.add('--load_net_b', default=False, action='store_true')
+    p.add('--load_net_path', default='./data/nets/V5_BN/net_60000')
 
     # training general
     p.add('--val_b', default=True)

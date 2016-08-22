@@ -568,7 +568,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             maximum = np.max(self.height_gt)
             self.height_gt *= -1.
             self.height_gt += maximum
-            self.height_gt *= 100.
+            # self.height_gt *= 100.
 
         if not self.padding_b:
             # crop label

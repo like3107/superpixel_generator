@@ -95,6 +95,7 @@ def build_net_v5():
                         b=np.random.random(4)*10+10.)
     return l_in, l_9, fov
 
+
 def build_net_v5_big():
     fov = 76    # field of view = patch length
     n_channels = 4
@@ -130,6 +131,34 @@ def build_net_v5_big():
                         nonlinearity=las.nonlinearities.rectify,
                         b=np.random.random(4)*10+10.)
     return l_in, l_12, fov
+
+
+def build_net_v5_BN():
+    fov = 40    # field of view = patch length
+    n_channels = 4
+    n_classes = 4
+    filt = [7, 6, 6]
+    n_filt = [20, 25, 60, 30, n_classes]
+    pool = [2, 2]
+
+    # 40
+    l_in = L.InputLayer((None, n_channels, fov, fov))
+    l_1 = L.batch_norm(L.Conv2DLayer(l_in, n_filt[0], filt[0]))
+
+    l_2 = L.MaxPool2DLayer(l_1, pool[0])
+    # 17
+    l_3 = L.batch_norm(L.Conv2DLayer(l_2, n_filt[1], filt[1]))
+    l_4 = L.MaxPool2DLayer(l_3, pool[1])
+    # 6
+    l_5 = L.Conv2DLayer(l_4, n_filt[2], 5, filt[2],
+                        nonlinearity=las.nonlinearities.rectify)
+    l_6 = L.Conv2DLayer(l_5, n_filt[3], 1,
+                        nonlinearity=las.nonlinearities.rectify)
+    l_7 = L.Conv2DLayer(l_6, n_filt[4], 1,
+                        nonlinearity=las.nonlinearities.rectify,
+                        b=np.random.random(4)*10+10.)
+    return l_in, l_7, fov
+
 
 
 def build_ID_v0():
@@ -238,6 +267,13 @@ def build_ID_v5_hydra_big():
     return l_in, l_in_direction, l_9, l_10, fov
 
 
+def build_ID_v5_hydra_BN():
+    l_in, l_9, fov = build_net_v5_BN()
+    l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+    l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+    return l_in, l_in_direction, l_9, l_10, fov
+
+
 def build_ID_v0_hybrid():
     fov = 40  # field of view = patch length
     n_channels = 2
@@ -315,7 +351,7 @@ def build_ID_v1_hybrid():
 def loss_updates_probs_v0(l_in, target, last_layer, L1_weight=10**-5,
                           update='adam'):
 
-    all_params = L.get_all_params(last_layer)
+    all_params = L.get_all_params(last_layer, trainable=True)
 
     l_out_train = L.get_output(last_layer, deterministic=False)
     l_out_valid = L.get_output(last_layer, deterministic=True)
@@ -380,7 +416,7 @@ def loss_updates_hydra_v0(l_in_data, l_in_direction, last_layer,
 def loss_updates_hydra_v5(l_in_data, l_in_direction, last_layer,
                           L1_weight=10**-5, margin=0):
 
-    all_params = L.get_all_params(last_layer)
+    all_params = L.get_all_params(last_layer, trainable=True)
 
     bs = l_in_data.input_var.shape[0]
 
