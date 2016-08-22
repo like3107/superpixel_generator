@@ -13,7 +13,7 @@ class BatchMemento:
     def __len__(self):
         return len(self.memory)
 
-    def add_to_memory(self, batch_first, batch_second):
+    def add_to_memory(self, batch_first, batch_second, **kwargs):
         """
         adds a batch with additional information (batch_second) to the
         memory.
@@ -23,9 +23,11 @@ class BatchMemento:
             self.second_type = batch_second.dtype
 
         for i in range(len(batch_first)):
-            self.memory.append({"first":batch_first[i],
+            sample = {"first":batch_first[i],
                                 "second":batch_second[i],
-                                "loss":None})
+                                "loss":None}
+            sample.update(**kwargs)
+            self.memory.append(sample)
 
     def get_batch(self, batchsize):
 
@@ -53,6 +55,20 @@ class BatchMemento:
                                             .astype(self.second_type),\
                choices
 
+    def get_evenheight_batch():
+        num_samples = len(self) 
+        choices += np.random.choice(np.arange(len(self)),
+                                       size=len(self),
+                                       replace=False,
+                                       p=self.get_evenheight_priority()).tolist()
+
+        assert(len(choices)==batchsize)
+        return np.stack([self.memory[i]["first"] for i in choices])\
+                                            .astype(self.first_type),\
+               np.stack([self.memory[i]["second"] for i in choices])\
+                                            .astype(self.second_type),\
+               choices
+
     def update_loss(self, loss ,choices):
         for l,c in zip(loss, choices):
             self.memory[c]["loss"] = np.mean(l)
@@ -66,6 +82,22 @@ class BatchMemento:
 
         priority /= np.sum(priority)
         return priority
+
+    def get_evenheight_priority():
+        heights = np.array([m["height"] for m in self.memory])
+        maxheight = np.amax(heights)
+        minheight = np.amin(heights)
+        steps = np.linspace(minheight, maxheight, 10)
+        digit = np.digitize(heights, steps)
+        bincount = hnp.bincount(digit)
+        priority = [1./bincount[s] for s in digit]
+        print np.sum(priority),maxheight,minheight
+        print heights[30:]
+        print bincount[30:]
+        print priority[30:]
+        priority /= np.sum(priority)
+        return priority
+
 
     def count_new(self):
         return len([0 for m in self.memory if m["loss"] is None])

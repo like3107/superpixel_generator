@@ -240,7 +240,10 @@ def train_script_v1(options):
                 Memento.add_to_memory(membrane, gt)
                 # start using exp replay only after #options.exp_warmstart iterations
                 if options.exp_warmstart < iteration:
-                    membrane, gt, mem_choice = Memento.get_batch(options.batch_size+options.exp_bs)
+                    if exp_height:
+                        membrane, gt, mem_choice = Memento.get_evenheight_batch(options.batch_size+options.exp_bs)
+                    else:
+                        membrane, gt, mem_choice = Memento.get_batch(options.batch_size+options.exp_bs)
 
             if options.augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
