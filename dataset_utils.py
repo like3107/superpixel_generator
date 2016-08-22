@@ -315,7 +315,6 @@ class HoneyBatcherPredict(object):
 
                 self.global_seeds.append(seeds)
         else:
-            print 'timos seeds'
             self.global_seeds = []
             for b in range(self.bs):
                 x, y = wsDtseeds(

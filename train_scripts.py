@@ -3,10 +3,7 @@ matplotlib.use('Agg')
 # matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
-import theano
-import lasagne
 import utils as u
-from matplotlib import pyplot as plt
 import nets
 import dataset_utils as du
 import numpy as np
@@ -337,51 +334,68 @@ def train_script_v1(options):
 
 
 if __name__ == '__main__':
-
     p = configargparse.ArgParser(default_config_files=['./training.conf'])
-    p.add('--save_net_b', default = True, type=bool)
-    p.add('--load_net_b', default = False, type=bool)
+    p.add('--save_net_b', default=True, type=bool)
+    p.add('--load_net_b', default=False, type=bool)
 
-    def_net_name = 'V5'
-    p.add('--net_name', default = def_net_name)
+    def_net_name = 'V5_trash'
+    p.add('--net_name', default=def_net_name)
 
+    # train data paths
     def_train_version = 'first_repr'
-    p.add('--train_version', default = def_train_version)
-    p.add('--raw_path', default = './data/volumes/raw_%s.h5' % def_train_version)
-    p.add('--membrane_path', default = './data/volumes/membranes_%s.h5' % def_train_version)
-    p.add('--label_path', default = './data/volumes/label_%s.h5' % def_train_version)
-    p.add('--height_gt_path', default = './data/volumes/height_%s.h5' % def_train_version)
-    p.add('--timos_seeds_b', default = True, type=bool)
+    p.add('--train_version', default=def_train_version)
+    p.add('--raw_path', default='./data/volumes/raw_%s.h5' % def_train_version)
+    p.add('--membrane_path',
+          default='./data/volumes/membranes_%s.h5' % def_train_version)
+    p.add('--label_path',
+          default='./data/volumes/label_%s.h5' % def_train_version)
+    p.add('--height_gt_path',
+          default='./data/volumes/height_%s.h5' % def_train_version)
+    p.add('--timos_seeds_b', default=True, type=bool)
 
+    # valid data paths
     def_valid_version = 'first_repr'
-    p.add('--valid_version', default =def_valid_version)
-    p.add('--label_path_val', default = './data/volumes/label_%s.h5' % def_valid_version)
-    p.add('--height_gt_path_val', default = './data/volumes/height_%s.h5' % def_valid_version)
-    p.add('--raw_path_val', default = './data/volumes/raw_%s.h5' % def_valid_version)
-    p.add('--membrane_path_val', default = './data/volumes/membranes_%s.h5' % def_valid_version)\
+    p.add('--valid_version', default=def_valid_version)
+    p.add('--label_path_val',
+          default='./data/volumes/label_%s.h5' % def_valid_version)
+    p.add('--height_gt_path_val',
+          default='./data/volumes/height_%s.h5' % def_valid_version)
+    p.add('--raw_path_val',
+          default='./data/volumes/raw_%s.h5' % def_valid_version)
+    p.add('--membrane_path_val',
+          default='./data/volumes/membranes_%s.h5' % def_valid_version)
 
-    p.add('--load_net_path', default = './data/nets/V5_exp_aug_noft/net_3000000')
-    p.add('--batch_size', default = 16, type=int)
-    p.add('--batch_size_ft', default = 8, type=int)
-    p.add('--global_edge_len', default = 300, type=int)
-    p.add('--dummy_data_b', default = False, type=bool)
-    p.add('--val_b', default = True)
-    p.add('--reset_after_fine_tune', default = False, type=bool)
-    p.add('--fast_reset', default = False, type=bool)
-    p.add('--fine_tune_b', default = True, type=bool)
+    # reload existing net
+    p.add('--load_net_path', default='./data/nets/V5_exp_aug_noft/net_3000000')
+
+    # training general
+    p.add('--val_b', default=True)
+    p.add('--save_counter', default=10000, type=int)
+    p.add('--dummy_data_b', default=False, type=bool)
+    p.add('--global_edge_len', default=300, type=int)
+    p.add('--fast_reset', default=False, type=bool)
+    p.add('--clip_method', default='clip')
+    p.add('--augment_pretraining', default=True, type=bool)
+
+    # pre-training
+    p.add('--pre_train_iter', default=100000, type=int)
+    p.add('--regularization', default=10 ** -9, type=float)
+    p.add('--batch_size', default=16, type=int)
+
+    # fine-tuning
+    p.add('--batch_size_ft', default=8, type=int)
+    p.add('--reset_after_fine_tune', default=False, type=bool)
+    p.add('--fine_tune_b', default=True, type=bool)
+    p.add('--augment_ft', default=True, type=bool)
+    p.add('--margin', default=0.5, type=float)
+
+    # experience replay
     # clip_method="exp20"
-    p.add('--clip_method', default = 'clip')
-    p.add('--augment_pretraining', default = True, type=bool)
-    p.add('--augment_ft', default = True, type=bool)
-    p.add('--exp_bs', default = 16, type=int)
-    p.add('--exp_ft_bs', default = 8, type=int)
-    p.add('--exp_warmstart', default = 1000, type=int)
+    p.add('--exp_bs', default=16, type=int)
+    p.add('--exp_ft_bs', default=8, type=int)
+    p.add('--exp_warmstart', default=1000, type=int)
 
-    p.add('--pre_train_iter', default = 100000, type=int)
-    p.add('--max_iter', default = 10000000000000, type=int)
-    p.add('--save_counter', default = 10000, type=int)
-    p.add('--margin', default = 0.5, type=float)
-    p.add('--regularization', default = 10**-9,type=float)
+    p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')
 
     options = p.parse_args()
