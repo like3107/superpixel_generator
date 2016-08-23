@@ -30,9 +30,10 @@ def train_script_v1(options):
     if not os.path.exists(debug_path):
         os.makedirs(debug_path)
 
-    network = nets.build_ID_v5_hydra_BN
-    loss = nets.loss_updates_probs_v0
-    loss_fine = nets.loss_updates_hydra_v5
+    builder = nets.NetBuilder()
+    network = builder.get_net(options.net_arch)
+    loss = builder.get_loss('updates_probs_v0')
+    loss_fine = builder.get_loss('updates_hydra_v5')
 
     # all params entered.......................
 
@@ -355,6 +356,7 @@ if __name__ == '__main__':
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
     p.add('--net_name', default=def_net_name)
+    p.add('--net_arch', default="ID_v5_hydra_BN")
     p.add('--no-save_net', dest='save_net_b', action='store_false')
 
     # reload existing net
@@ -415,7 +417,7 @@ if __name__ == '__main__':
     p.add('--exp_warmstart', default=1000, type=int)
     p.add('--no-exp_height', dest='exp_height', action='store_false')
     p.add('--no-exp_save', dest='exp_save', action='store_false')
-    p.add('--exp_load', default="", type=str)
+    p.add('--exp_load', default="None", type=str)
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')

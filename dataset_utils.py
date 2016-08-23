@@ -482,7 +482,7 @@ class HoneyBatcherPredict(object):
                                                 Id, direction)
 
     def max_new_old_pq_update(self, b, x, y, height, lower_bound, Id,
-                               direction, error_indicator=False, input_time=0):
+                               direction, error_indicator=0, input_time=0):
         prev_height = self.global_heightmap_batch[b, x - self.pad, y - self.pad]
         if self.global_claims[b, x, y] == 0 and height < prev_height:
             height_j = max(height, lower_bound)
@@ -688,7 +688,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         return ground_truth
 
     def get_centers_from_queue(self):
-        self.error_indicator_pass = np.zeros(self.bs, dtype=np.bool)
+        self.error_indicator_pass = np.zeros(self.bs, dtype=np.int)
         self.global_time += 1
         centers, ids, heights = \
             super(HoneyBatcherPath, self).get_centers_from_queue()
@@ -707,8 +707,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             center_y] = time_put
 
         # pass on if type I error already occured
-        if error_indicator:
-            self.error_indicator_pass[b] = True  # remember to pass on
+        if error_indicator > 0:
+            self.error_indicator_pass[b] = error_indicator+1 # remember to pass on
             self.global_errormap[b, 1,
                                  center_x - self.pad,
                                  center_y - self.pad] = 1
@@ -718,7 +718,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                         center_y - self.pad]:
             self.global_errormap[b, :2, center_x - self.pad,
                                  center_y - self.pad] = 1
-            self.error_indicator_pass[b] = True
+            self.error_indicator_pass[b] = 1
 
         # check for errors in neighbor regions, type II
         if self.find_errors_b:
@@ -747,10 +747,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             # pass errors on
             for x, y, height, direction in \
                     zip(new_seeds_x, new_seeds_y, heights, directions):
-                if self.error_indicator_pass[b]:
-                    error_indicator = True
-                else:
-                    error_indicator = False
+                error_indicator = self.error_indicator_pass[b]
                 self.max_new_old_pq_update(b, x, y, height, lower_bound,
                                            Id, direction,
                                            error_indicator=error_indicator,
@@ -1312,7 +1309,7 @@ def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
     for i in range(membrane_gt.shape[0]):
         dist_trf[i] = distance_transform_edt(gt[i])
         gt[i] = label(gt[i], background=0)
-        gt[i] = dilate(gt[i], kernel=np.ones((4,4)), iterations=1)
+        # gt[i] = dilate(gt[i], kernel=np.ones((4,4)), iterations=1)
 
     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
