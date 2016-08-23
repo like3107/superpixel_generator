@@ -125,7 +125,7 @@ def train_script_v1(options):
                 and options.save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
 
-            if exp_save:
+            if options.exp_save:
                 Memento.save(save_net_path +'/exp/exp_%i.h5' % iteration)
                 if options.fine_tune_b:
                     Memento_ft.save(save_net_path +'/exp/exp_ft_%i.h5' % iteration)
@@ -354,7 +354,7 @@ if __name__ == '__main__':
     p.add('--save_net_b', default=True, type=bool)
 
     # reload existing net
-    p.add('--load_net_b', default=True, action='store_true')
+    p.add('--load_net_b', action='store_true')
     p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
 
     # train data paths
