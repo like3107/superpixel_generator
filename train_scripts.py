@@ -354,7 +354,7 @@ if __name__ == '__main__':
     p.add('--save_net_b', default=True, type=bool)
 
     # reload existing net
-    p.add('--load_net_b', action='store_true')
+    p.add('--load_net_b', default=False, type=bool)
     p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
 
     # train data paths
@@ -383,7 +383,7 @@ if __name__ == '__main__':
 
     # training general
     p.add('--val_b', default=True)
-    p.add('--save_counter', default=1000, type=int)
+    p.add('--save_counter', default=10000, type=int)
     p.add('--dummy_data_b', default=False, type=bool)
     p.add('--global_edge_len', default=300, type=int)
     p.add('--fast_reset', default=False, type=bool)
@@ -393,7 +393,7 @@ if __name__ == '__main__':
     p.add('--pre_train_iter', default=600000, type=int)
     p.add('--regularization', default=10. ** 1, type=float)
     p.add('--batch_size', default=16, type=int)
-    p.add('--augment_pretraining', default=True, action='store_true')
+    p.add('--augment_pretraining', default=True, type=bool)
     p.add('--scale_height_factor', default=100)
 
     # fine-tuning
@@ -401,20 +401,22 @@ if __name__ == '__main__':
     p.add('--reset_after_fine_tune', default=False, type=bool)
     p.add('--fine_tune_b', default=True, type=bool)
     p.add('--margin', default=0.5, type=float)
-    p.add('--augment_ft', action='store_true')
+    p.add('--augment_ft', default=True, type=bool)
 
     # experience replay
     # clip_method="exp20"
     p.add('--exp_bs', default=16, type=int)
     p.add('--exp_ft_bs', default=8, type=int)
     p.add('--exp_warmstart', default=1000, type=int)
-    p.add('--exp_height', default=True, action='store_true')
-    p.add('--exp_save', default=True, action='store_true')
+    p.add('--exp_height', default=True, type=bool)
+    p.add('--exp_save', default=True, type=bool)
     p.add('--exp_load', default="", type=str)
 
     p.add('--max_iter', default=10000000000000, type=int)
-    p.add('--no_bash_backup', action='store_true')
+    p.add('--no_bash_backup', default=False, type=bool)
 
     options = p.parse_args()
+
+    u.print_options_for_net(options, def_train_version, def_valid_version)
 
     train_script_v1(options)

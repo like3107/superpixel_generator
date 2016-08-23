@@ -177,6 +177,19 @@ def load_network(load_path, l_last):
     return
 
 
+def print_options_for_net(options, train_version, valid_version):
+    to_print = str([options.net_name, options.load_net_b, options.load_net_path,
+                train_version, valid_version, options.val_b,
+                options.global_edge_len, options.fast_reset,
+                options.clip_method, options.pre_train_iter,
+                options.regularization, options.batch_size,
+                options.augment_pretraining, options.scale_height_factor,
+                options.batch_size_ft, options.margin, options.augment_ft,
+                options.exp_bs, options.exp_ft_bs, options.exp_warmstart,
+                options.exp_height, options.exp_save, options.exp_load])
+    print to_print[1:-1]
+    print
+
 def plot_train_val_errors(all_y_values, x_values, save_path, names):
     fig = plt.figure()
     plots = []
