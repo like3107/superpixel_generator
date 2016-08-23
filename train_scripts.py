@@ -67,7 +67,7 @@ def train_script_v1(options):
 
     Memento = exp.BatchMemento()
 
-    if options.exp_load != "":
+    if options.exp_load != "None":
         Memento.load(options.exp_load)
 
     if options.fine_tune_b:
@@ -410,7 +410,7 @@ if __name__ == '__main__':
     p.add('--exp_warmstart', default=1000, type=int)
     p.add('--exp_height', default=True, type=bool)
     p.add('--exp_save', default=True, type=bool)
-    p.add('--exp_load', default="", type=str)
+    p.add('--exp_load', default=None, type=str)
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', default=False, type=bool)
@@ -418,5 +418,5 @@ if __name__ == '__main__':
     options = p.parse_args()
 
     u.print_options_for_net(options, def_train_version, def_valid_version)
-
+    exit()
     train_script_v1(options)
