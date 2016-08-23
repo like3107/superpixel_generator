@@ -97,12 +97,11 @@ def train_script_v1(options):
                     clip_method=options.clip_method,
                     timos_seeds_b=options.timos_seeds_b,
                     scale_height_factor=options.scale_height_factor)
-
-        bm_val.init_batch()  # Training
+        bm_val.init_batch()
 
     if options.load_net_b:
         np.random.seed(651)     # change seed so different images for retrain
-        print "loading network parameters from ",options.load_net_path
+        print "loading network parameters from ", options.load_net_path
         u.load_network(options.load_net_path, l_out)
 
     # everything is initialized now train and predict every once in a while....
@@ -240,7 +239,8 @@ def train_script_v1(options):
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
 
             if options.exp_bs > 0:
-                Memento.add_to_memory(membrane, gt, [{"height":gt.mean()} for g in gt])
+                # tmp steffen
+                Memento.add_to_memory(membrane, gt, [{"height":g.mean()} for g in gt])
                 # start using exp replay only after #options.exp_warmstart iterations
                 if options.exp_warmstart < iteration:
                     if options.exp_height:
@@ -293,7 +293,6 @@ def train_script_v1(options):
         # monitor training and plot loss
         if iteration % 100 == 0 and (iteration < options.pre_train_iter or not
                 options.fine_tune_b):
-
             if options.augment_pretraining:
                 loss_train_no_reg = float(loss_valid_f(a_membrane, a_gt))
             else:
