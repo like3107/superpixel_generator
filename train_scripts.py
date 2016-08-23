@@ -110,8 +110,6 @@ def train_script_v1(options):
     fine_tune_losses = [[], []]
     iterations = []
     ft_iteration = 0
-
-
     free_voxel_empty = (options.global_edge_len - patch_len)**2
     free_voxel = free_voxel_empty
     print 'training'
@@ -341,12 +339,17 @@ def train_script_v1(options):
 if __name__ == '__main__':
     p = configargparse.ArgParser(default_config_files=['./training.conf'])
 
-    p.add('--save_net_b', default=True, type=bool)
-    def_net_name = 'V5_BN_times100_2'
+    # where to save the net
+    def_net_name = 'V5_BN_times100_ft'
     p.add('--net_name', default=def_net_name)
+    p.add('--save_net_b', default=True, type=bool)
+
+    # reload existing net
+    p.add('--load_net_b', default=True, action='store_true')
+    p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
 
     # train data paths
-    def_train_version = 'first_repr'
+    def_train_version = 'second'
     p.add('--train_version', default=def_train_version)
     p.add('--raw_path', default='./data/volumes/raw_%s.h5' % def_train_version)
     p.add('--membrane_path',
@@ -360,18 +363,14 @@ if __name__ == '__main__':
     # valid data paths
     def_valid_version = 'first_repr'
     p.add('--valid_version', default=def_valid_version)
-    p.add('--label_path_val',
-          default='./data/volumes/label_%s.h5' % def_valid_version)
-    p.add('--height_gt_path_val',
-          default='./data/volumes/height_%s.h5' % def_valid_version)
     p.add('--raw_path_val',
           default='./data/volumes/raw_%s.h5' % def_valid_version)
     p.add('--membrane_path_val',
           default='./data/volumes/membranes_%s.h5' % def_valid_version)
-
-    # reload existing net
-    p.add('--load_net_b', default=True, action='store_true')
-    p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
+    p.add('--label_path_val',
+          default='./data/volumes/label_%s.h5' % def_valid_version)
+    p.add('--height_gt_path_val',
+          default='./data/volumes/height_%s.h5' % def_valid_version)
 
     # training general
     p.add('--val_b', default=True)
@@ -382,13 +381,13 @@ if __name__ == '__main__':
     p.add('--clip_method', default='clip')
 
     # pre-training
-    p.add('--pre_train_iter', default=1000000, type=int)
-    p.add('--regularization', default=10 ** -9, type=float)
+    p.add('--pre_train_iter', default=600000, type=int)
+    p.add('--regularization', default=10. ** 1, type=float)
     p.add('--batch_size', default=16, type=int)
-    p.add('--augment_pretraining', action='store_true')
+    p.add('--augment_pretraining', default=True, action='store_true')
 
     # fine-tuning
-    p.add('--batch_size_ft', default=8, type=int)
+    p.add('--batch_size_ft', default=4, type=int)
     p.add('--reset_after_fine_tune', default=False, type=bool)
     p.add('--fine_tune_b', default=True, type=bool)
     p.add('--margin', default=0.5, type=float)

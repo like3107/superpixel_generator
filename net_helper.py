@@ -12,4 +12,5 @@ def calc_conv_reduction(edge_len, filter_size, stride=1, pooling=1, padding=0):
 
 
 if __name__ == '__main__':
-    print calc_conv_reduction(6, 6)
+    print calc_conv_reduction(5 , 5)
+    # 35 15 5

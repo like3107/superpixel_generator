@@ -181,7 +181,7 @@ if __name__ == '__main__':
     p.add('--chunk_size', default=16)
     p.add('--slices_total', default=64)     # number z slices
     # network params
-    p.add('--net_number', default='net_120000',type=str)
+    p.add('--net_number', default='net_336994',type=str)
     p.add('--net_name', default='V5_BN_times100_2', type=str)
 
     # data params
