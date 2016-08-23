@@ -178,9 +178,10 @@ def load_network(load_path, l_last):
     return
 
 
-def print_options_for_net(options, train_version, valid_version):
+def print_options_for_net(options):
     to_print = str([options.net_name, options.load_net_b, options.load_net_path,
-                train_version, valid_version, options.val_b,
+                options.def_train_version, options.def_valid_version,
+                    options.val_b,
                 options.global_edge_len, options.fast_reset,
                 options.clip_method, options.pre_train_iter,
                 options.regularization, options.batch_size,

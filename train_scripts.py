@@ -417,6 +417,6 @@ if __name__ == '__main__':
 
     options = p.parse_args()
 
-    u.print_options_for_net(options, def_train_version, def_valid_version)
+    u.print_options_for_net(options)
     exit()
     train_script_v1(options)
