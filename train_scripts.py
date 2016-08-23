@@ -246,6 +246,10 @@ def train_script_v1(options):
         # pretraining
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
 
+            # if np.any(bm.error_indicator_pass > 0):
+            #     gt = (gt.transpose()+bm.error_indicator_pass).transpose()
+            #     print "adjusting height ",bm.error_indicator_pass
+
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt, [{"height":g.mean()} for g in gt])
                 # start using exp replay only after #options.exp_warmstart iterations
@@ -351,10 +355,10 @@ if __name__ == '__main__':
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
     p.add('--net_name', default=def_net_name)
-    p.add('--save_net_b', default=True, type=bool)
+    p.add('--no-save_net', dest='save_net_b', action='store_false')
 
     # reload existing net
-    p.add('--load_net_b', default=False, type=bool)
+    p.add('--load_net', dest='load_net_b', action='store_true')
     p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
 
     # train data paths
@@ -384,7 +388,7 @@ if __name__ == '__main__':
     # training general
     p.add('--val_b', default=True)
     p.add('--save_counter', default=10000, type=int)
-    p.add('--dummy_data_b', default=False, type=bool)
+    p.add('--dummy_data', dest='dummy_data_b', action='store_true')
     p.add('--global_edge_len', default=300, type=int)
     p.add('--fast_reset', default=False, type=bool)
     p.add('--clip_method', default='clip')
@@ -393,30 +397,31 @@ if __name__ == '__main__':
     p.add('--pre_train_iter', default=600000, type=int)
     p.add('--regularization', default=10. ** 1, type=float)
     p.add('--batch_size', default=16, type=int)
-    p.add('--augment_pretraining', default=True, type=bool)
-    p.add('--scale_height_factor', default=100)
+    p.add('--no-augment_pretraining', dest='augment_pretraining',
+                                      action='store_false')
+    p.add('--scale_height_factor', default=100,type=float)
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)
-    p.add('--reset_after_fine_tune', default=False, type=bool)
-    p.add('--fine_tune_b', default=True, type=bool)
+    p.add('--reset_after_fine_tune', action='store_true')
+    p.add('--no-ft', dest='fine_tune_b', action='store_false')
     p.add('--margin', default=0.5, type=float)
     p.add('--augment_ft', default=True, type=bool)
-
+    p.add('--no-aug-ft', dest='augment_ft', action='store_false')
     # experience replay
     # clip_method="exp20"
     p.add('--exp_bs', default=16, type=int)
     p.add('--exp_ft_bs', default=8, type=int)
     p.add('--exp_warmstart', default=1000, type=int)
-    p.add('--exp_height', default=True, type=bool)
-    p.add('--exp_save', default=True, type=bool)
+    p.add('--no-exp_height', dest='exp_height', action='store_false')
+    p.add('--no-exp_save', dest='exp_save', action='store_false')
     p.add('--exp_load', default="", type=str)
 
     p.add('--max_iter', default=10000000000000, type=int)
-    p.add('--no_bash_backup', default=False, type=bool)
+    p.add('--no_bash_backup', action='store_true')
 
     options = p.parse_args()
 
-    u.print_options_for_net(options, def_train_version, def_valid_version)
+    u.print_options_for_net(options)
 
     train_script_v1(options)
