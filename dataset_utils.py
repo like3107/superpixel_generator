@@ -439,6 +439,10 @@ class HoneyBatcherPredict(object):
                 time_put = self.priority_queue[b].get()
             if self.global_claims[b, center_x, center_y] == 0:
                 already_claimed = False
+                if self.perfect_play and error_indicator > 0:
+                    # only draw correct claims
+                    already_claimed = True 
+
         assert (self.global_claims[b, center_x, center_y] == 0)
         assert (self.pad <= center_x < self.global_el - self.pad)
         assert (self.pad <= center_y < self.global_el - self.pad)
@@ -529,7 +533,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_method='clip',
                  timos_seeds_b=True, slices=None,
-                 scale_height_factor=None):
+                 scale_height_factor=None, perfect_play=False):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
                                                raw=raw, raw_key=raw_key,
@@ -583,6 +587,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                             self.pad:-self.pad]
 
         # private
+        self.perfect_play = perfect_play
         self.global_directionmap_batch = None  # no padding
         self.global_label_batch = None  # no padding
         self.global_height_gt_batch = None  # no padding
