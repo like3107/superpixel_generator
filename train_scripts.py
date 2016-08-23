@@ -247,9 +247,9 @@ def train_script_v1(options):
         # pretraining
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
 
-            # if np.any(bm.error_indicator_pass > 0):
-            #     gt = (gt.transpose()+bm.error_indicator_pass).transpose()
-            #     print "adjusting height ",bm.error_indicator_pass
+            if options.add_height_penalty and \
+                    np.any(bm.error_indicator_pass > 0):
+                gt = (gt.transpose()+bm.error_indicator_pass).transpose()
 
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt, [{"height":g.mean()} for g in gt])
@@ -392,7 +392,7 @@ if __name__ == '__main__':
     p.add('--save_counter', default=10000, type=int)
     p.add('--dummy_data', dest='dummy_data_b', action='store_true')
     p.add('--global_edge_len', default=300, type=int)
-    p.add('--fast_reset', default=False, type=bool)
+    p.add('--fast_reset', action='store_true')
     p.add('--clip_method', default='clip')
 
     # pre-training
@@ -402,13 +402,14 @@ if __name__ == '__main__':
     p.add('--no-augment_pretraining', dest='augment_pretraining',
                                       action='store_false')
     p.add('--scale_height_factor', default=100,type=float)
+    p.add('--ahp', dest='add_height_penalty', action='store_true')
+    
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)
     p.add('--reset_after_fine_tune', action='store_true')
     p.add('--no-ft', dest='fine_tune_b', action='store_false')
     p.add('--margin', default=0.5, type=float)
-    p.add('--augment_ft', default=True, type=bool)
     p.add('--no-aug-ft', dest='augment_ft', action='store_false')
     # experience replay
     # clip_method="exp20"
