@@ -528,7 +528,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_method='clip',
-                 timos_seeds_b=True, slices=None):
+                 timos_seeds_b=True, slices=None,
+                 scale_height_factor=None):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
                                                raw=raw, raw_key=raw_key,
@@ -568,7 +569,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             maximum = np.max(self.height_gt)
             self.height_gt *= -1.
             self.height_gt += maximum
-            self.height_gt *= 100.
+            if scale_height_factor is not None:
+                self.height_gt *= scale_height_factor
 
         if not self.padding_b:
             # crop label

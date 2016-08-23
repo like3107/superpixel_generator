@@ -82,7 +82,8 @@ def train_script_v1(options):
            patch_len=patch_len, global_edge_len=options.global_edge_len,
            padding_b=False,
            find_errors_b=options.fine_tune_b,
-           clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b)
+           clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
+           scale_height_factor=options.scale_height_factor)
     bm.init_batch()
 
     if options.val_b:
@@ -94,7 +95,8 @@ def train_script_v1(options):
                     patch_len=patch_len, global_edge_len=options.global_edge_len,
                     padding_b=False,
                     clip_method=options.clip_method,
-                    timos_seeds_b=options.timos_seeds_b)
+                    timos_seeds_b=options.timos_seeds_b,
+                    scale_height_factor=options.scale_height_factor)
 
         bm_val.init_batch()  # Training
 
@@ -385,6 +387,7 @@ if __name__ == '__main__':
     p.add('--regularization', default=10. ** 1, type=float)
     p.add('--batch_size', default=16, type=int)
     p.add('--augment_pretraining', default=True, action='store_true')
+    p.add('--scale_height_factor', default=100)
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)
