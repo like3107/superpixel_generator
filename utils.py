@@ -187,7 +187,7 @@ def print_options_for_net(options):
                 options.augment_pretraining, options.scale_height_factor,
                 options.batch_size_ft, options.margin, options.augment_ft,
                 options.exp_bs, options.exp_ft_bs, options.exp_warmstart,
-                options.exp_height, options.exp_save, options.exp_load])
+                options.exp_height, options.exp_save, options.exp_load, options.net_arch])
     print to_print[1:-1]
     print
 
