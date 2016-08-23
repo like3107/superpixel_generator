@@ -163,6 +163,7 @@ def create_network_folder_structure(save_net_path, train_mode=True):
     if not os.path.exists(save_net_path + code_save_folder):
         os.mkdir(save_net_path + code_save_folder)
     os.system('cp -rf *.py ' + save_net_path + code_save_folder)
+    os.system('cp -rf *.conf ' + save_net_path + code_save_folder)
 
 def load_network(load_path, l_last):
     h5_keys = []
@@ -177,9 +178,9 @@ def load_network(load_path, l_last):
     return
 
 
-def print_options_for_net(options, train_version, valid_version):
+def print_options_for_net(options):
     to_print = str([options.net_name, options.load_net_b, options.load_net_path,
-                train_version, valid_version, options.val_b,
+                options.train_version, options.valid_version, options.val_b,
                 options.global_edge_len, options.fast_reset,
                 options.clip_method, options.pre_train_iter,
                 options.regularization, options.batch_size,

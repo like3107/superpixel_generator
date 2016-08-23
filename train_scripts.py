@@ -67,7 +67,7 @@ def train_script_v1(options):
 
     Memento = exp.BatchMemento()
 
-    if options.exp_load != "":
+    if options.exp_load != "None":
         Memento.load(options.exp_load)
 
     if options.fine_tune_b:
@@ -423,5 +423,4 @@ if __name__ == '__main__':
     options = p.parse_args()
 
     u.print_options_for_net(options)
-
     train_script_v1(options)
