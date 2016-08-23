@@ -386,11 +386,11 @@ if __name__ == '__main__':
           default='./data/volumes/height_%s.h5' % def_valid_version)
 
     # training general
-    p.add('--val_b', default=True)
+    p.add('--no-val', dest='val_b', action='store_false')
     p.add('--save_counter', default=10000, type=int)
     p.add('--dummy_data', dest='dummy_data_b', action='store_true')
     p.add('--global_edge_len', default=300, type=int)
-    p.add('--fast_reset', default=False, type=bool)
+    p.add('--fast_reset', dest='fast_reset', action='store_true')
     p.add('--clip_method', default='clip')
 
     # pre-training
@@ -421,6 +421,7 @@ if __name__ == '__main__':
     p.add('--no_bash_backup', action='store_true')
 
     options = p.parse_args()
-
+    print options
     u.print_options_for_net(options)
+    exit()
     train_script_v1(options)
