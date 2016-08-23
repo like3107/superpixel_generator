@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import h5py
 
 class BatchMemento:
     """
@@ -7,7 +8,6 @@ class BatchMemento:
     """
     def __init__(self):
         self.memory = []
-        self.priority = []
         self.epsilon = 0.1
 
     def __len__(self):
@@ -104,15 +104,42 @@ class BatchMemento:
 
     def clear_memory(self):
         self.memory = []
-        self.priority = []
+
+    def save(self, file_name):
+        with h5py.File(file_name, 'w') as out_h5: 
+            out_h5.create_dataset("len",data=int(len(self)),dtype=int)
+            out_h5.create_dataset("epsilon",data=float(self.epsilon),dtype=float)
+
+            if len(self) > 0:
+                keys = self.memory[0].keys()
+                for k in keys:
+                    out_h5.create_dataset("mem/"+k,data=np.array([np.nan if m[k] is None\
+                            else m[k] for m in self.memory]),compression='gzip')
+
+    def load(self, file_name):
+        with h5py.File(file_name, 'r') as in_h5: 
+            self.epsilon = in_h5['epsilon'].value
+            if in_h5["len"].value > 0:
+                mkeys = in_h5["mem"].keys()
+                for i in range(in_h5["len"].value):
+                    sample = {}
+                    for k in mkeys:
+                        print k,i
+                        if k == "loss" and in_h5["mem/"+k][i] == np.nan:
+                            sample[k] = None
+                        else:
+                            sample[k] = in_h5["mem/"+k][i]
+                    self.memory.append(sample)
+            else:
+                self.memory = []
+                self.priority = []
 
 def stack_batch(b1, b2):
     return np.stack((b1,b2)).swapaxes(0,1)
 
 def flatten_stack(batch):
     return np.concatenate((batch[:,0],batch[:,1]),axis=0)
-
-
+    
 
 if __name__ == '__main__':
     M = BatchMemento()

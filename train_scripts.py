@@ -67,6 +67,9 @@ def train_script_v1(options):
 
     Memento = exp.BatchMemento()
 
+    if options.exp_load != "":
+        Memento.load(options.exp_load)
+
     if options.fine_tune_b:
         print 'compiling theano finetuningfunctions'
         loss_train_fine_f, loss_valid_fine_f, probs_fine_f = \
@@ -121,6 +124,11 @@ def train_script_v1(options):
         if (iteration % options.save_counter == 0 or free_voxel <= 201)\
                 and options.save_net_b:
             u.save_network(save_net_path, l_out, 'net_%i' % iteration)
+
+            if exp_save:
+                Memento.save(save_net_path +'/exp/exp_%i.h5' % iteration)
+                if options.fine_tune_b:
+                    Memento_ft.save(save_net_path +'/exp/exp_ft_%i.h5' % iteration)
 
         # predict val
         if options.val_b:
@@ -239,7 +247,6 @@ def train_script_v1(options):
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
 
             if options.exp_bs > 0:
-                # tmp steffen
                 Memento.add_to_memory(membrane, gt, [{"height":g.mean()} for g in gt])
                 # start using exp replay only after #options.exp_warmstart iterations
                 if options.exp_warmstart < iteration:
@@ -291,7 +298,7 @@ def train_script_v1(options):
             free_voxel = free_voxel_empty
 
         # monitor training and plot loss
-        if iteration % 100 == 0 and (iteration < options.pre_train_iter or not
+        if iteration % 1000 == 0 and (iteration < options.pre_train_iter or not
                 options.fine_tune_b):
             if options.augment_pretraining:
                 loss_train_no_reg = float(loss_valid_f(a_membrane, a_gt))
@@ -305,6 +312,7 @@ def train_script_v1(options):
                   'loss_validation %.4f, iteration %i' % \
                   (loss_train, loss_train_no_reg, loss_valid, iteration),
             sys.stdout.flush()
+
             if options.save_net_b:
                 iterations.append(iteration)
                 losses[0].append(loss_train)
@@ -375,7 +383,7 @@ if __name__ == '__main__':
 
     # training general
     p.add('--val_b', default=True)
-    p.add('--save_counter', default=10000, type=int)
+    p.add('--save_counter', default=1000, type=int)
     p.add('--dummy_data_b', default=False, type=bool)
     p.add('--global_edge_len', default=300, type=int)
     p.add('--fast_reset', default=False, type=bool)
@@ -401,6 +409,8 @@ if __name__ == '__main__':
     p.add('--exp_ft_bs', default=8, type=int)
     p.add('--exp_warmstart', default=1000, type=int)
     p.add('--exp_height', default=True, action='store_true')
+    p.add('--exp_save', default=True, action='store_true')
+    p.add('--exp_load', default="", type=str)
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')

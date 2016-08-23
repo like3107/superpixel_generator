@@ -154,6 +154,8 @@ def create_network_folder_structure(save_net_path, train_mode=True):
         os.mkdir(save_net_path)
     if not os.path.exists(save_net_path + '/images'):
         os.mkdir(save_net_path + '/images')
+    if not os.path.exists(save_net_path + '/images'):
+        os.mkdir(save_net_path + '/exp')
     if train_mode:
         code_save_folder = '/code_train'
     else:
