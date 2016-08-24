@@ -108,7 +108,8 @@ def pred_script_v2(
     c.use('gpu0')
 
     BM = du.HoneyBatcherPredict
-    network = nets.build_net_v5_BN     # hydra only needs build_ID_v0
+    netbuiler = nets.NetBuilder()
+    network = netbuiler.build_net_v5_BN     # hydra only needs build_ID_v0
     probs_funcs = nets.prob_funcs   # hydra, multichannel
     print 'pred script v2 start %i till %i' % (slices[0], slices[-1])
 
@@ -182,7 +183,7 @@ if __name__ == '__main__':
     p.add('--slices_total', default=64)     # number z slices
     # network params
     p.add('--net_number', default='net_336994',type=str)
-    p.add('--net_name', default='V5_BN_times100_2', type=str)
+    p.add('--net_name', default='V5_BN_bigreg_fixed_HEP', type=str)
 
     # data params
     p.add('--global_edge_len', default=300) # should be same as max(x)=max(y)

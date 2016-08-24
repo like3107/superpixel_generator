@@ -191,7 +191,7 @@ class HoneyBatcherPredict(object):
     def __init__(self, membranes, raw=None, raw_key=None,
                  membrane_key=None,  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
-                 slices=None, timos_seeds_b=True):
+                 slices=None, timos_seeds_b=True, perfect_play=False):
 
         """
         batch loader. Use either for predict. For valId and train use:
@@ -247,6 +247,7 @@ class HoneyBatcherPredict(object):
             raise Exception('try setting padding to True')
 
         # private
+        self.perfect_play = perfect_play
         self.global_batch = None  # includes padding, nn input
         self.global_raw = None
         self.global_claims = None  # includes padding, tri-map, inp
@@ -542,7 +543,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                patch_len=patch_len,
                                                padding_b=padding_b,
                                                timos_seeds_b=timos_seeds_b,
-                                               slices=slices)
+                                               slices=slices,
+                                               perfect_play=perfect_play)
 
         if isinstance(label, str):
             self.labels = load_h5(label, h5_key=label_key,
@@ -587,7 +589,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                             self.pad:-self.pad]
 
         # private
-        self.perfect_play = perfect_play
         self.global_directionmap_batch = None  # no padding
         self.global_label_batch = None  # no padding
         self.global_height_gt_batch = None  # no padding
