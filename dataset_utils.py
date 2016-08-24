@@ -356,7 +356,8 @@ class HoneyBatcherPredict(object):
     def walk_cross_coords(self, center):
         # walk in coord system of global label batch: x : 0 -> global_el - pl
         # use center if out of bounds
-        for x, y, d in zip(self.get_cross_coords(center)):
+        coords_x, coords_y, directions = self.get_cross_coords(center)
+        for x, y, d in zip(coords_x, coords_y, directions):
             yield x, y, d
 
     def get_cross_coords(self, center):
