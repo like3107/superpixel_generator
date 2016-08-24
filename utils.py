@@ -194,7 +194,7 @@ def save_options(load_path, options):
             for op_key, op_val in options:
                 if "options/"+op_key in net_h5:
                     f.__delitem__("options/"+op_key)
-                net_file.create_dataset("options/"+op_key,data=op_val)
+                net_h5.create_dataset("options/"+op_key,data=op_val)
 
 def print_options_for_net(options):
     to_print = str([options.net_name, options.load_net_b, options.load_net_path,
