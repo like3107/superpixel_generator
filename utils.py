@@ -190,9 +190,9 @@ def load_options(load_path, options={}):
 
 def save_options(load_path, options):
     if len(options) > 0:
-        with h5py.File(load_path, 'r+') as net_file:
+        with h5py.File(load_path, 'r+') as net_h5:
             for op_key, op_val in options:
-                if "options/"+op_key in h5File:
+                if "options/"+op_key in net_h5:
                     f.__delitem__("options/"+op_key)
                 net_file.create_dataset("options/"+op_key,data=op_val)
 
