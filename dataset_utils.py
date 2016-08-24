@@ -255,7 +255,7 @@ class HoneyBatcherPredict(object):
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
         self.priority_queue = None
-        self.coordinate_offset = np.array([[-1,0],[0,1],[1,0],[0,-1]],dtype=np.int)
+        self.coordinate_offset = np.array([[-1,0],[0,-1],[1,0],[0,1]],dtype=np.int)
         self.direction_array = np.arange(4)
         self.perfect_play = False
         self.error_indicator_pass = np.zeros((batch_size))
@@ -711,7 +711,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         # pass on if type I error already occured
         if error_indicator > 0:
-            self.error_indicator_pass[b] = error_indicator + self.scaling # remember to pass on
+            self.error_indicator_pass[b] = error_indicator + \
+                                           self.scaling # remember to pass on
             self.global_errormap[b, 1,
                                  center_x - self.pad,
                                  center_y - self.pad] = 1
@@ -734,7 +735,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def get_path_to_root(self, start_position, batch):
 
         def update_position(pos, direction):
-            offsets = zip([-1, 0, 1, 0], [0, -1, 0, 1])[int(direction)]
+            offsets = self.coordinate_offset[int(direction)]
             new_pos = [pos[0] - offsets[0], pos[1] - offsets[1]]
             return new_pos
 
@@ -1374,9 +1375,9 @@ def augment_batch(batch, gt=None, direction=None):
 
         dgt = {}
         dgt["left"] = gt[:,0,:,:]
-        dgt["up"] = gt[:,1,:,:]
+        dgt["down"] = gt[:,1,:,:]
         dgt["right"] = gt[:,2,:,:]
-        dgt["down"] = gt[:,3,:,:]
+        dgt["up"] = gt[:,3,:,:]
         # original
         ac = 0
         augmented_gt[ac*bs:(ac+1)*bs] = gt
@@ -1456,10 +1457,10 @@ def augment_batch(batch, gt=None, direction=None):
 
         # rot 90 by transpose and flipx
         ac = 5
-        augmented_dir[ac*bs:(ac+1)*bs] = (direction + 3) % 4
+        augmented_dir[ac*bs:(ac+1)*bs] = (direction + 1) % 4
         # rot -90 by transpose and flipy 
         ac = 6
-        augmented_dir[ac*bs:(ac+1)*bs] = (direction + 1) % 4
+        augmented_dir[ac*bs:(ac+1)*bs] = (direction + 3) % 4
         return augmented_batch, augmented_dir
 
     return augmented_batch
@@ -1477,10 +1478,10 @@ def average_ouput(output, ft=False):
         mean_out = np.mean(augm_out,axis=1)
     else:
         c = np.arange(7)
-        mean_out[:,0,:,:] = np.mean(augm_out[:,c,[0,2,0,2,1,3,1],:,:],axis=1)
-        mean_out[:,1,:,:] = np.mean(augm_out[:,c,[1,1,3,3,0,0,2],:,:],axis=1)
-        mean_out[:,2,:,:] = np.mean(augm_out[:,c,[2,0,2,0,3,1,3],:,:],axis=1)
-        mean_out[:,3,:,:] = np.mean(augm_out[:,c,[3,3,1,1,2,2,0],:,:],axis=1)
+        mean_out[:,0,:,:] = np.mean(augm_out[:,c,[0,2,0,2,1,1,3],:,:],axis=1)
+        mean_out[:,1,:,:] = np.mean(augm_out[:,c,[1,1,3,3,0,2,0],:,:],axis=1)
+        mean_out[:,2,:,:] = np.mean(augm_out[:,c,[2,0,2,0,3,3,1],:,:],axis=1)
+        mean_out[:,3,:,:] = np.mean(augm_out[:,c,[3,3,1,1,2,0,2],:,:],axis=1)
     return mean_out
 
 def grad_to_height(grad):

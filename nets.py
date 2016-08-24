@@ -23,6 +23,7 @@ class NetBuilder():
                 and method.startswith("loss_"))
 
     def get_net(self, netname):
+        print 'building net: ', netname
         return self.build_methods["build_"+netname]
 
     def get_loss(self, lossname):
@@ -395,7 +396,8 @@ class NetBuilder():
             updates = las.updates.adam(loss_train, all_params)
         if update == 'sgd':
             updates = las.updates.sgd(loss_train, all_params, 0.0001)
-        loss_train_f = theano.function([l_in.input_var, target], [loss_train, loss_individual_batch],
+        loss_train_f = theano.function([l_in.input_var, target],
+                                       [loss_train, loss_individual_batch],
                                        updates=updates)
 
         loss_valid_f = theano.function([l_in.input_var, target], loss_valid)

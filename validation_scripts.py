@@ -12,7 +12,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         gt = du.load_h5(gt_path, h5_key=gt_key)[0]
     if isinstance(pred_path, str):
         pred = du.load_h5(pred_path, h5_key=pred_key)[0]
-    print gt.shape, pred.shape
+    print 'gt', gt.shape, 'pred', pred.shape
     assert(gt.shape == pred.shape)
 
     if slice_by_slice:
@@ -41,7 +41,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         print 'Adapted Rand error recall    :, %.3f ,+- %.3f' % (all_means[4], all_vars[4])
         # string for easy copy to google doc
     	print ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
-    	return make_val_dic(all_means, all_vars)
+        return make_val_dic(all_means, all_vars)
 
     else:
         # variational information of split and merge error,  i.e., H(X|Y) and H(Y|X)
@@ -422,10 +422,11 @@ def make_val_dic(all_means, all_vars):
 if __name__ == '__main__':
     print   
     # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
-    pred_path='./data/preds/ws_3D_timo_b.h5'
+    pred_path='./data/nets/V5_BN_bigreg_fixed_HEP/' \
+              'predsnet_a_336994/pred_final_V5_BN_bigreg_fixed_HEP_net_336994.h5'
     # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './data/volumes/label_b.h5'
+    gt_path = './data/volumes/old/label_a.h5'
 
 
     print pred_path

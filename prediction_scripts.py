@@ -65,7 +65,7 @@ def pred_script_v2_wrapper(
         du.save_h5(path_to_folder + '/final.h5', 'data', data=le_final,
                    overwrite='w')
 
-    concat_h5_in_folder(pred_save_folder, chunk_size, slices_total, 
+    concat_h5_in_folder(pred_save_folder, chunk_size, slices_total,
                         global_edge_len)
 
     # du.save_h5(pred_save_folder + net_name + 'pred_final.h5',
@@ -100,7 +100,7 @@ def pred_script_v2(
     c.use('gpu0')
 
     options = u.load_options(net_file)
-    
+
     BM = du.HoneyBatcherPredict
     builder = nets.NetBuilder()
     network = builder.get_net(options['net_arch'])
@@ -181,10 +181,10 @@ if __name__ == '__main__':
     p.add('--pred_save_folder', default='',type=str)
 
     # data params
-    p.add('--global_edge_len', default=1250) # has to be same as max(x)=max(y)
-    p.add('--membrane_path', default='./data/volumes/membranes_b.h5')
-    p.add('--raw_path', default='./data/volumes/raw_b.h5')
-    p.add('--gt_path', default='./data/volumes/label_b.h5')
+    p.add('--global_edge_len', default=300) # has to be same as max(x)=max(y)
+    p.add('--membrane_path', default='./data/volumes/membranes_first_repr.h5')
+    p.add('--raw_path', default='./data/volumes/raw_first_repr.h5')
+    p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
     p.add('--timos_seeds_b', default=True)
     p.add('--save_validation', default="",type=str)
     options = p.parse_args()
