@@ -27,7 +27,7 @@ def pred_script_v2_wrapper(
     assert (os.path.exists(membrane_path))
     assert (os.path.exists(raw_path))
 
-    pred_save_folder = net_path + '/preds'+net_number+'/'
+    pred_save_folder = net_path + '/preds_b_'+net_number+'/'
 
     create_network_folder_structure(pred_save_folder)
     print 'net', net_name, net_number
@@ -129,9 +129,9 @@ def pred_script_v2(
             #tmp
             # label='./data/volumes/label_first_repr.h5',
             # height_gt='./data/volumes/height_first_repr.h5'
-
             )
 
+    assert (bm.rl == bm.global_el)
     u.load_network(load_net_path, l_out)
 
     bm.init_batch(start=0)
@@ -179,17 +179,17 @@ if __name__ == '__main__':
     p.add('-c', '--my-config', is_config_file=True, help='config file path')
 
     # multiprocessing params
-    p.add('--chunk_size', default=16)
-    p.add('--slices_total', default=64)     # number z slices
+    p.add('--chunk_size', default=25)
+    p.add('--slices_total', default=125)     # number z slices
     # network params
     p.add('--net_number', default='net_336994',type=str)
     p.add('--net_name', default='V5_BN_bigreg_fixed_HEP', type=str)
 
     # data params
-    p.add('--global_edge_len', default=300) # should be same as max(x)=max(y)
-    p.add('--membrane_path', default='./data/volumes/membranes_first_repr.h5')
-    p.add('--raw_path', default='./data/volumes/raw_first_repr.h5')
-    p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
+    p.add('--global_edge_len', default=1250) # has to be same as max(x)=max(y)
+    p.add('--membrane_path', default='./data/volumes/membranes_b.h5')
+    p.add('--raw_path', default='./data/volumes/raw_b.h5')
+    p.add('--gt_path', default='./data/volumes/label_b.h5')
     p.add('--timos_seeds_b', default=True)
     p.add('--save_validation', default="",type=str)
     options = p.parse_args()
