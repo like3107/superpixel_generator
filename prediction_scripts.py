@@ -21,9 +21,9 @@ def pred_script_v2_wrapper(
         ):
 
     assert (slices_total % chunk_size == 0)
-    assert (os.path.exists(pred_save_folder))
     assert (os.path.exists(membrane_path))
     assert (os.path.exists(raw_path))
+    assert (os.path.exists(net_file))
 
     create_network_folder_structure(pred_save_folder)
     print 'net', net_file
@@ -98,7 +98,6 @@ def pred_script_v2(
     import dataset_utils as du
     from theano.sandbox import cuda as c
     c.use('gpu0')
-
     options = u.load_options(net_file)
 
     BM = du.HoneyBatcherPredict
@@ -172,20 +171,21 @@ if __name__ == '__main__':
     p.add('-c', '--my-config', is_config_file=True, help='config file path')
 
     # multiprocessing params
-    p.add('--chunk_size', default=16)
-    p.add('--slices_total', default=64)     # number z slices
+    p.add('--chunk_size', default=16, type=int)
+    p.add('--slices_total', default=64, type=int)     # number z slices
+
     # network params
     p.add('--net_file', default='',type=str)
-    p.add('--net_number', default='net_336994',type=str)
-    p.add('--net_name', default='V5_BN_bigreg_fixed_HEP', type=str)
     p.add('--pred_save_folder', default='',type=str)
+    p.add('--net_name', default='',type=str)
+    p.add('--net_number', default='',type=str)
 
     # data params
-    p.add('--global_edge_len', default=300) # has to be same as max(x)=max(y)
+    p.add('--global_edge_len', default=300, type=int) # has to be same as max(x)=max(y)
     p.add('--membrane_path', default='./data/volumes/membranes_first_repr.h5')
     p.add('--raw_path', default='./data/volumes/raw_first_repr.h5')
     p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
-    p.add('--timos_seeds_b', default=True)
+    p.add('--timos_seeds_b', action='store_false')
     p.add('--save_validation', default="",type=str)
     options = p.parse_args()
 
@@ -205,7 +205,6 @@ if __name__ == '__main__':
                         raw_path=options.raw_path,
                         gt_path=options.gt_path,
                         timos_seeds_b=options.timos_seeds_b)
-
 
     if options.save_validation != "":
         f = open(options.save_validation,'w')
