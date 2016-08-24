@@ -172,8 +172,8 @@ if __name__ == '__main__':
     p.add('-c', '--my-config', is_config_file=True, help='config file path')
 
     # multiprocessing params
-    p.add('--chunk_size', default=25)
-    p.add('--slices_total', default=125)     # number z slices
+    p.add('--chunk_size', default=16)
+    p.add('--slices_total', default=64)     # number z slices
     # network params
     p.add('--net_file', default='',type=str)
     p.add('--net_number', default='net_336994',type=str)
