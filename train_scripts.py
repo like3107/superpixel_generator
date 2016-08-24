@@ -139,7 +139,15 @@ def train_script_v1(options):
             bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
         # predict train
-        membrane, gt, seeds, ids = bm.get_batches()
+        try:
+            membrane, gt, seeds, ids = bm.get_batches()
+        except:
+            print "Warning: queue empty... resetting bm"
+            bm.init_batch()
+            if options.val_b:
+                bm_val.init_batch()
+            free_voxel = free_voxel_empty
+            membrane, gt, seeds, ids = bm.get_batches()
         probs = probs_f(membrane)
         bm.update_priority_queue(probs, seeds, ids)
 
