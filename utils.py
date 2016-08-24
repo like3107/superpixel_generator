@@ -5,6 +5,7 @@ import lasagne as las
 import dataset_utils as du
 import os
 import sys
+import h5py
 
 np.random.seed(1234)
 fixed_rand = np.random.rand(256, 3)
@@ -121,7 +122,7 @@ def make_bash_executable(base_path, add_option=''):
 
 
 def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
-                 n_filter=None):
+                 n_filter=None,add=[]):
 
     h5_values = []
     h5_keys = []
@@ -147,6 +148,7 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
         h5_values.append(n_filter)
 
     du.save_h5(save_path + net_name, h5_keys, h5_values, overwrite='w')
+    save_options(save_path + net_name,add)
 
 
 def create_network_folder_structure(save_net_path, train_mode=True):
@@ -175,8 +177,24 @@ def load_network(load_path, l_last):
 
     all_param_values = du.load_h5(load_path, h5_keys)
     las.layers.set_all_param_values(l_last, all_param_values)
-    return
 
+def load_options(load_path, options={}):
+    with h5py.File(load_path, 'r') as net_file:
+        for op_key, op_val in [(k, net_file['options/'+k].value)\
+                                for k in net_file['options'].keys()]:
+            if isinstance(options,dict):
+                options[op_key] = op_val
+            else:
+                options.__setattr__(op_key, op_val)
+    return options
+
+def save_options(load_path, options):
+    if len(options) > 0:
+        with h5py.File(load_path, 'r+') as net_file:
+            for op_key, op_val in options:
+                if "options/"+op_key in h5File:
+                    f.__delitem__("options/"+op_key)
+                net_file.create_dataset("options/"+op_key,data=op_val)
 
 def print_options_for_net(options):
     to_print = str([options.net_name, options.load_net_b, options.load_net_path,

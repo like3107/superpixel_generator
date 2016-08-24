@@ -125,7 +125,9 @@ def train_script_v1(options):
 
         if (iteration % options.save_counter == 0 or free_voxel <= 201)\
                 and options.save_net_b:
-            u.save_network(save_net_path, l_out, 'net_%i' % iteration)
+            u.save_network(save_net_path, l_out,
+                           'net_%i' % iteration,
+                           add=options._get_kwargs())
 
             if options.exp_save:
                 Memento.save(save_net_path +'/exp/exp_%i.h5' % iteration)

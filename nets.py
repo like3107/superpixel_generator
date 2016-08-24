@@ -571,7 +571,5 @@ def prob_funcs_hybrid(l_in, last_layers):
 if __name__ == '__main__':
 
     l_in, l_in_direction, l_9, l_10, fov = self.build_ID_v0_hydra()
-
-
     las.layers.CustomRecurrentLayer()
 
