@@ -255,7 +255,10 @@ class HoneyBatcherPredict(object):
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
         self.priority_queue = None
-
+        self.coordinate_offset = np.array([[-1,0],[0,1],[1,0],[0,-1]],dtype=np.int)
+        self.direction_array = np.arange(4)
+        self.perfect_play = False
+        self.error_indicator_pass = np.zeros((batch_size))
         # debug
         self.max_batch = 0
         self.counter = 0
@@ -353,24 +356,18 @@ class HoneyBatcherPredict(object):
     def walk_cross_coords(self, center):
         # walk in coord system of global label batch: x : 0 -> global_el - pl
         # use center if out of bounds
-        center_x, center_y = center
-        for direction, [offset_x, offset_y] in \
-                enumerate(zip([-1, 0, 1, 0], [0, -1, 0, 1])):
-            # check boundary conditions
-            if (self.pad <= center_x + offset_x < self.global_el - self.pad) \
-                    and (self.pad <= center_y + offset_y <
-                                 self.global_el - self.pad):
-                yield center_x + offset_x, center_y + offset_y, direction
-            else:
-                yield center_x, center_y, direction
+        for x, y, d in zip(self.get_cross_coords(center)):
+            yield x, y, d
 
-    def get_cross_coords(self, seed, global_offset=0):
-        seeds_x, seeds_y, dirs = [], [], []
-        for seed_x, seed_y, d in self.walk_cross_coords(seed):
-            seeds_x.append(seed_x + global_offset)
-            seeds_y.append(seed_y + global_offset)
-            dirs.append(d)
-        return np.array(seeds_x), np.array(seeds_y), np.array(d)
+    def get_cross_coords(self, center):
+        coords = self.coordinate_offset + center
+        np.clip(coords,self.pad, self.global_el - self.pad - 1, out=coords)
+        return coords[:,0], coords[:,1], self.direction_array
+
+    def get_cross_coords_offset(self, center):
+        coords = self.coordinate_offset + center - self.pad
+        np.clip(coords, 0, self.global_el - self.pl - 1, out=coords)
+        return coords[:,0], coords[:,1], self.direction_array
 
     def crop_membrane(self, seed, b):
         membrane = self.global_batch[b,
@@ -435,6 +432,8 @@ class HoneyBatcherPredict(object):
         already_claimed = True
         while already_claimed:
             if self.priority_queue[b].empty():
+                self.serialize_to_h5("empty_queue_state")
+                self.draw_debug_image("empty_queue")
                 raise Exception('priority queue empty. All pixels labeled')
             height, _, center_x, center_y, Id, direction, error_indicator, \
                 time_put = self.priority_queue[b].get()
@@ -442,7 +441,7 @@ class HoneyBatcherPredict(object):
                 already_claimed = False
                 if self.perfect_play and error_indicator > 0:
                     # only draw correct claims
-                    already_claimed = True 
+                    already_claimed = True
 
         assert (self.global_claims[b, center_x, center_y] == 0)
         assert (self.pad <= center_x < self.global_el - self.pad)
@@ -467,11 +466,10 @@ class HoneyBatcherPredict(object):
         return raw_batch, centers, ids
 
     def update_priority_queue(self, heights_batch, centers, ids):
-        directions = [0, 1, 2, 3]
         for b, center, Id, heights in zip(range(self.bs), centers, ids,
                                           heights_batch[:, :, 0, 0]):
             # if possibly wrong
-            new_seeds_x, new_seeds_y, _ = self.get_cross_coords(center)
+            cross_x, cross_y, cross_d = self.get_cross_coords(center)
             lower_bound = self.global_heightmap_batch[b,
                                                       center[0] - self.pad,
                                                       center[1] - self.pad]
@@ -479,26 +477,22 @@ class HoneyBatcherPredict(object):
                 print "encountered inf for prediction center !!!!", \
                     b, center, Id, heights, lower_bound
                 raise Exception('encountered inf for prediction center')
-
-            for x, y, height, direction in \
-                    zip(new_seeds_x, new_seeds_y, heights, directions):
-                    #  min of NN output and other estimates (if existent)
-                    self.max_new_old_pq_update(b, x, y, height, lower_bound,
-                                                Id, direction)
+            self.max_new_old_pq_update(b, cross_x, cross_y, heights, lower_bound,
+                                                Id, cross_d)
 
     def max_new_old_pq_update(self, b, x, y, height, lower_bound, Id,
-                               direction, error_indicator=0, input_time=0):
-        prev_height = self.global_heightmap_batch[b, x - self.pad, y - self.pad]
-        if self.global_claims[b, x, y] == 0 and height < prev_height:
-            height_j = max(height, lower_bound)
-            # if height_prev > 0:
-            #     height_j = min(height_j, height_prev)
-            self.global_heightmap_batch[b,
-                                        x - self.pad,
-                                        y - self.pad] = height_j
-            self.priority_queue[b].put((height_j, np.random.random(), x, y,
-                                        Id, direction, error_indicator,
-                                        input_time))
+                               direction, input_time=0, add_all=False):
+        # check if there is no other lower prediction
+        is_lowest = ((height < self.global_heightmap_batch[b, x - self.pad, y - self.pad]) | add_all )\
+                    & (self.global_claims[b, x, y] == 0)
+        height[height<lower_bound] = lower_bound
+        self.global_heightmap_batch[b, x  - self.pad, y - self.pad][is_lowest] = height[is_lowest]
+        for cx, cy, cd, hj, il in zip(x, y, direction, height, is_lowest):
+            if il:
+                self.priority_queue[b].put((hj, np.random.random(), cx, cy,
+                                            Id, cd,
+                                            self.error_indicator_pass[b],
+                                            input_time))
 
     def draw_debug_image(self, image_name,
                          path='./data/nets/debug/images/',
@@ -686,8 +680,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         return raw_batch, gts, centers, ids
 
     def get_adjacent_heights(self, seed, batch):
-        seeds_x, seeds_y, _ = self.get_cross_coords(seed,
-                                                    global_offset=-self.pad)
+        seeds_x, seeds_y, _ = self.get_cross_coords_offset(seed)
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         assert (np.any(self.rl - self.pl > seeds_x) or
                 np.any(self.rl - self.pl > seeds_y))
@@ -736,31 +729,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         #     direction, error_indicator, time_put
         return height, _, center_x, center_y, Id, direction, error_indicator, \
                     time_put
-
-    def update_priority_queue(self, heights_batch, centers, ids):
-        directions = [0, 1, 2, 3]
-        for b, center, Id, heights in zip(range(self.bs), centers, ids,
-                                          heights_batch[:, :, 0, 0]):
-            # if possibly wrong
-            new_seeds_x, new_seeds_y, _ = self.get_cross_coords(center)
-            self.global_prediction_map[b,
-                                       center[0] - self.pad,
-                                       center[1] - self.pad, :] = heights
-            lower_bound = self.global_heightmap_batch[b, center[0] - self.pad,
-                                                      center[1] - self.pad]
-            if lower_bound == np.inf:
-                print "encountered inf for prediction center !!!!", \
-                    b, center, Id, heights, lower_bound
-                raise Exception('encountered inf for prediction center')
-
-            # pass errors on
-            for x, y, height, direction in \
-                    zip(new_seeds_x, new_seeds_y, heights, directions):
-                error_indicator = self.error_indicator_pass[b]
-                self.max_new_old_pq_update(b, x, y, height, lower_bound,
-                                           Id, direction,
-                                           error_indicator=error_indicator,
-                                           input_time=self.global_time)
 
     def get_path_to_root(self, start_position, batch):
 
@@ -968,7 +936,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         return reconst_e1, reconst_e2, np.array(error_I_direction), np.array(
             error_II_direction)
 
-    def serialize_to_h5(self, h5_filename, path="./data/nets/debug_serial/"):
+    def serialize_to_h5(self, h5_filename, path="./data/nets/debug/serial/"):
         if not exists(path):
             makedirs(path)
         with h5py.File(path+'/'+h5_filename, 'w') as out_h5:
