@@ -439,6 +439,10 @@ class HoneyBatcherPredict(object):
                 time_put = self.priority_queue[b].get()
             if self.global_claims[b, center_x, center_y] == 0:
                 already_claimed = False
+                if self.perfect_play and error_indicator > 0:
+                    # only draw correct claims
+                    already_claimed = True 
+
         assert (self.global_claims[b, center_x, center_y] == 0)
         assert (self.pad <= center_x < self.global_el - self.pad)
         assert (self.pad <= center_y < self.global_el - self.pad)
@@ -529,7 +533,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_method='clip',
                  timos_seeds_b=True, slices=None,
-                 scale_height_factor=None):
+                 scale_height_factor=None, perfect_play=False):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
                                                raw=raw, raw_key=raw_key,
@@ -571,6 +575,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.height_gt += maximum
             if scale_height_factor is not None:
                 self.height_gt *= scale_height_factor
+                self.scaling = scale_height_factor
+            else:
+                self.scaling = 1.
 
         if not self.padding_b:
             # crop label
@@ -580,6 +587,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                             self.pad:-self.pad]
 
         # private
+        self.perfect_play = perfect_play
         self.global_directionmap_batch = None  # no padding
         self.global_label_batch = None  # no padding
         self.global_height_gt_batch = None  # no padding
@@ -708,7 +716,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         # pass on if type I error already occured
         if error_indicator > 0:
-            self.error_indicator_pass[b] = error_indicator+1 # remember to pass on
+            self.error_indicator_pass[b] = error_indicator + self.scaling # remember to pass on
             self.global_errormap[b, 1,
                                  center_x - self.pad,
                                  center_y - self.pad] = 1
@@ -718,7 +726,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                         center_y - self.pad]:
             self.global_errormap[b, :2, center_x - self.pad,
                                  center_y - self.pad] = 1
-            self.error_indicator_pass[b] = 1
+            self.error_indicator_pass[b] = self.scaling
 
         # check for errors in neighbor regions, type II
         if self.find_errors_b:
@@ -1504,6 +1512,21 @@ def average_ouput(output, ft=False):
         mean_out[:,2,:,:] = np.mean(augm_out[:,c,[2,0,2,0,3,1,3],:,:],axis=1)
         mean_out[:,3,:,:] = np.mean(augm_out[:,c,[3,3,1,1,2,2,0],:,:],axis=1)
     return mean_out
+
+def grad_to_height(grad):
+    height = np.empty((grad.shape[0],4,1,1),dtype=grad.dtype)
+    height[:,0,:,:] = grad[:,0,:,:]-grad[:,1,:,:]
+    height[:,1,:,:] = grad[:,0,:,:]+grad[:,2,:,:]
+    height[:,2,:,:] = grad[:,0,:,:]+grad[:,1,:,:]
+    height[:,3,:,:] = grad[:,0,:,:]-grad[:,2,:,:]
+    return height
+
+def height_to_grad(height):
+    grad = np.empty((height.shape[0],3,1,1),dtype=height.dtype)
+    grad[:,0,:,:] = height.mean(axis=1)
+    grad[:,1,:,:] = height[:,2,:,:]-height[:,0,:,:]
+    grad[:,2,:,:] = height[:,1,:,:]-height[:,3,:,:]
+    return grad
 
 if __name__ == '__main__':
 

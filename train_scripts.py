@@ -87,7 +87,8 @@ def train_script_v1(options):
            padding_b=False,
            find_errors_b=options.fine_tune_b,
            clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
-           scale_height_factor=options.scale_height_factor)
+           scale_height_factor=options.scale_height_factor,
+           perfect_play=options.perfect_play)
     bm.init_batch()
 
     if options.val_b:
@@ -251,6 +252,7 @@ def train_script_v1(options):
                     np.any(bm.error_indicator_pass > 0):
                 gt = (gt.transpose()+bm.error_indicator_pass).transpose()
 
+
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt, [{"height":g.mean()} for g in gt])
                 # start using exp replay only after #options.exp_warmstart iterations
@@ -259,6 +261,7 @@ def train_script_v1(options):
                         membrane, gt, mem_choice = Memento.get_evenheight_batch(options.batch_size+options.exp_bs)
                     else:
                         membrane, gt, mem_choice = Memento.get_batch(options.batch_size+options.exp_bs)
+
 
             if options.augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
@@ -394,6 +397,7 @@ if __name__ == '__main__':
     p.add('--global_edge_len', default=300, type=int)
     p.add('--fast_reset', action='store_true')
     p.add('--clip_method', default='clip')
+    p.add('--perfect_play', action='store_true')
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)

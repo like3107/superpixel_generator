@@ -40,6 +40,26 @@ class BatchChannelSlicer(las.layers.MergeLayer):
         batches = l_in.shape[0]
         return l_in[T.arange(batches), slices, None]
 
+class GradientToHeight(las.layers.Layer):
+    """
+    input: 2 Las layers:
+        1. layer which should be sliced along the channels (axis=1)
+        2. vector of which indices should be used (one channel per batch)
+    output: shape (b, 1, ...)
+    """
+    def __init__(self, incoming, **kwargs):
+        super(GradientToHeight, self).__init__(incoming, **kwargs)
+
+    def get_output_shape_for(self, input_shape):
+        # return tuple((input_shape[0], 4, *input_shape[2:]))
+        return tuple((input_shape[0], 4, 1, 1))
+
+    def get_output_for(self, input, **kwargs):
+        return T.stack([
+            input[:,0,:,:]-input[:,1,:,:],
+            input[:,0,:,:]+input[:,2,:,:],
+            input[:,0,:,:]+input[:,1,:,:],
+            input[:,0,:,:]-input[:,2,:,:]],axis=1)
 
 if __name__ == '__main__':
     shape = (10, 2, 4, 4)

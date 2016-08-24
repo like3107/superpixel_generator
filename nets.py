@@ -155,10 +155,9 @@ class NetBuilder():
         return l_in, l_12, fov
 
 
-    def build_net_v5_BN(self):
+    def build_net_v5_BN(self, n_classes = 4):
         fov = 40    # field of view = patch length
         n_channels = 4
-        n_classes = 4
         filt = [7, 6, 6]
         n_filt = [20, 25, 60, 30, n_classes]
         pool = [2, 2]
@@ -178,10 +177,8 @@ class NetBuilder():
                             nonlinearity=las.nonlinearities.rectify)
         l_7 = L.Conv2DLayer(l_6, n_filt[4], 1,
                             nonlinearity=las.nonlinearities.rectify,
-                            b=np.random.random(4)*10+10.)
+                            b=np.random.random(n_classes)*10+10.)
         return l_in, l_7, fov
-
-
 
     def build_ID_v0(self):
         fov = 40  # field of view = patch length
@@ -295,6 +292,12 @@ class NetBuilder():
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov
 
+    def build_ID_v5_hydra_BN_grad(self):
+        l_in, l_9, fov = self.build_net_v5_BN(n_classes=3)
+        l_9_height = cs.GradientToHeight(l_9)
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9_height, l_in_direction])
+        return l_in, l_in_direction, l_9_height, l_10, fov
 
     def build_ID_v0_hybrid(self):
         fov = 40  # field of view = patch length
