@@ -82,7 +82,8 @@ def prpare_seg_path_wrapper(path, names):
     for name in names:
         segmentation = load_h5(path + name)[0]
         segmentation = prepare_data_mc(segmentation)
-        save_h5(path + 'pred_' + name, 'data', data=segmentation)
+        save_h5(path + 'pred_' + name, 'data',
+                data=segmentation.astype(np.uint32), overwrite='w')
 
 
 def prepare_data_mc(segmentation):

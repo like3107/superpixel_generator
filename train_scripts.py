@@ -102,7 +102,7 @@ def train_script_v1(options):
            raw=raw_path,
            batch_size=options.batch_size,
            patch_len=patch_len, global_edge_len=options.global_edge_len,
-           padding_b=False,
+           padding_b=options.padding_b,
            find_errors_b=options.fine_tune_b,
            clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
            scale_height_factor=options.scale_height_factor,
@@ -116,11 +116,14 @@ def train_script_v1(options):
                     batch_size=options.batch_size,
                     find_errors_b=options.fine_tune_b,
                     patch_len=patch_len, global_edge_len=options.global_edge_len,
-                    padding_b=False,
+                    padding_b=options.padding_b,
                     clip_method=options.clip_method,
                     timos_seeds_b=options.timos_seeds_b,
                     scale_height_factor=options.scale_height_factor)
         bm_val.init_batch()
+
+    if options.padding_b:
+        options.global_edge_len = bm.global_el
 
     if options.load_net_b:
         np.random.seed(651)     # change seed so different images for retrain
@@ -163,23 +166,25 @@ def train_script_v1(options):
             bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
         # predict train
-        try:
-            membrane, gt, seeds, ids = bm.get_batches()
-        except:
-            print "Warning: queue empty... resetting bm"
-            bm.init_batch()
-            bm.draw_debug_image(
-                "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
-                (iteration, bm.counter, free_voxel),
-                path=save_net_path_reset)
-            if options.val_b:
-                bm_val.init_batch()
-                bm_val.draw_debug_image(
-                    "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
+        if options.perfect_play:
+            try:
+                membrane, gt, seeds, ids = bm.get_batches()
+            except:
+                print "Warning: queue empty... resetting bm"
+                bm.init_batch()
+                bm.draw_debug_image(
+                    "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
                     (iteration, bm.counter, free_voxel),
                     path=save_net_path_reset)
+                if options.val_b:
+                    bm_val.init_batch()
+                    bm_val.draw_debug_image(
+                        "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
+                        (iteration, bm.counter, free_voxel),
+                        path=save_net_path_reset)
 
-            free_voxel = free_voxel_empty
+                free_voxel = free_voxel_empty
+        else:
             membrane, gt, seeds, ids = bm.get_batches()
         probs = probs_f(membrane)
         bm.update_priority_queue(probs, seeds, ids)
@@ -294,7 +299,8 @@ def train_script_v1(options):
                 gt = (gt.transpose()+bm.error_indicator_pass).transpose()
 
             if options.exp_bs > 0:
-                Memento.add_to_memory(membrane, gt, [{"height":g.mean()} for g in gt])
+                Memento.add_to_memory(membrane, gt,
+                                      [{"height":g.mean()} for g in gt])
                 # start using exp replay only after #options.exp_warmstart iterations
                 if options.exp_warmstart < iteration:
                     if options.exp_height:
@@ -425,6 +431,7 @@ if __name__ == '__main__':
     p.add('--fast_reset', action='store_true')
     p.add('--clip_method', default='clip')
     p.add('--perfect_play', action='store_true')
+    p.add('--padding_b', action='store_false')
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)
