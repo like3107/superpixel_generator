@@ -763,12 +763,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 self.global_directionmap_batch[batch,
                                                current_position[0]-self.pad,
                                                current_position[1]-self.pad]
-            print current_position, current_direction, self.global_heightmap_batch[batch,
-                                               current_position[0]-self.pad,
-                                               current_position[1]-self.pad],\
-                                               self.global_claims[batch,
-                                               current_position[0],
-                                               current_position[1]]
             yield current_position, current_direction
 
     # 2nd crossing from own gt ID into other ID
