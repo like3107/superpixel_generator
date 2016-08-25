@@ -24,6 +24,16 @@ def train_script_v1(options):
 
     save_net_path = './data/nets/' + options.net_name + '/'
 
+    raw_path ='./data/volumes/raw_%s.h5' % options.train_version
+    membrane_path ='./data/volumes/membranes_%s.h5' % options.train_version
+    label_path ='./data/volumes/label_%s.h5' % options.train_version
+    height_gt_path ='./data/volumes/height_%s.h5' % options.train_version
+
+    raw_path_val ='./data/volumes/raw_%s.h5' % options.valid_version
+    membrane_path_val ='./data/volumes/membranes_%s.h5' % options.valid_version
+    label_path_val ='./data/volumes/label_%s.h5' % options.valid_version
+    height_gt_path_val ='./data/volumes/height_%s.h5' % options.valid_version
+
     debug_path = save_net_path + "/batches"
     if not os.path.exists(debug_path):
         os.makedirs(debug_path)
@@ -58,9 +68,9 @@ def train_script_v1(options):
     l_in, l_in_direction, l_out, l_out_direction, patch_len = network()
     patch_len = 40
     if options.dummy_data_b:
-        options.raw_path, options.membrane_path, options.height_gt_path, options.label_path = \
+        raw_path, membrane_path, height_gt_path, label_path = \
             du.generate_dummy_data(options.batch_size, options.global_edge_len, patch_len)
-        options.raw_path_val, options.membrane_path_val, options.height_gt_path_val, options.label_path_val = \
+        raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
             du.generate_dummy_data(options.batch_size, options.global_edge_len, patch_len)
 
 
@@ -87,9 +97,9 @@ def train_script_v1(options):
         Memento_ft = exp.BatchMemento()
 
     print 'Loading data and Priority queue init'
-    bm = BM(options.membrane_path, label=options.label_path,
-           height_gt=options.height_gt_path,
-           raw=options.raw_path,
+    bm = BM(membrane_path, label=label_path,
+           height_gt=height_gt_path,
+           raw=raw_path,
            batch_size=options.batch_size,
            patch_len=patch_len, global_edge_len=options.global_edge_len,
            padding_b=False,
@@ -100,9 +110,9 @@ def train_script_v1(options):
     bm.init_batch()
 
     if options.val_b:
-        bm_val = BM(options.membrane_path_val, label=options.label_path_val,
-                    height_gt=options.height_gt_path_val,
-                    raw=options.raw_path_val,
+        bm_val = BM(membrane_path_val, label=label_path_val,
+                    height_gt=height_gt_path_val,
+                    raw=raw_path_val,
                     batch_size=options.batch_size,
                     find_errors_b=options.fine_tune_b,
                     patch_len=patch_len, global_edge_len=options.global_edge_len,
@@ -158,8 +168,17 @@ def train_script_v1(options):
         except:
             print "Warning: queue empty... resetting bm"
             bm.init_batch()
+            bm.draw_debug_image(
+                "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
+                (iteration, bm.counter, free_voxel),
+                path=save_net_path_reset)
             if options.val_b:
                 bm_val.init_batch()
+                bm_val.draw_debug_image(
+                    "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
+                    (iteration, bm.counter, free_voxel),
+                    path=save_net_path_reset)
+
             free_voxel = free_voxel_empty
             membrane, gt, seeds, ids = bm.get_batches()
         probs = probs_f(membrane)
@@ -294,8 +313,9 @@ def train_script_v1(options):
             if options.exp_bs > 0 and options.exp_warmstart < iteration:
                 Memento.update_loss(individual_loss, mem_choice)
 
-                if iteration % 1000 == 0:
-                    Memento.forget()
+                # tmp use if memento blows up the ram :)
+                # if iteration % 1000 == 0:
+                #     Memento.forget()
 
         # reset bms
         if free_voxel <= 201 \
@@ -391,26 +411,11 @@ if __name__ == '__main__':
     # train data paths
     def_train_version = 'second_repr'       # def change me
     p.add('--train_version', default=def_train_version)
-    p.add('--raw_path', default='./data/volumes/raw_%s.h5' % def_train_version)
-    p.add('--membrane_path',
-          default='./data/volumes/membranes_%s.h5' % def_train_version)
-    p.add('--label_path',
-          default='./data/volumes/label_%s.h5' % def_train_version)
-    p.add('--height_gt_path',
-          default='./data/volumes/height_%s.h5' % def_train_version)
     p.add('--timos_seeds_b', default=True, type=bool)
 
     # valid data paths
     def_valid_version = 'first_repr'
     p.add('--valid_version', default=def_valid_version)
-    p.add('--raw_path_val',
-          default='./data/volumes/raw_%s.h5' % def_valid_version)
-    p.add('--membrane_path_val',
-          default='./data/volumes/membranes_%s.h5' % def_valid_version)
-    p.add('--label_path_val',
-          default='./data/volumes/label_%s.h5' % def_valid_version)
-    p.add('--height_gt_path_val',
-          default='./data/volumes/height_%s.h5' % def_valid_version)
 
     # training general
     p.add('--no-val', dest='val_b', action='store_false')
