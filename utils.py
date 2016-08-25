@@ -151,11 +151,22 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
     save_options(save_path + net_name,add)
 
 
-def create_network_folder_structure(save_net_path, train_mode=True):
+
+def create_network_folder_structure(save_net_path,
+                                    save_net_path_pre='',
+                                    save_net_path_ft='',
+                                    save_net_path_reset='',
+                                    train_mode=True):
     if not os.path.exists(save_net_path):
         os.mkdir(save_net_path)
     if not os.path.exists(save_net_path + '/images'):
         os.mkdir(save_net_path + '/images')
+    if not os.path.exists(save_net_path_reset):
+        os.mkdir(save_net_path_reset)
+    if not os.path.exists(save_net_path_ft):
+        os.mkdir(save_net_path_ft)
+    if not os.path.exists(save_net_path_pre):
+            os.mkdir(save_net_path_pre)
     if not os.path.exists(save_net_path + '/exp'):
         os.mkdir(save_net_path + '/exp')
     if train_mode:
@@ -166,6 +177,7 @@ def create_network_folder_structure(save_net_path, train_mode=True):
         os.mkdir(save_net_path + code_save_folder)
     os.system('cp -rf *.py ' + save_net_path + code_save_folder)
     os.system('cp -rf *.conf ' + save_net_path + code_save_folder)
+
 
 def load_network(load_path, l_last):
     h5_keys = []
