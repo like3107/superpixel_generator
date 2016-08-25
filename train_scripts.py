@@ -83,7 +83,7 @@ def train_script_v1(options):
     #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
     #                           allow_input_downcast=True)
 
-    Memento = exp.BatchMemento()
+    Memento = exp.BatchMemento(scale_height_factor=options.scale_height_factor)
 
     if options.exp_load != "None":
         print "loading Memento from ", options.exp_load

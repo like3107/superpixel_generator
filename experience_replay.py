@@ -6,9 +6,10 @@ class BatchMemento:
     """
     Remember training instances and create (stochastically prioritized) replay batches
     """
-    def __init__(self):
+    def __init__(self, scale_height_factor=None):
         self.memory = []
         self.epsilon = 0.1
+        self.scale_height_factor = scale_height_factor
 
     def __len__(self):
         return len(self.memory)
@@ -128,6 +129,8 @@ class BatchMemento:
                             sample[k] = None
                         else:
                             sample[k] = in_h5["mem/"+k][i]
+                            if k == "height" and not self.scale_height_factor in None:
+                            	sample[k] *= self.scale_height_factor
                     self.memory.append(sample)
                     
                 self.first_type = self.memory[0]["first"].dtype
