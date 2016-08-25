@@ -40,9 +40,9 @@ def train_script_v1(options):
     # initialize the net
     # init a network folder where all images, models and hyper params are stored
     if options.save_net_b:
-        save_net_path_pre = save_net_path + '/images/pretrain'
-        save_net_path_ft = save_net_path + '/images/ft'
-        save_net_path_reset = save_net_path + '/images/reset'
+        save_net_path_pre = save_net_path + '/images/pretrain/'
+        save_net_path_ft = save_net_path + '/images/ft/'
+        save_net_path_reset = save_net_path + '/images/reset/'
         u.create_network_folder_structure(save_net_path,
                                           save_net_path_pre=save_net_path_pre,
                                           save_net_path_ft=save_net_path_ft,

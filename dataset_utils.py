@@ -744,9 +744,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         def update_position(pos, direction):
             """ 
             update position by following the minimal spanning tree backwards
-            for this reason: reverse direction for direction offset
+            for this reason: subtract direction for direction offset
             """
-            offsets = self.coordinate_offset[(int(direction) + 2) % 4]
+            offsets = self.coordinate_offset[int(direction)]
             new_pos = [pos[0] - offsets[0], pos[1] - offsets[1]]
             return new_pos
 
@@ -763,6 +763,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 self.global_directionmap_batch[batch,
                                                current_position[0]-self.pad,
                                                current_position[1]-self.pad]
+            print current_position, current_direction, self.global_heightmap_batch[batch,
+                                               current_position[0]-self.pad,
+                                               current_position[1]-self.pad],\
+                                               self.global_claims[batch,
+                                               current_position[0],
+                                               current_position[1]]
             yield current_position, current_direction
 
     # 2nd crossing from own gt ID into other ID
