@@ -735,7 +735,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def get_path_to_root(self, start_position, batch):
 
         def update_position(pos, direction):
-            offsets = self.coordinate_offset[int(direction)]
+            """ 
+            update position by following the minimal spanning tree backwards
+            for this reason: reverse direction for direction offset
+            """
+            offsets = self.coordinate_offset[(int(direction) + 2) % 4]
             new_pos = [pos[0] - offsets[0], pos[1] - offsets[1]]
             return new_pos
 
