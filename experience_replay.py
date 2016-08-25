@@ -124,12 +124,14 @@ class BatchMemento:
                 for i in range(in_h5["len"].value):
                     sample = {}
                     for k in mkeys:
-                        print k,i
                         if k == "loss" and in_h5["mem/"+k][i] == np.nan:
                             sample[k] = None
                         else:
                             sample[k] = in_h5["mem/"+k][i]
                     self.memory.append(sample)
+                    
+                self.first_type = self.memory[0]["first"].dtype
+                self.second_type = self.memory[0]["second"].dtype
             else:
                 self.memory = []
                 self.priority = []

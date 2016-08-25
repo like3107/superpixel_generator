@@ -76,6 +76,7 @@ def train_script_v1(options):
     Memento = exp.BatchMemento()
 
     if options.exp_load != "None":
+        print "loading Memento from ", options.exp_load
         Memento.load(options.exp_load)
 
     if options.fine_tune_b:
@@ -378,6 +379,7 @@ if __name__ == '__main__':
 
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
+    p.add('-c', '--my-config', is_config_file=True)
     p.add('--net_name', default=def_net_name)
     p.add('--net_arch', default="ID_v5_hydra_BN")
     p.add('--no-save_net', dest='save_net_b', action='store_false')
