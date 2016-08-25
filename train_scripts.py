@@ -262,7 +262,6 @@ def train_script_v1(options):
                     np.any(bm.error_indicator_pass > 0):
                 gt = (gt.transpose()+bm.error_indicator_pass).transpose()
 
-
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt, [{"height":g.mean()} for g in gt])
                 # start using exp replay only after #options.exp_warmstart iterations
@@ -377,7 +376,7 @@ if __name__ == '__main__':
     p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
 
     # train data paths
-    def_train_version = 'second'
+    def_train_version = 'second_repr'       # def change me
     p.add('--train_version', default=def_train_version)
     p.add('--raw_path', default='./data/volumes/raw_%s.h5' % def_train_version)
     p.add('--membrane_path',
