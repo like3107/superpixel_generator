@@ -78,6 +78,13 @@ def make_array_cumulative(array):
     return cumulative_array
 
 
+def prpare_seg_path_wrapper(path, names):
+    for name in names:
+        segmentation = load_h5(path + name)[0]
+        segmentation = prepare_data_mc(segmentation)
+        save_h5(path + 'pred_' + name, 'data', data=segmentation)
+
+
 def prepare_data_mc(segmentation):
     """
     input 2D segmentation in (x,y,z) returns 2D in (z, x, y) and non repeating

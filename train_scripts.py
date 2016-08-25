@@ -40,7 +40,14 @@ def train_script_v1(options):
     # initialize the net
     # init a network folder where all images, models and hyper params are stored
     if options.save_net_b:
-        u.create_network_folder_structure(save_net_path)
+        save_net_path_pre = save_net_path + '/images/pretrain'
+        save_net_path_ft = save_net_path + '/images/ft'
+        save_net_path_reset = save_net_path + '/images/reset'
+        u.create_network_folder_structure(save_net_path,
+                                          save_net_path_pre=save_net_path_pre,
+                                          save_net_path_ft=save_net_path_ft,
+                                          save_net_path_reset=save_net_path_reset,
+                                          )
         if not options.no_bash_backup:
             u.make_bash_executable(save_net_path, add_option="--no_bash_backup")
     c.use('gpu0')
@@ -125,8 +132,12 @@ def train_script_v1(options):
 
         if (iteration % options.save_counter == 0 or free_voxel <= 201)\
                 and options.save_net_b:
+            if free_voxel <= 201:
+                net_save_name = 'reset_'
+            else:
+                net_save_name = ''
             u.save_network(save_net_path, l_out,
-                           'net_%i' % iteration,
+                           '%snet_%i' % (net_save_name, iteration),
                            add=options._get_kwargs())
 
             if options.exp_save:
@@ -169,7 +180,7 @@ def train_script_v1(options):
                     and iteration > options.pre_train_iter:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
-
+                save_net_path_pre = save_net_path_ft
                 print "mem size ", len(Memento_ft), Memento_ft.count_new(), len(bm.global_error_dict)
 
                 Memento_ft.add_to_memory(
@@ -181,30 +192,30 @@ def train_script_v1(options):
                 bm.serialize_to_h5("finetunging_ser_batch_%08i_counter_%i" %
                         (iteration, bm.counter))
                 bm.draw_batch(error_b_type1, "finetunging_error1_batch_%08i_counter_%i" %
-                        (iteration, bm.counter),path=save_net_path + '/images/')
+                        (iteration, bm.counter),path=save_net_path_ft)
                 bm.draw_batch(error_b_type2,
                               "finetunging_error2_batch_%08i_counter_%i" %
-                        (iteration, bm.counter),path=save_net_path + '/images/')
+                        (iteration, bm.counter),path=save_net_path_ft)
                 bm.draw_error_paths("finetuning_path_error_iter_%08i_counter_%i" %
                         (iteration, bm.counter),
-                        path=save_net_path + '/images/')
+                        path=save_net_path_ft)
                 for b in range(bm.bs):
                     bm.draw_debug_image(
                         "finetunging_pic_iteration_%08i_counter_%i_b_%i" %
                         (iteration, bm.counter, b),
-                        path=save_net_path + '/images/', b=b)
+                        path=save_net_path_ft, b=b)
 
                 if options.save_net_b:
                     # plot train images
                     bm.draw_debug_image("train_iteration_iter_%08i_counter_%i" %
                                         (iteration, bm.counter),
-                                        path=save_net_path + '/images/')
+                                        path=save_net_path_ft)
                     bm.draw_error_paths("train_path_error_iter_%08i_counter_%i" %
                                         (iteration, bm.counter),
-                                        path=save_net_path + '/images/')
+                                        path=save_net_path_ft)
                     if options.val_b:
                         bm_val.draw_debug_image("val_iteration_%08i" % iteration,
-                                                path=save_net_path + '/images/')
+                                                path=save_net_path_ft)
 
                 # fine tuning
                 print 'Finetuning...'
@@ -262,7 +273,6 @@ def train_script_v1(options):
                     np.any(bm.error_indicator_pass > 0):
                 gt = (gt.transpose()+bm.error_indicator_pass).transpose()
 
-
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt, [{"height":g.mean()} for g in gt])
                 # start using exp replay only after #options.exp_warmstart iterations
@@ -305,12 +315,12 @@ def train_script_v1(options):
             bm.draw_debug_image(
                 "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
                 (iteration, bm.counter, free_voxel),
-                path=save_net_path + '/images/')
+                path=save_net_path_reset)
             if options.val_b:
                 bm_val.draw_debug_image(
                     "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
                     (iteration, bm.counter, free_voxel),
-                    path=save_net_path + '/images/')
+                    path=save_net_path_reset)
                 bm_val.init_batch()
             bm.init_batch()
             free_voxel = free_voxel_empty
@@ -348,7 +358,7 @@ def train_script_v1(options):
                 bm.draw_debug_image(
                     "train_iteration_%08i_counter_%i_freevoxel_%i_b_%i" %
                     (iteration, bm.counter, free_voxel, b),
-                    path=save_net_path + '/images/', b=b)
+                    path=save_net_path_pre, b=b)
             # bm.draw_batch(membrane,
             #               path=save_net_path+ '/images/',
             #               image_name='bat_in_%i_b' % (iteration),
@@ -377,7 +387,7 @@ if __name__ == '__main__':
     p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
 
     # train data paths
-    def_train_version = 'second'
+    def_train_version = 'second_repr'       # def change me
     p.add('--train_version', default=def_train_version)
     p.add('--raw_path', default='./data/volumes/raw_%s.h5' % def_train_version)
     p.add('--membrane_path',
