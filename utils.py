@@ -176,7 +176,7 @@ def create_network_folder_structure(save_net_path,
     if not os.path.exists(save_net_path + code_save_folder):
         os.mkdir(save_net_path + code_save_folder)
     os.system('cp -rf *.py ' + save_net_path + code_save_folder)
-    os.system('cp -rf *./data/config/*.conf ' + save_net_path + code_save_folder)
+    os.system('cp -rf ./data/config/*.conf ' + save_net_path + code_save_folder)
 
 
 def load_network(load_path, l_last):
