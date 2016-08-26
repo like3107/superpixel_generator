@@ -410,7 +410,7 @@ def get_options():
 
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
-    # p.add('-c', '--my-config', is_config_file=True)
+    p.add('-c', '--my-config', is_config_file=True)
     p.add('--net_name', default=def_net_name)
     p.add('--net_arch', default="ID_v5_hydra_BN")
     p.add('--no-save_net', dest='save_net_b', action='store_false')
