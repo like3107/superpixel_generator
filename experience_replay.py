@@ -6,9 +6,9 @@ class BatcherBatcherBatcher:
     """
     Remember training instances and create (stochastically prioritized) replay batches
     """
-    def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40, warmstart=1000):
-        self.first = np.empty((max_mem_size, 4, pl, pl),dtype='float32')
-        self.second = np.empty((max_mem_size, 4, 1, 1),dtype='float32')
+    def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40, warmstart=1000, n_channels=4):
+        self.first = np.empty((max_mem_size, n_channels, pl, pl),dtype='float32')
+        self.second = np.empty((max_mem_size, n_channels, 1, 1),dtype='float32')
         self.length = 0
         self.max_mem_size = max_mem_size
         # determined by histogram of cliped height map
