@@ -87,10 +87,10 @@ class BatcherBatcherBatcher:
             out_h5.create_dataset("length",data=int(len(self)),dtype=int)
             if not self.scale_height_factor is None:
                 out_h5.create_dataset("scale_height_factor",data=float(self.scale_height_factor),dtype=float)
-                out_h5.create_dataset("mem/second",data=self.second/float(self.scale_height_factor),dtype='float32')
+                out_h5.create_dataset("mem/second",data=self.second/float(self.scale_height_factor),dtype='float32',compression='gzip')
             else:
                 out_h5.create_dataset("scale_height_factor",data=1.,dtype=float)
-                out_h5.create_dataset("mem/second",data=self.second,dtype='float32')
+                out_h5.create_dataset("mem/second",data=self.second,dtype='float32',compression='gzip')
             out_h5.create_dataset("mem/first",data=self.first,dtype='float32')
 
     def load(self, file_name):
