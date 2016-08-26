@@ -91,6 +91,7 @@ def train_script_v1(options):
                             warmstart=options.exp_warmstart)
 
     if options.exp_load != "None":
+        np.random.seed(len(options.net_name))
         print "loading Memento from ", options.exp_load
         Memento.load(options.exp_load)
 
@@ -132,7 +133,7 @@ def train_script_v1(options):
         options.global_edge_len = bm.global_el
 
     if options.load_net_b:
-        np.random.seed(651)     # change seed so different images for retrain
+        np.random.seed(len(options.net_name))     # change seed so different images for retrain
         print "loading network parameters from ", options.load_net_path
         u.load_network(options.load_net_path, l_out)
 
@@ -305,7 +306,9 @@ def train_script_v1(options):
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt)
                 # start using exp replay only after #options.exp_warmstart iterations
-                membrane, gt = Memento.get_batch(options.batch_size+options.exp_bs)
+                if iteration >= options.exp_warmstart:
+                    membrane, gt = Memento.get_batch(options.batch_size +
+                                                     options.exp_bs)
 
             if options.augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
@@ -314,12 +317,12 @@ def train_script_v1(options):
             else:
                 loss_train, individual_loss = loss_train_f(membrane, gt)
 
-            # if options.exp_bs > 0 and options.exp_warmstart < iteration:
+            # for old memento (ft)
+                # if options.exp_bs > 0 and options.exp_warmstart < iteration:
             #     Memento.update_loss(individual_loss, mem_choice)
-
                 # tmp use if memento blows up the ram :)
-                if iteration % 1000 == 0 and options.exp_bs > 0:
-                    Memento.forget()
+                # if iteration % 1000 == 0 and options.exp_bs > 0:
+                #     Memento.forget()
 
         # reset bms
         if free_voxel <= 201 \
