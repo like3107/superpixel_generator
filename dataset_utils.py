@@ -11,7 +11,6 @@ from os import makedirs
 from os.path import exists
 from ws_timo import wsDtseeds
 from matplotlib import pyplot as plt
-import theano
 from Queue import PriorityQueue
 import utils as u
 from scipy.ndimage import convolve, gaussian_filter
@@ -37,13 +36,13 @@ def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
     if h5_key is None:     # no h5 key specified
         output = list()
         for key in g.keys():
-            output.append(np.array(g[key], dtype=theano.config.floatX))
+            output.append(np.array(g[key], dtype='float32'))
     elif isinstance(h5_key, basestring):   # string
-        output = [np.array(g[h5_key], dtype=theano.config.floatX)]
+        output = [np.array(g[h5_key], dtype='float32')]
     elif isinstance(h5_key, list):          # list
         output = list()
         for key in h5_key:
-            output.append(np.array(g[key], dtype=theano.config.floatX))
+            output.append(np.array(g[key], dtype='float32'))
     else:
         raise Exception('h5 key type is not supported')
     if slices is not None:
@@ -286,6 +285,8 @@ class HoneyBatcherPredict(object):
         ind_y = np.random.randint(0,
                                   self.rl - self.global_el + 1,
                                   size=self.bs)
+
+        print "in_b",ind_b,self.bs, self.global_el, self.rl
         for b in range(self.bs):
             self.global_batch[b, :, :] = \
                 self.membranes[ind_b[b],
@@ -394,7 +395,7 @@ class HoneyBatcherPredict(object):
         labels = self.global_claims[b,
                  seed[0] - self.pad:seed[0] + self.pad,
                  seed[1] - self.pad:seed[1] + self.pad]
-        claimed = np.zeros((2, self.pl, self.pl), dtype=theano.config.floatX)
+        claimed = np.zeros((2, self.pl, self.pl), dtype='float32')
         claimed[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
         claimed[0, :, :][labels == -1] = 0  # the others
         claimed[1, :, :][labels == Id] = 1  # me
@@ -408,9 +409,9 @@ class HoneyBatcherPredict(object):
 
     def init_batch(self, start=None):
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
-                                     dtype=theano.config.floatX)
+                                     dtype='float32')
         self.global_raw = np.zeros((self.bs, self.global_el, self.global_el),
-                                   dtype=theano.config.floatX)
+                                   dtype='float32')
 
         # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims = np.empty((self.bs, self.global_el, self.global_el))
@@ -461,7 +462,7 @@ class HoneyBatcherPredict(object):
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
         raw_batch = np.zeros((self.bs, 4, self.pl, self.pl),
-                             dtype=theano.config.floatX)
+                             dtype='float32')
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
             raw_batch[b, 0, :, :] = self.crop_membrane(center, b)
             raw_batch[b, 1, :, :] = self.crop_raw(center, b)
@@ -650,7 +651,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def init_batch(self, start=None):
         self.global_label_batch = np.zeros(self.label_shape,
-                                            dtype=theano.config.floatX)
+                                            dtype='float32')
         self.global_height_gt_batch = np.zeros(self.label_shape)
         super(HoneyBatcherPath, self).init_batch(start=start)
         self.global_timemap = np.empty_like(self.global_batch, dtype=np.int)
@@ -676,7 +677,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def get_batches(self):
         raw_batch, centers, ids = super(HoneyBatcherPath, self).get_batches()
-        gts = np.zeros((self.bs, 4, 1, 1), dtype=theano.config.floatX)
+        gts = np.zeros((self.bs, 4, 1, 1), dtype='float32')
         for b in range(self.bs):
             gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
         assert (not np.any(gts < 0))
@@ -906,7 +907,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
         raw_batch = np.zeros((len(batches), 4, self.pl, self.pl),
-                             dtype=theano.config.floatX)
+                             dtype='float32')
         for i, (b, center, Id) in enumerate(zip(batches, centers, ids)):
             raw_batch[i, 0, :, :] = self.crop_membrane(center, b)
             raw_batch[i, 1, :, :] = self.crop_raw(center, b)
@@ -1263,8 +1264,8 @@ class DummyBM:
     def init_batch(self):
         self.batch = \
             np.random.random(size=(self.bs, self.n_ch,
-                                    self.pl, self.pl)).astype(theano.config.floatX)
-        self.gt = np.zeros((self.bs, 4, 1, 1)).astype(theano.config.floatX)
+                                    self.pl, self.pl)).astype('float32')
+        self.gt = np.zeros((self.bs, 4, 1, 1)).astype('float32')
         self.batch[:self.bs/2, 0, :, 0] = 1.
         self.gt[:self.bs/2, 0, 0, 0] = 1.
 
@@ -1354,7 +1355,7 @@ def augment_batch(batch, gt=None, direction=None):
     augment_shape = list(batch.shape)
     bs = batch.shape[0]
     augment_shape[0] *= 7
-    augmented_batch = np.empty(augment_shape, dtype=theano.config.floatX)
+    augmented_batch = np.empty(augment_shape, dtype='float32')
 
     # original
     ac = 0
@@ -1383,7 +1384,7 @@ def augment_batch(batch, gt=None, direction=None):
         # apply inverse transform on gt batch
         augment_gt_shape = list(gt.shape)
         augment_gt_shape[0] *= 7
-        augmented_gt = np.empty(augment_gt_shape, dtype=theano.config.floatX)
+        augmented_gt = np.empty(augment_gt_shape, dtype='float32')
 
         dgt = {}
         dgt["left"] = gt[:,0,:,:]
