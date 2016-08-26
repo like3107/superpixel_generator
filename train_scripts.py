@@ -15,6 +15,7 @@ import h5py
 import sys
 import configargparse
 
+
 def train_script_v1(options):
     print 'train script v1'
     # data params:
@@ -317,13 +318,13 @@ def train_script_v1(options):
             #     Memento.update_loss(individual_loss, mem_choice)
 
                 # tmp use if memento blows up the ram :)
-                if iteration % 1000 == 0:
+                if iteration % 1000 == 0 and options.exp_bs > 0:
                     Memento.forget()
 
         # reset bms
         if free_voxel <= 201 \
-            or (options.fast_reset \
-                and (free_voxel_empty / 4)  % (iteration + 1) == 0 \
+            or (options.fast_reset
+                and (free_voxel_empty / 4)  % (iteration + 1) == 0
                 and free_voxel_empty - free_voxel > 1000):
 
             if (len(bm.global_error_dict) > 0)\

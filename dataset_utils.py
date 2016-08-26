@@ -709,7 +709,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                            seeds_y] != \
                     self.global_id2gt[batch][Id]]
             if np.any(mask):
-                ground_truth[mask] = self.error_indicator_pass[batch]
+                if self.error_indicator_pass[batch] != 0:
+                    # center on wrong label
+                    ground_truth[mask] = self.error_indicator_pass[batch]
+                else:       # center on correct id
+                    ground_truth[mask] = (self.pad + 1) * self.scaling
                 # \
                 #         (self.pad + 1) * self.scaling + \
                 #         np.random.randint(0, self.scaling)
@@ -736,8 +740,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         # pass on if type I error already occured
         if error_indicator > 0:
-            self.error_indicator_pass[b] = error_indicator + \
-                                           self.scaling # remember to pass on
+            # went back into own territory --> reset error counter
+            if self.global_id2gt[b][Id] == \
+                self.global_label_batch[b,
+                                        center_x - self.pad,
+                                        center_y - self.pad]:
+                self.error_indicator_pass[b] = 0.
+            else:   # remember to pass on
+                self.error_indicator_pass[b] = error_indicator + \
+                                           self.scaling
             self.global_errormap[b, 1,
                                  center_x - self.pad,
                                  center_y - self.pad] = 1
