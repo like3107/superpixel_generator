@@ -148,7 +148,7 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
         h5_values.append(n_filter)
 
     du.save_h5(save_path + net_name, h5_keys, h5_values, overwrite='w')
-    save_options(save_path + net_name,add)
+    save_options(save_path + net_name, add)
 
 
 
@@ -190,6 +190,7 @@ def load_network(load_path, l_last):
     all_param_values = du.load_h5(load_path, h5_keys)
     las.layers.set_all_param_values(l_last, all_param_values)
 
+
 def load_options(load_path, options={}):
     with h5py.File(load_path, 'r') as net_file:
         for op_key, op_val in [(k, net_file['options/'+k].value)\
@@ -200,13 +201,16 @@ def load_options(load_path, options={}):
                 options.__setattr__(op_key, op_val)
     return options
 
+
 def save_options(load_path, options):
     if len(options) > 0:
         with h5py.File(load_path, 'r+') as net_h5:
             for op_key, op_val in options:
                 if "options/"+op_key in net_h5:
-                    f.__delitem__("options/"+op_key)
+                    net_h5.__delitem__("options/"+op_key)
                 net_h5.create_dataset("options/"+op_key,data=op_val)
+
+
 
 def print_options_for_net(options):
     to_print = str([options.net_name, options.load_net_b, options.load_net_path,

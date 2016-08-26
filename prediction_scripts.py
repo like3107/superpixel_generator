@@ -64,7 +64,7 @@ def pred_script_v2_wrapper(
     assert (os.path.exists(membrane_path))
     assert (os.path.exists(raw_path))
     assert (os.path.exists(net_file))
-
+    print 'gt path', gt_path
     create_network_folder_structure(pred_save_folder)
     print 'net', net_file
 
@@ -232,7 +232,10 @@ if __name__ == '__main__':
         options.net_file = './data/nets/' + options.net_name + '/' + options.net_number
 
     if options.pred_save_folder == '':
-        options.pred_save_folder = './data/nets/' + options.net_name + '/preds'+options.net_number+'/'
+        options.pred_save_folder = './data/nets/' + options.net_name + '/preds_c'+options.net_number+'/'
+
+    if options.save_validation == "":
+        options.save_validation = options.pred_save_folder + 'numbanumba.txt'
 
     prediction = pred_script_v2_wrapper(
                         chunk_size=options.chunk_size,

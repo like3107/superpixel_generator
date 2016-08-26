@@ -431,7 +431,7 @@ def get_options():
     p.add('--fast_reset', action='store_true')
     p.add('--clip_method', default='clip')
     p.add('--perfect_play', action='store_true')
-    p.add('--padding_b', action='store_false')
+    p.add('--padding_b', action='store_true')
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)
