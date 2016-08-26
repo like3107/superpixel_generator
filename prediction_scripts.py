@@ -206,7 +206,7 @@ if __name__ == '__main__':
     # slice = sys.argv[1]
     import configargparse
 
-    p = configargparse.ArgParser(default_config_files=['./validation.conf'])
+    p = configargparse.ArgParser(default_config_files=['./data/config/validation.conf'])
     p.add('-c', '--my-config', is_config_file=True, help='config file path')
 
     # multiprocessing params

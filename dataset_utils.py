@@ -286,7 +286,7 @@ class HoneyBatcherPredict(object):
                                   self.rl - self.global_el + 1,
                                   size=self.bs)
 
-        print "in_b",ind_b,self.bs, self.global_el, self.rl
+        # print "in_b",ind_b,self.bs, self.global_el, self.rl
         for b in range(self.bs):
             self.global_batch[b, :, :] = \
                 self.membranes[ind_b[b],
@@ -703,15 +703,17 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 np.any(self.rl - self.pl > seeds_y))
         ground_truth = \
             self.global_height_gt_batch[batch, seeds_x, seeds_y].flatten()
-        if Id is not None:
+        # increase height relative to label (go up even after boundary crossing)
+        if Id is not None:      #  == if self.add_height
             mask = [self.global_label_batch[batch,
                                            seeds_x,
                                            seeds_y] != \
                     self.global_id2gt[batch][Id]]
             if np.any(mask):
-                ground_truth[mask] = \
-                    (self.pad + 1) * self.scaling + \
-                    np.random.randint(0, self.scaling)
+                ground_truth[mask] = self.error_indicator_pass[batch]
+                # \
+                #         (self.pad + 1) * self.scaling + \
+                #         np.random.randint(0, self.scaling)
         return ground_truth
 
     def get_centers_from_queue(self):
@@ -746,7 +748,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                         center_y - self.pad]:
             self.global_errormap[b, :2, center_x - self.pad,
                                  center_y - self.pad] = 1
-            self.error_indicator_pass[b] = self.scaling
+            self.error_indicator_pass[b] = self.scaling * (self.pad + 1)
 
         # check for errors in neighbor regions, type II
         if self.find_errors_b:

@@ -108,7 +108,7 @@ def train_script_v1(options):
            clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
            scale_height_factor=options.scale_height_factor,
            perfect_play=options.perfect_play,
-           add_height_b=options.ahp_rand)
+           add_height_b=options.add_height_penalty)
     bm.init_batch()
 
     if options.val_b:
@@ -298,10 +298,6 @@ def train_script_v1(options):
         # pre-training
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
 
-            if options.add_height_penalty and \
-                    np.any(bm.error_indicator_pass > 0):
-                gt = (gt.transpose()+bm.error_indicator_pass).transpose()
-
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt,
                                       [{"height":g.mean()} for g in gt])
@@ -405,11 +401,11 @@ def train_script_v1(options):
             #                     (iteration, bm.counter, free_voxel),
             #                     path=save_net_path + '/images/')
 def get_options():
-    p = configargparse.ArgParser(default_config_files=['./training.conf'])
+    p = configargparse.ArgParser(default_config_files=['./data/config/training.conf'])
 
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
-    p.add('-c', '--my-config', is_config_file=True)
+    # p.add('-c', '--my-config', is_config_file=True)
     p.add('--net_name', default=def_net_name)
     p.add('--net_arch', default="ID_v5_hydra_BN")
     p.add('--no-save_net', dest='save_net_b', action='store_false')
@@ -445,7 +441,6 @@ def get_options():
                                       action='store_false')
     p.add('--scale_height_factor', default=100,type=float)
     p.add('--ahp', dest='add_height_penalty', action='store_true')
-    p.add('--ahp_rand', action='store_true')
 
 
     # fine-tuning
