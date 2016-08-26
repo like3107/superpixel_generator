@@ -6,7 +6,47 @@ import numpy as np
 from multiprocessing import Process, Queue
 import time
 import os
+import h5py as h
+from os import makedirs
+from os.path import exists
 
+def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
+    if not exists(path):
+        error = 'path: %s does not exist, check' % path
+        raise Exception(error)
+    f = h.File(path, 'r')
+    if group is not None:
+        g = f[group]
+        if group2 is not None:
+            g = g[group2]
+    else:   # no groups in file structure
+        g = f
+    if h5_key is None:     # no h5 key specified
+        output = list()
+        for key in g.keys():
+            output.append(np.array(g[key], dtype='float32'))
+    elif isinstance(h5_key, basestring):   # string
+        output = [np.array(g[h5_key], dtype='float32')]
+    elif isinstance(h5_key, list):          # list
+        output = list()
+        for key in h5_key:
+            output.append(np.array(g[key], dtype='float32'))
+    else:
+        raise Exception('h5 key type is not supported')
+    if slices is not None:
+        output = [output[0][slices]]
+    f.close()
+    return output
+
+
+def save_h5(path, h5_key, data, overwrite='w-'):
+    f = h.File(path, overwrite)
+    if isinstance(h5_key, str):
+        f.create_dataset(h5_key, data=data)
+    if isinstance(h5_key, list):
+        for key, values in zip(h5_key, data):
+            f.create_dataset(key, data=values)
+    f.close()
 
 def pred_script_v2_wrapper(
         chunk_size=None,
@@ -55,14 +95,13 @@ def pred_script_v2_wrapper(
         print 'joining'
         p.join()
 
-    import dataset_utils as du
     import glob
     def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
         files = sorted(glob.glob(path_to_folder + '/final_slice' + '*.h5'))
         le_final = np.zeros((n_slices, edge_len, edge_len), dtype=np.uint64)
         for start, file in zip(range(0, n_slices, slice_size), files):
-            le_final[start:start + slice_size, :, :] = du.load_h5(file)[0]
-        du.save_h5(path_to_folder + '/final.h5', 'data', data=le_final,
+            le_final[start:start + slice_size, :, :] = load_h5(file)[0]
+        save_h5(path_to_folder + '/final.h5', 'data', data=le_final,
                    overwrite='w')
 
     concat_h5_in_folder(pred_save_folder, chunk_size, slices_total,
@@ -171,7 +210,7 @@ if __name__ == '__main__':
     p.add('-c', '--my-config', is_config_file=True, help='config file path')
 
     # multiprocessing params
-    p.add('--chunk_size', default=16, type=int)
+    p.add('--chunk_size', default=8, type=int)
     p.add('--slices_total', default=64, type=int)     # number z slices
 
     # network params
@@ -207,25 +246,30 @@ if __name__ == '__main__':
                         timos_seeds_b=options.timos_seeds_b)
 
     if options.save_validation != "":
-        f = open(options.save_validation,'w')
-        f.write(str(prediction['Variational information split']))
-        f.write("+-")
-        f.write(str(prediction['Variational information split_error']))
-        f.write(",") 
-        f.write(str(prediction['Variational information merge']))
-        f.write("+-")
-        f.write(str(prediction['Variational information merge_error']))
-        f.write(",") 
-        f.write(str(prediction['Adapted Rand error']))
-        f.write("+-")
-        f.write(str(prediction['Adapted Rand error_error']))
-        f.write(",") 
-        f.write(str(prediction['Adapted Rand error precision']))
-        f.write("+-") 
-        f.write(str(prediction['Adapted Rand error precision_error']))
-        f.write(",")
-        f.write(str(prediction['Adapted Rand error recall']))
-        f.write("+-") 
-        f.write(str(prediction['Adapted Rand error recall_error']))
-        f.close()
+        if options.save_validation.endswith(".json"):
+            import json
+            with open(options.save_validation, 'w') as f:
+                f.write(json.dumps(prediction))
+        else:
+            f = open(options.save_validation,'w')
+            f.write(str(prediction['Variational information split']))
+            f.write("+-")
+            f.write(str(prediction['Variational information split_error']))
+            f.write(",") 
+            f.write(str(prediction['Variational information merge']))
+            f.write("+-")
+            f.write(str(prediction['Variational information merge_error']))
+            f.write(",") 
+            f.write(str(prediction['Adapted Rand error']))
+            f.write("+-")
+            f.write(str(prediction['Adapted Rand error_error']))
+            f.write(",") 
+            f.write(str(prediction['Adapted Rand error precision']))
+            f.write("+-") 
+            f.write(str(prediction['Adapted Rand error precision_error']))
+            f.write(",")
+            f.write(str(prediction['Adapted Rand error recall']))
+            f.write("+-") 
+            f.write(str(prediction['Adapted Rand error recall_error']))
+            f.close()
 

@@ -114,7 +114,11 @@ class BatchMemento:
             if len(self) > 0:
                 keys = self.memory[0].keys()
                 for k in keys:
-                    out_h5.create_dataset("mem/"+k,data=np.array([np.nan if m[k] is None\
+                    if k == "height" and not self.scale_height_factor in None:
+                        out_h5.create_dataset("mem/"+k,data=np.array([np.nan if m[k] is None\
+                            else m[k]/self.scale_height_factor for m in self.memory]),compression='gzip')
+                    else:
+                        out_h5.create_dataset("mem/"+k,data=np.array([np.nan if m[k] is None\
                             else m[k] for m in self.memory]),compression='gzip')
 
     def load(self, file_name):
@@ -130,7 +134,7 @@ class BatchMemento:
                         else:
                             sample[k] = in_h5["mem/"+k][i]
                             if k == "height" and not self.scale_height_factor in None:
-                            	sample[k] *= self.scale_height_factor
+                                sample[k] *= self.scale_height_factor
                     self.memory.append(sample)
                     
                 self.first_type = self.memory[0]["first"].dtype

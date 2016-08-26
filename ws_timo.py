@@ -30,7 +30,7 @@ def load_h5(path, h5_key=None, group=None, group2=None):
     elif isinstance(h5_key, list):          # list
         output = list()
         for key in h5_key:
-            output.append(np.array(g[key], dtype=theano.config.floatX))
+            output.append(np.array(g[key], dtype='float32'))
     else:
         raise Exception('h5 key type is not supported')
     return output
