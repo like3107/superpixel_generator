@@ -225,7 +225,10 @@ def plot_train_val_errors(all_y_values, x_values, save_path, names):
     fig = plt.figure()
     plots = []
     for y_values in all_y_values:
-        # print 'yvalues', y_values
+        if len(y_values) == 2:
+            y_values[-1] = (y_values[-2] + y_values[-1]) / 2.
+        if len(y_values) >= 3:
+            y_values[-1] = (y_values[-3] + y_values[-2] + y_values[-1]) / 3.
         plot, = plt.plot(x_values, y_values)
         # if np.any(all_y_values < 0):
         plt.yscale('log')
