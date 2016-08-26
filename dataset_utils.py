@@ -747,8 +747,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                         center_y - self.pad]:
                 self.error_indicator_pass[b] = 0.
             else:   # remember to pass on
-                self.error_indicator_pass[b] = error_indicator + \
-                                           self.scaling
+                self.error_indicator_pass[b] = \
+                    min(error_indicator + self.scaling,
+                        2 * self.pad * self.scaling +       # don't go to high
+                        np.random.randint(self.scaling))
             self.global_errormap[b, 1,
                                  center_x - self.pad,
                                  center_y - self.pad] = 1

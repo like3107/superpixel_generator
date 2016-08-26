@@ -6,7 +6,8 @@ class BatcherBatcherBatcher:
     """
     Remember training instances and create (stochastically prioritized) replay batches
     """
-    def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40, warmstart=1000):
+    def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40,
+                 warmstart=1000):
         self.first = np.empty((max_mem_size, 4, pl, pl),dtype='float32')
         self.second = np.empty((max_mem_size, 4, 1, 1),dtype='float32')
         self.length = 0
@@ -33,6 +34,8 @@ class BatcherBatcherBatcher:
         """
         adds a batch with additional information (batch_second) to the
         memory.
+        first:  pre-train
+        second: gt or ft
         """
         bs = batch_first.shape[0]
         if self.length < self.warmstart:
