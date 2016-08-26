@@ -88,7 +88,8 @@ def train_script_v1(options):
     Memento = exp.BatcherBatcherBatcher(
                             scale_height_factor=options.scale_height_factor, 
                             pl=patch_len,
-                            warmstart=options.exp_warmstart)
+                            warmstart=options.exp_warmstart,
+                            accept_rate=options.exp_acceptance_rate)
 
     if options.exp_load != "None":
         np.random.seed(len(options.net_name))
@@ -387,6 +388,11 @@ def train_script_v1(options):
                     "train_iteration_%08i_counter_%i_freevoxel_%i_b_%i" %
                     (iteration, bm.counter, free_voxel, b),
                     path=save_net_path_pre, b=b)
+                if options.val_b:
+                    bm_val.draw_debug_image(
+                        "val_iteration_%08i_counter_%i_freevoxel_%i_b_%i" %
+                        (iteration, bm.counter, free_voxel, b),
+                        path=save_net_path_pre, b=b)
             # bm.draw_batch(membrane,
             #               path=save_net_path+ '/images/',
             #               image_name='bat_in_%i_b' % (iteration),
@@ -453,6 +459,7 @@ def get_options():
     p.add('--exp_bs', default=16, type=int)
     p.add('--exp_ft_bs', default=8, type=int)
     p.add('--exp_warmstart', default=1000, type=int)
+    p.add('--exp_acceptance_rate', default=3)
     p.add('--no-exp_height', dest='exp_height', action='store_false')
     p.add('--no-exp_save', dest='exp_save', action='store_false')
     p.add('--exp_load', default="None", type=str)
