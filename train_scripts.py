@@ -7,6 +7,7 @@ import theano
 import utils as u
 import nets
 import dataset_utils as du
+print du.__file__
 import numpy as np
 from theano.sandbox import cuda as c
 import experience_replay as exp
@@ -182,7 +183,6 @@ def train_script_v1(options):
                         "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
                         (iteration, bm.counter, free_voxel),
                         path=save_net_path_reset)
-
                 free_voxel = free_voxel_empty
         else:
             membrane, gt, seeds, ids = bm.get_batches()
@@ -320,8 +320,8 @@ def train_script_v1(options):
                 Memento.update_loss(individual_loss, mem_choice)
 
                 # tmp use if memento blows up the ram :)
-                # if iteration % 1000 == 0:
-                #     Memento.forget()
+                if iteration % 1000 == 0:
+                    Memento.forget()
 
         # reset bms
         if free_voxel <= 201 \
@@ -398,9 +398,7 @@ def train_script_v1(options):
             # bm.draw_debug_image("train_iteration_%08i_counter_%i_freevoxel_%i" %
             #                     (iteration, bm.counter, free_voxel),
             #                     path=save_net_path + '/images/')
-
-
-if __name__ == '__main__':
+def get_options():
     p = configargparse.ArgParser(default_config_files=['./training.conf'])
 
     # where to save the net
@@ -461,7 +459,10 @@ if __name__ == '__main__':
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')
 
-    options = p.parse_args()
+    return p.parse_args()
 
+if __name__ == '__main__':
+
+    options = get_options()
     u.print_options_for_net(options)
     train_script_v1(options)
