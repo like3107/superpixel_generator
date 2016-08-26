@@ -286,7 +286,6 @@ class HoneyBatcherPredict(object):
                                   self.rl - self.global_el + 1,
                                   size=self.bs)
 
-        # print "in_b",ind_b,self.bs, self.global_el, self.rl
         for b in range(self.bs):
             self.global_batch[b, :, :] = \
                 self.membranes[ind_b[b],

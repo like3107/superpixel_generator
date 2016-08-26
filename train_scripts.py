@@ -84,7 +84,10 @@ def train_script_v1(options):
     #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
     #                           allow_input_downcast=True)
 
-    Memento = exp.BatchMemento(scale_height_factor=options.scale_height_factor)
+    Memento = exp.BatcherBatcherBatcher(
+                            scale_height_factor=options.scale_height_factor, 
+                            pl=patch_len,
+                            warmstart=options.exp_warmstart)
 
     if options.exp_load != "None":
         print "loading Memento from ", options.exp_load
@@ -299,17 +302,9 @@ def train_script_v1(options):
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
 
             if options.exp_bs > 0:
-                Memento.add_to_memory(membrane, gt,
-                                      [{"height":g.mean()} for g in gt])
+                Memento.add_to_memory(membrane, gt)
                 # start using exp replay only after #options.exp_warmstart iterations
-                if options.exp_warmstart < iteration:
-                    if options.exp_height:
-                        membrane, gt, mem_choice = \
-                            Memento.get_evenheight_batch(options.batch_size+options.exp_bs)
-                    else:
-                        membrane, gt, mem_choice = \
-                            Memento.get_batch(options.batch_size+options.exp_bs)
-
+                membrane, gt = Memento.get_batch(options.batch_size+options.exp_bs)
 
             if options.augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
@@ -318,8 +313,8 @@ def train_script_v1(options):
             else:
                 loss_train, individual_loss = loss_train_f(membrane, gt)
 
-            if options.exp_bs > 0 and options.exp_warmstart < iteration:
-                Memento.update_loss(individual_loss, mem_choice)
+            # if options.exp_bs > 0 and options.exp_warmstart < iteration:
+            #     Memento.update_loss(individual_loss, mem_choice)
 
                 # tmp use if memento blows up the ram :)
                 if iteration % 1000 == 0:
