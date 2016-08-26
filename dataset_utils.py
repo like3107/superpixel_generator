@@ -255,6 +255,7 @@ class HoneyBatcherPredict(object):
 
         # private
         self.perfect_play = perfect_play
+
         self.global_batch = None  # includes padding, nn input
         self.global_raw = None
         self.global_claims = None  # includes padding, tri-map, inp
@@ -264,7 +265,6 @@ class HoneyBatcherPredict(object):
         self.priority_queue = None
         self.coordinate_offset = np.array([[-1,0],[0,-1],[1,0],[0,1]],dtype=np.int)
         self.direction_array = np.arange(4)
-        self.perfect_play = False
         self.error_indicator_pass = np.zeros((batch_size))
         # debug
         self.max_batch = 0
@@ -470,6 +470,7 @@ class HoneyBatcherPredict(object):
             # check whether already pulled
             assert (self.global_claims[b, center[0], center[1]] == 0)
             self.global_claims[b, center[0], center[1]] = Id
+
             self.global_heightmap_batch[b,
                                         center[0] - self.pad,
                                         center[1] - self.pad] = height
@@ -538,7 +539,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_method='clip',
                  timos_seeds_b=True, slices=None,
-                 scale_height_factor=None, perfect_play=False):
+                 scale_height_factor=None, perfect_play=False,
+                 add_height_b=False):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
                                                membrane_key=membrane_key,
                                                raw=raw, raw_key=raw_key,
@@ -593,6 +595,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                             self.pad:-self.pad]
 
         # private
+        self.add_height_b = add_height_b
         self.global_directionmap_batch = None  # no padding
         self.global_label_batch = None  # no padding
         self.global_height_gt_batch = None  # no padding
@@ -679,24 +682,36 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         raw_batch, centers, ids = super(HoneyBatcherPath, self).get_batches()
         gts = np.zeros((self.bs, 4, 1, 1), dtype='float32')
         for b in range(self.bs):
-            gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            if self.add_height_b:
+                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            else:
+                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b,
+                                                            ids[b])
         assert (not np.any(gts < 0))
         assert (np.any(np.isfinite(raw_batch)))
         assert (not np.any(raw_batch < 0))
         assert (np.any(np.isfinite(centers)))
         assert (np.any(np.isfinite(ids)))
         assert (np.any(np.isfinite(gts)))
-
         return raw_batch, gts, centers, ids
 
-    def get_adjacent_heights(self, seed, batch):
+    def get_adjacent_heights(self, seed, batch, Id=None):
         seeds_x, seeds_y, _ = self.get_cross_coords_offset(seed)
+        # boundary conditions
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         assert (np.any(self.rl - self.pl > seeds_x) or
                 np.any(self.rl - self.pl > seeds_y))
-        # boundary conditions
         ground_truth = \
             self.global_height_gt_batch[batch, seeds_x, seeds_y].flatten()
+        if Id is not None:
+            mask = [self.global_label_batch[batch,
+                                           seeds_x,
+                                           seeds_y] != \
+                    self.global_id2gt[batch][Id]]
+            if np.any(mask):
+                ground_truth[mask] = \
+                    (self.pad + 1) * self.scaling + \
+                    np.random.randint(0, self.scaling)
         return ground_truth
 
     def get_centers_from_queue(self):

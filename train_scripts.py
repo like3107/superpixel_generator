@@ -107,7 +107,8 @@ def train_script_v1(options):
            find_errors_b=options.fine_tune_b,
            clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
            scale_height_factor=options.scale_height_factor,
-           perfect_play=options.perfect_play)
+           perfect_play=options.perfect_play,
+           add_height_b=options.ahp_rand)
     bm.init_batch()
 
     if options.val_b:
@@ -245,11 +246,14 @@ def train_script_v1(options):
                 # fine tuning
                 print 'Finetuning...'
                 ft_iteration += 1
-                batch_ft, dir_ft, mem_choice_ft = Memento_ft.get_batch(options.batch_size_ft+options.exp_ft_bs)
+                batch_ft, dir_ft, mem_choice_ft = \
+                    Memento_ft.get_batch(options.batch_size_ft + options.exp_ft_bs)
 
                 if options.augment_ft:
-                    batch_ft_t1, dir_t1 = du.augment_batch(batch_ft[:,0], direction=dir_ft[:,0])
-                    batch_ft_t2, dir_t2 = du.augment_batch(batch_ft[:,1], direction=dir_ft[:,1])
+                    batch_ft_t1, dir_t1 = du.augment_batch(batch_ft[:,0],
+                                                           direction=dir_ft[:,0])
+                    batch_ft_t2, dir_t2 = du.augment_batch(batch_ft[:,1],
+                                                           direction=dir_ft[:,1])
                     batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
                     batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
                 else:
@@ -291,7 +295,7 @@ def train_script_v1(options):
                         bm_val.init_batch()
                     free_voxel = free_voxel_empty
 
-        # pretraining
+        # pre-training
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
 
             if options.add_height_penalty and \
@@ -304,9 +308,11 @@ def train_script_v1(options):
                 # start using exp replay only after #options.exp_warmstart iterations
                 if options.exp_warmstart < iteration:
                     if options.exp_height:
-                        membrane, gt, mem_choice = Memento.get_evenheight_batch(options.batch_size+options.exp_bs)
+                        membrane, gt, mem_choice = \
+                            Memento.get_evenheight_batch(options.batch_size+options.exp_bs)
                     else:
-                        membrane, gt, mem_choice = Memento.get_batch(options.batch_size+options.exp_bs)
+                        membrane, gt, mem_choice = \
+                            Memento.get_batch(options.batch_size+options.exp_bs)
 
 
             if options.augment_pretraining:
@@ -370,7 +376,7 @@ def train_script_v1(options):
 
             if options.save_net_b:
                 iterations.append(iteration)
-                losses[0].append(loss_train)
+                losses[0].append(float(loss_train))
                 losses[1].append(loss_train_no_reg)
                 losses[2].append(loss_valid)
                 u.plot_train_val_errors(
@@ -439,6 +445,7 @@ def get_options():
                                       action='store_false')
     p.add('--scale_height_factor', default=100,type=float)
     p.add('--ahp', dest='add_height_penalty', action='store_true')
+    p.add('--ahp_rand', action='store_true')
 
 
     # fine-tuning
