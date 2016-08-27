@@ -330,6 +330,11 @@ class HoneyBatcherPredict(object):
                     ind_y[b]:ind_y[b] + self.global_el]
 
             if self.downsample:
+                self.global_raw_bottom_top[b, 2,:,:] =\
+                    self.raw[ind_b[b],
+                    ind_x[b]-self.global_el/2:ind_x[b] + 3*self.global_el/2:2,
+                    ind_y[b]-self.global_el/2:ind_y[b] + 3*self.global_el/2:2]
+
                 self.global_batch_bottom_top[b, 2,:,:] =\
                     self.membranes[ind_b[b],
                     ind_x[b]-self.global_el/2:ind_x[b] + 3*self.global_el/2:2,
@@ -1221,9 +1226,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_raw_bottom_top[b, 1, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1]})
 
-        plot_images.append({"title": "Raw Downsample",
-                            'im': self.global_raw_bottom_top[b, 2, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]})
+        if self.downsample:
+            plot_images.append({"title": "Raw Downsample",
+                                'im': self.global_raw_bottom_top[b, 2, self.pad:-self.pad - 1,
+                                      self.pad:-self.pad - 1]})
 
 
         plot_images.append({"title": "Memb Bottom",
@@ -1233,10 +1239,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         plot_images.append({"title": "Memb Tob",
                             'im': self.global_batch_bottom_top[b, 1, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1]}) 
-
-        plot_images.append({"title": "Memb Downsample",
-                            'im': self.global_batch_bottom_top[b, 2, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]})
+        
+        if self.downsample:
+            plot_images.append({"title": "Memb Downsample",
+                                'im': self.global_batch_bottom_top[b, 2, self.pad:-self.pad - 1,
+                                      self.pad:-self.pad - 1]})
 
         timemap = np.array(self.global_timemap[b, :, :])
         timemap[timemap < 0] = 0
