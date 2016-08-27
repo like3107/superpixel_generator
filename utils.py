@@ -150,7 +150,35 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
     du.save_h5(save_path + net_name, h5_keys, h5_values, overwrite='w')
     save_options(save_path + net_name, add)
 
+def get_stack_indices(name,network):
 
+    if 'first' in name:
+        ds_step = 50
+    elif 'second' in name:
+        ds_step = 75
+    else:
+        return None
+
+    if 'zstack' in network:
+        if 'repr' in name:
+                print "Using every third slice (0:64*3:3), due to zstack"
+                return np.arange(1,64*3,3)
+        else:
+            print "Removing dataset slices for touching blocks"
+                sample_indices = range(ds_step*3)
+                # remove indexes back to front to keep the order
+                for i in numpy.arange(ds_step*2,0,-ds_step):
+                del sample_indices[i]
+                del sample_indices[i-1]
+                return sample_indices
+
+def get_n_channels(network):
+    n_channels = 4
+    if ("zstack" in network):
+        n_channels += 4
+    if ("down" in options.net_arch):
+        n_channels += 2
+    return n_channels
 
 def create_network_folder_structure(save_net_path,
                                     save_net_path_pre='',

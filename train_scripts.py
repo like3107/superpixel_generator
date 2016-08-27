@@ -85,19 +85,11 @@ def train_script_v1(options):
     #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
     #                           allow_input_downcast=True)
 
-    n_channels = 4
-    sample_indices = None
-    val_sample_indices = None
-
-    if ("zstack" in options.net_arch):
-        n_channels += 4
-        if 'repr' in options.train_version:
-            sample_indices = np.arange(1,192,3)
-        if 'repr' in options.valid_version:
-            val_sample_indices = np.arange(1,192,3)
-
-    if ("down" in options.net_arch):
-        n_channels += 2
+    n_channels = u.get_n_channels(options.net_arch)
+    sample_indices = u.get_stack_indices(options.train_version,
+                                       options.net_arch)
+    val_sample_indices = u.get_stack_indices(options.valid_version,
+                                       options.net_arch)
 
     Memento = exp.BatcherBatcherBatcher(
                             scale_height_factor=options.scale_height_factor, 
