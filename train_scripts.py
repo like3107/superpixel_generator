@@ -471,7 +471,7 @@ def get_options():
     p.add('--exp_bs', default=16, type=int)
     p.add('--exp_ft_bs', default=8, type=int)
     p.add('--exp_warmstart', default=1000, type=int)
-    p.add('--exp_acceptance_rate', default=3)
+    p.add('--exp_acceptance_rate', default=3, type=int)
     p.add('--no-exp_height', dest='exp_height', action='store_false')
     p.add('--no-exp_save', dest='exp_save', action='store_false')
     p.add('--exp_mem_size', default=20000, type=int)
