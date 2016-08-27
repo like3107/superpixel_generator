@@ -7,9 +7,9 @@ class BatcherBatcherBatcher:
     Remember training instances and create (stochastically prioritized) replay batches
     """
     def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40,
-                 warmstart=1000, accept_rate=3):
+                 n_channels=4, warmstart=1000, accept_rate=3):
         self.pl = pl
-        self.first = np.empty((max_mem_size, 4, self.pl, self.pl),
+        self.first = np.empty((max_mem_size, n_channels, self.pl, self.pl),
                               dtype='float32')
         self.second = np.empty((max_mem_size, 4, 1, 1),dtype='float32')
         self.length = 0
@@ -114,11 +114,15 @@ class BatcherBatcherBatcher:
                 out_h5.create_dataset(
                     "mem/second",
                     data=self.second / float(self.scale_height_factor),
-                    dtype='float32')
+                    dtype='float32',compression='gzip')
             else:
                 out_h5.create_dataset("scale_height_factor",data=1.,dtype=float)
-                out_h5.create_dataset("mem/second",data=self.second,dtype='float32')
-            out_h5.create_dataset("mem/first",data=self.first,dtype='float32')
+                out_h5.create_dataset("mem/second",
+                                        data=self.second,
+                                        dtype='float32',
+                                        compression='gzip')
+            out_h5.create_dataset("mem/first",data=self.first,dtype='float32',
+                                              compression='gzip')
 
     def load(self, file_name):
         with h5py.File(file_name, 'r') as in_h5: 

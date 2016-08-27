@@ -198,7 +198,8 @@ class HoneyBatcherPredict(object):
     def __init__(self, membranes, raw=None, raw_key=None,
                  membrane_key=None,  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
-                 slices=None, timos_seeds_b=True, perfect_play=False):
+                 z_stack = False, downsample = False, slices=None,
+                 timos_seeds_b=True, perfect_play=False):
 
         """
         batch loader. Use either for predict. For valId and train use:
@@ -254,7 +255,16 @@ class HoneyBatcherPredict(object):
             raise Exception('try setting padding to True')
 
         # private
+        self.n_channels = 4
         self.perfect_play = perfect_play
+        self.z_stack = z_stack
+        if self.z_stack:
+            # add 4 channels, (2 membrane, 2 raw)
+            self.n_channels += 4
+            
+        self.downsample = downsample
+        if self.downsample:
+            self.n_channels += 2
 
         self.global_batch = None  # includes padding, nn input
         self.global_raw = None
@@ -279,22 +289,52 @@ class HoneyBatcherPredict(object):
         else:
             ind_b = np.arange(start + self.bs)
         # indices to raw, correct for label which edge len is -self.pl shorter
-        ind_x = np.random.randint(0,
-                                  self.rl - self.global_el + 1,
-                                  size=self.bs)
-        ind_y = np.random.randint(0,
-                                  self.rl - self.global_el + 1,
-                                  size=self.bs)
+        if not self.downsample:
+            ind_x = np.random.randint(0,
+                                      self.rl - self.global_el + 1,
+                                      size=self.bs)
+            ind_y = np.random.randint(0,
+                                      self.rl - self.global_el + 1,
+                                      size=self.bs)
+        else:
+            assert(self.global_el % 2 == 0)
+            ind_x = np.random.randint(self.global_el/2,
+                                      self.rl - 2*self.global_el + 1,
+                                      size=self.bs)
+            ind_y = np.random.randint(self.global_el/2,
+                                      self.rl - 3*self.global_el/2 + 1,
+                                      size=self.bs)
 
         for b in range(self.bs):
-            self.global_batch[b, :, :] = \
-                self.membranes[ind_b[b],
-                         ind_x[b]:ind_x[b] + self.global_el,
-                         ind_y[b]:ind_y[b] + self.global_el]
+                
             self.global_raw[b, :, :] = \
                 self.raw[ind_b[b],
                          ind_x[b]:ind_x[b] + self.global_el,
                          ind_y[b]:ind_y[b] + self.global_el]
+
+            self.global_batch[b, :, :] = \
+                self.membranes[ind_b[b],
+                         ind_x[b]:ind_x[b] + self.global_el,
+                         ind_y[b]:ind_y[b] + self.global_el]
+
+            if self.z_stack:
+                index = np.clip([ind_b[b]-1,ind_b[b]+1],0,self.n_slices-1)
+                self.global_raw_bottom_top[b, :2, :, :] =\
+                        self.raw[index,
+                         ind_x[b]:ind_x[b] + self.global_el,
+                         ind_y[b]:ind_y[b] + self.global_el]
+
+                self.global_batch_bottom_top[b, :2,:,:] =\
+                    self.membranes[index,
+                    ind_x[b]:ind_x[b] + self.global_el,
+                    ind_y[b]:ind_y[b] + self.global_el]
+
+            if self.downsample:
+                self.global_batch_bottom_top[b, 2,:,:] =\
+                    self.membranes[ind_b[b],
+                    ind_x[b]-self.global_el/2:ind_x[b] + 3*self.global_el/2:2,
+                    ind_y[b]-self.global_el/2:ind_y[b] + 3*self.global_el/2:2]
+
         if inherit_code:
             return ind_b, ind_x, ind_y
 
@@ -384,8 +424,32 @@ class HoneyBatcherPredict(object):
                                      seed[1] - self.pad:seed[1] + self.pad]
         return membrane
 
+    def crop_membrane_bottom_top(self, seed, b):
+        membrane = self.global_batch_bottom_top[b, :2,
+                                     seed[0] - self.pad:seed[0] + self.pad,
+                                     seed[1] - self.pad:seed[1] + self.pad]
+        return membrane
+
+    def crop_membrane_downsample(self, seed, b):
+        membrane = self.global_batch_bottom_top[b, 2,
+                                     seed[0] - self.pad:seed[0] + self.pad,
+                                     seed[1] - self.pad:seed[1] + self.pad]
+        return membrane
+
     def crop_raw(self, seed, b):
         raw = self.global_raw[b,
+              seed[0] - self.pad:seed[0] + self.pad,
+              seed[1] - self.pad:seed[1] + self.pad]
+        return raw
+
+    def crop_raw_bottom_top(self, seed, b):
+        raw = self.global_raw_bottom_top[b, :2,
+              seed[0] - self.pad:seed[0] + self.pad,
+              seed[1] - self.pad:seed[1] + self.pad]
+        return raw
+
+    def crop_raw_downsample(self, seed, b):
+        raw = self.global_raw_bottom_top[b, 2,
               seed[0] - self.pad:seed[0] + self.pad,
               seed[1] - self.pad:seed[1] + self.pad]
         return raw
@@ -412,6 +476,12 @@ class HoneyBatcherPredict(object):
         self.global_raw = np.zeros((self.bs, self.global_el, self.global_el),
                                    dtype='float32')
 
+        n_add_input_channels = (3 if self.downsample else 2)
+
+        self.global_batch_bottom_top = np.zeros((self.bs, n_add_input_channels, self.global_el, self.global_el),
+                                     dtype='float32')
+        self.global_raw_bottom_top = np.zeros((self.bs, n_add_input_channels, self.global_el, self.global_el),
+                                   dtype='float32')
         # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims = np.empty((self.bs, self.global_el, self.global_el))
         self.global_claims.fill(-1.)
@@ -458,18 +528,35 @@ class HoneyBatcherPredict(object):
         return height, _, center_x, center_y, Id, direction, error_indicator, \
                 time_put
 
+    def get_network_input(self, center, b, Id, out):
+
+        out[0, :, :] = self.crop_membrane(center, b)
+        out[1, :, :] = self.crop_raw(center, b)
+        out[2:4, :, :] = self.crop_mask_claimed(center, b, Id)
+        
+        # use last index to append other input information
+        last_index = 4
+        if self.z_stack:
+            out[last_index:last_index+2, :, :] = self.crop_raw_bottom_top(center, b)
+            out[last_index+2:last_index+4, :, :] = self.crop_membrane_bottom_top(center, b)
+            last_index += 4
+
+        if self.downsample:
+            out[last_index, :, :] = self.crop_membrane_downsample(center, b)
+            out[last_index+1, :, :] = self.crop_raw_downsample(center, b)
+            last_index += 2
+
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
-        raw_batch = np.zeros((self.bs, 4, self.pl, self.pl),
+
+        raw_batch = np.zeros((self.bs, self.n_channels, self.pl, self.pl),
                              dtype='float32')
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
-            raw_batch[b, 0, :, :] = self.crop_membrane(center, b)
-            raw_batch[b, 1, :, :] = self.crop_raw(center, b)
-            raw_batch[b, 2:4, :, :] = self.crop_mask_claimed(center, b, Id)
+
+            self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
             # check whether already pulled
             assert (self.global_claims[b, center[0], center[1]] == 0)
             self.global_claims[b, center[0], center[1]] = Id
-
             self.global_heightmap_batch[b,
                                         center[0] - self.pad,
                                         center[1] - self.pad] = height
@@ -538,6 +625,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_method='clip',
                  timos_seeds_b=True, slices=None,
+                 z_stack = False, downsample = False,
                  scale_height_factor=None, perfect_play=False,
                  add_height_b=False):
         super(HoneyBatcherPath, self).__init__(membranes=membranes,
@@ -548,6 +636,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                patch_len=patch_len,
                                                padding_b=padding_b,
                                                timos_seeds_b=timos_seeds_b,
+                                               z_stack = z_stack,
+                                               downsample = downsample,
                                                slices=slices,
                                                perfect_play=perfect_play)
 
@@ -935,16 +1025,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             pass
 
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
-        raw_batch = np.zeros((len(batches), 4, self.pl, self.pl),
+        raw_batch = np.zeros((len(batches), self.n_channels, self.pl, self.pl),
                              dtype='float32')
         for i, (b, center, Id) in enumerate(zip(batches, centers, ids)):
-            raw_batch[i, 0, :, :] = self.crop_membrane(center, b)
-            raw_batch[i, 1, :, :] = self.crop_raw(center, b)
-            raw_batch[i, 2:4, :, :] = self.crop_mask_claimed(center, b, Id)
+            self.get_network_input(center, b, Id, raw_batch[i, :, :, :])
 
         mask = self.crop_time_mask(centers, timepoint, batches)
         raw_batch[:, 2, :, :][mask] = 0
         raw_batch[:, 3, :, :][mask] = 0
+
         return raw_batch
 
     def reconstruct_path_error_inputs(self):
@@ -1123,6 +1212,31 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                  self.global_error_dict.values() if
                                  e["batch"] == b]),
                             'im': self.global_errormap[b, 2, :, :]})
+
+        plot_images.append({"title": "Raw Bottom",
+                            'im': self.global_raw_bottom_top[b, 0, self.pad:-self.pad - 1,
+                                  self.pad:-self.pad - 1]})
+
+        plot_images.append({"title": "Raw Top",
+                            'im': self.global_raw_bottom_top[b, 1, self.pad:-self.pad - 1,
+                                  self.pad:-self.pad - 1]})
+
+        plot_images.append({"title": "Raw Downsample",
+                            'im': self.global_raw_bottom_top[b, 2, self.pad:-self.pad - 1,
+                                  self.pad:-self.pad - 1]})
+
+
+        plot_images.append({"title": "Memb Bottom",
+                            'im': self.global_batch_bottom_top[b, 0, self.pad:-self.pad - 1,
+                                  self.pad:-self.pad - 1]}) 
+
+        plot_images.append({"title": "Memb Tob",
+                            'im': self.global_batch_bottom_top[b, 1, self.pad:-self.pad - 1,
+                                  self.pad:-self.pad - 1]}) 
+
+        plot_images.append({"title": "Memb Downsample",
+                            'im': self.global_batch_bottom_top[b, 2, self.pad:-self.pad - 1,
+                                  self.pad:-self.pad - 1]})
 
         timemap = np.array(self.global_timemap[b, :, :])
         timemap[timemap < 0] = 0

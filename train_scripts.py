@@ -68,7 +68,7 @@ def train_script_v1(options):
     target_t = T.ftensor4()
 
     l_in, l_in_direction, l_out, l_out_direction, patch_len = network()
-    patch_len = 40
+
     if options.dummy_data_b:
         raw_path, membrane_path, height_gt_path, label_path = \
             du.generate_dummy_data(options.batch_size, options.global_edge_len, patch_len)
@@ -85,11 +85,18 @@ def train_script_v1(options):
     #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
     #                           allow_input_downcast=True)
 
+    n_channels = 4
+    if ("zstack" in options.net_arch):
+        n_channels += 4
+    if ("down" in options.net_arch):
+        n_channels += 2
+
     Memento = exp.BatcherBatcherBatcher(
                             scale_height_factor=options.scale_height_factor, 
                             max_mem_size=options.exp_mem_size,
                             pl=patch_len,
                             warmstart=options.exp_warmstart,
+                            n_channels=n_channels,
                             accept_rate=options.exp_acceptance_rate)
 
     if options.exp_load != "None":
@@ -113,6 +120,8 @@ def train_script_v1(options):
            padding_b=options.padding_b,
            find_errors_b=options.fine_tune_b,
            clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
+           z_stack=("zstack" in options.net_arch),
+           downsample = ("down" in options.net_arch),
            scale_height_factor=options.scale_height_factor,
            perfect_play=options.perfect_play,
            add_height_b=options.add_height_penalty)
@@ -128,6 +137,8 @@ def train_script_v1(options):
                     padding_b=options.padding_b,
                     clip_method=options.clip_method,
                     timos_seeds_b=options.timos_seeds_b,
+                    z_stack=("zstack" in options.net_arch),
+					downsample = ("down" in options.net_arch),
                     scale_height_factor=options.scale_height_factor)
         bm_val.init_batch()
 
