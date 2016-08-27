@@ -80,12 +80,17 @@ class BatcherBatcherBatcher:
             self.length += chosen_bs
         else:
             # the whole batch does not fit anymore(fill up memory)
+            print "adding leftover batch"
             left_over = self.max_mem_size - self.length
-            self.first[-left_over:] = \
+            self.first[self.length:] = \
                 batch_first[np.random.choice(np.arange(bs),
                                              size=left_over,
                                              replace=False)]
-            self.length += left_over
+            self.second[self.length:] = \
+                batch_second[np.random.choice(np.arange(bs),
+                                             size=left_over,
+                                             replace=False)]
+            self.length = self.max_mem_size
 
     def get_batch(self, batchsize):
         # return batch of max size if requested batch size is bigger than memory
