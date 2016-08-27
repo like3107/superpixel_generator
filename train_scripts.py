@@ -88,6 +88,8 @@ def train_script_v1(options):
     n_channels = 4
     if ("zstack" in options.net_arch):
         n_channels += 4
+    if ("down" in options.net_arch):
+        n_channels += 2
 
     Memento = exp.BatcherBatcherBatcher(
                             scale_height_factor=options.scale_height_factor, 
@@ -119,6 +121,7 @@ def train_script_v1(options):
            find_errors_b=options.fine_tune_b,
            clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
            z_stack=("zstack" in options.net_arch),
+           downsample = ("down" in options.net_arch),
            scale_height_factor=options.scale_height_factor,
            perfect_play=options.perfect_play,
            add_height_b=options.add_height_penalty)
@@ -135,6 +138,7 @@ def train_script_v1(options):
                     clip_method=options.clip_method,
                     timos_seeds_b=options.timos_seeds_b,
                     z_stack=("zstack" in options.net_arch),
+					downsample = ("down" in options.net_arch),
                     scale_height_factor=options.scale_height_factor)
         bm_val.init_batch()
 
