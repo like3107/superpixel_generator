@@ -756,10 +756,14 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.error_indicator_pass = None
         self.global_time = 0
 
-    def prepare_global_batch(self, start=None, inherit_code=False):
+    def prepare_global_batch(self,
+                             start=None,
+                             inherit_code=False,
+                             allowed_slices=None):
         ind_b, ind_x, ind_y = \
             super(HoneyBatcherPath, self).prepare_global_batch(start=start,
-                                                               inherit_code=True)
+                                               inherit_code=True,
+                                               allowed_slices=allowed_slices)
         for b in range(self.bs):
             self.global_height_gt_batch[b, :, :] = \
                 self.height_gt[ind_b[b],
@@ -800,11 +804,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             mask[i, :, :][self.crop_timemap(centers[i], b) > timepoint[i]] = 1
         return mask
 
-    def init_batch(self, start=None):
+    def init_batch(self, start=None, allowed_slices = None):
         self.global_label_batch = np.zeros(self.label_shape,
                                             dtype='float32')
         self.global_height_gt_batch = np.zeros(self.label_shape)
-        super(HoneyBatcherPath, self).init_batch(start=start)
+        super(HoneyBatcherPath, self).init_batch(start=start,
+                                                 allowed_slices=allowed_slices)
         self.global_timemap = np.empty_like(self.global_batch, dtype=np.int)
         self.global_timemap.fill(np.inf)
         self.global_time = 0
