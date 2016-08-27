@@ -167,6 +167,56 @@ def generate_quick_eval(vol_path, names=['raw', 'label', 'membranes', 'height'],
     print represent_data.shape
 
 
+def generate_quick_eval_big_FOV_z_slices(
+                        vol_path,
+                        names=['raw', 'label','membranes', 'height'],
+                        h5_keys=[None,None, None, None],
+                        label=False, suffix='_second',
+                        n_slices=64, edg_len=600, n_slices_load=3 * 50,
+                        inp_el=1250):
+
+    represent_data = np.empty((4, 3 * n_slices, edg_len, edg_len))
+
+    all_data = np.empty((4, n_slices_load, inp_el, inp_el))
+
+    for i, (key, name) in enumerate(zip(h5_keys, names)):
+        all_data[i, :, :, :] = load_h5(vol_path + name + suffix + '.h5',
+                           h5_key=key)[0]
+
+    slices = np.random.permutation(n_slices_load)[:n_slices]
+    starts_x = np.random.randint(0, inp_el - edg_len, size=n_slices)
+    starts_y = np.random.randint(0, inp_el - edg_len, size=n_slices)
+
+    for i, start_x, start_y, slice in zip(range(1, n_slices_load * 3, 3),
+                                          starts_x, starts_y, slices):
+        print 'i', i, slice, start_x, start_y
+
+        represent_data[:, i, :, :] \
+            = all_data[:, slice,
+                       start_x:start_x+edg_len,
+                       start_y:start_y+edg_len]
+        if slice == 0 or slice == 50 or slice == 100:
+            below = slice
+        else:
+            below = slice - 1
+        if slice == 49 or slice == 99 or slice == 149:
+            above = slice
+        else:
+            above = slice + 1
+        represent_data[:, range(i-1, i+2), :, :] \
+            = all_data[:, [below, slice, above],
+                       start_x:start_x+edg_len,
+                       start_y:start_y+edg_len]
+
+
+    for data, name in zip(represent_data, names):
+        if name == 'label':
+            data = data.astype(np.uint64)
+        save_h5(vol_path + name + suffix + '_repr_big_zstack.h5', 'data',
+                data=data)
+
+    print represent_data.shape
+
 def segmentation_to_membrane(input_path,output_path):
     """
     compute a binary mask that indicates the boundary of two touching labels
@@ -1399,11 +1449,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             plt.close(f)
 
 
-
-
-
-
-
 class DummyBM:
     def __init__(self, batch_size, patch_len, n_channels):
         self.bs = batch_size
@@ -1422,8 +1467,6 @@ class DummyBM:
     def get_bach(self):
         self.init_batch()
         return self.batch, self.gt
-
-
 
 
 def generate_dummy_data(batch_size, edge_len, patch_len, save_path=None):
@@ -1663,8 +1706,9 @@ def height_to_grad(height):
     return grad
 
 if __name__ == '__main__':
+    generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
 
-    generate_dummy_data(20, 300, 40, save_path='')
+    # generate_dummy_data(20, 300, 40, save_path='')
 
     # loading of cremi
     # path = './data/sample_A_20160501.hdf'
