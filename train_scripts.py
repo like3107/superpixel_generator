@@ -224,6 +224,10 @@ def train_script_v1(options):
                 out_h5.create_dataset("seeds",data=seeds ,compression="gzip")
                 out_h5.create_dataset("ids",data=ids ,compression="gzip")
                 out_h5.create_dataset("probs",data=probs ,compression="gzip")
+                bm.serialize_to_h5("batchtest.h5",path=debug_path)
+                for i in range(options.batch_size):
+                    bm.draw_debug_image(
+                        "debug_batch"+str(i),path=debug_path, b=i)
 
         # fine-tuning: update height difference errors
         if iteration % 100 == 0:

@@ -490,9 +490,10 @@ class HoneyBatcherPredict(object):
         return membrane
 
     def crop_membrane_downsample(self, seed, b):
+        down_coord = np.array(seed)/2 + self.global_el/4
         membrane = self.global_batch_bottom_top[b, 2,
-                                     seed[0] - self.pad:seed[0] + self.pad,
-                                     seed[1] - self.pad:seed[1] + self.pad]
+                          down_coord[0] - self.pad:down_coord[0] + self.pad,
+                          down_coord[1] - self.pad:down_coord[1] + self.pad]
         return membrane
 
     def crop_raw(self, seed, b):
@@ -508,9 +509,10 @@ class HoneyBatcherPredict(object):
         return raw
 
     def crop_raw_downsample(self, seed, b):
+        down_coord = np.array(seed)/2 + self.global_el/4
         raw = self.global_raw_bottom_top[b, 2,
-              seed[0] - self.pad:seed[0] + self.pad,
-              seed[1] - self.pad:seed[1] + self.pad]
+              down_coord[0] - self.pad:down_coord[0] + self.pad,
+              down_coord[1] - self.pad:down_coord[1] + self.pad]
         return raw
 
     def crop_mask_claimed(self, seed, b, Id):
