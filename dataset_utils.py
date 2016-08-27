@@ -611,11 +611,10 @@ class HoneyBatcherPredict(object):
         raw_batch = np.zeros((self.bs, self.n_channels, self.pl, self.pl),
                              dtype='float32')
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
-
-            self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
-            # check whether already pulled
             assert (self.global_claims[b, center[0], center[1]] == 0)
             self.global_claims[b, center[0], center[1]] = Id
+            self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
+            # check whether already pulled
             self.global_heightmap_batch[b,
                                         center[0] - self.pad,
                                         center[1] - self.pad] = height
@@ -656,16 +655,20 @@ class HoneyBatcherPredict(object):
         plot_images = []
         plot_images.append({"title": "Raw Input",
                             'im': self.global_raw[b, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]})
+                                  self.pad:-self.pad - 1],
+                            'interpolation': 'none'})
         plot_images.append({"title": "Memb Input",
                             'im': self.global_batch[b, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]})
+                                  self.pad:-self.pad - 1],
+                            'interpolation': 'none'})
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
                             'im': self.global_claims[b, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]})
+                                  self.pad:-self.pad - 1],
+                            'interpolation': 'none'})
         plot_images.append({"title": "Heightmap Prediciton",
-                            'im': self.global_heightmap_batch[b, :, :]})
+                            'im': self.global_heightmap_batch[b, :, :],
+                            'interpolation': 'none'})
         if not inherite_code:
             if save:
                 u.save_images(plot_images, path=path, name=image_name)
@@ -1160,20 +1163,25 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 for n,info in error.items():
                     out_h5.create_dataset("error/"+str(error_name[0])+"_"+str(error_name[1])+"_"+str(error_name[2])+"/"+n,data=np.array(info))
 
-    def draw_batch(self, raw_batch, image_name, path='./data/nets/debug/images/',
+    def draw_batch(self, raw_batch, image_name,
+                   path='./data/nets/debug/images/',
                    save=True, gt=None, probs=None):
         plot_images = []
         for b in range(raw_batch.shape[0]):
             plot_images.append({"title": "membrane",
-                                'im': raw_batch[b, 0]})
+                                'im': raw_batch[b, 0],
+                                'interpolation': 'none'})
             plot_images.append({"title": "raw",
-                                'im': raw_batch[b, 1]})
+                                'im': raw_batch[b, 1],
+                                'interpolation': 'none'})
             plot_images.append({"title": "claim others",
                                 'cmap': "rand",
-                                'im': raw_batch[b, 2]})
+                                'im': raw_batch[b, 2],
+                                'interpolation': 'none'})
             plot_images.append({"title": "claim me",
                                 'cmap': "rand",
-                                'im': raw_batch[b, 3]})
+                                'im': raw_batch[b, 3],
+                                'interpolation': 'none'})
         u.save_images(plot_images, path=path, name=image_name, column_size=4)
 
     def draw_error_reconst(self, image_name, path='./data/nets/debug/images/',
@@ -1246,7 +1254,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                              inherite_code=True)
 
         plot_images.insert(2,{"title": "Error Map",
-                            'im': self.global_errormap[b, 0, :, :]})
+                            'im': self.global_errormap[b, 0, :, :],
+                             'interpolation': 'none'})
 
         plot_images.insert(3,{"title": "Ground Truth Label",
                             'scatter': np.array(
@@ -1254,55 +1263,67 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                  self.global_error_dict.values() if
                                  "e1_pos" in e and e["batch"] == 4]),
                             "cmap": "rand",
-                            'im': self.global_label_batch[b, :, :]})
+                            'im': self.global_label_batch[b, :, :],
+                            'interpolation': 'none'})
 
         plot_images.insert(5,{"title": "Overflow Map",
-                            'im': self.global_errormap[b, 1, :, :]})
+                            'im': self.global_errormap[b, 1, :, :],
+                            'interpolation': 'none'})
         
         plot_images.insert(6,{"title": "Heightmap GT",
                             'im': self.global_height_gt_batch[b, :, :],
-                            'scatter': np.array(self.global_seeds[b]) - self.pad})
+                            'scatter': np.array(self.global_seeds[b]) - self.pad,
+                            'interpolation': 'none'})
 
         plot_images.insert(8,{"title": "Height Differences",
                             'im': self.global_heightmap_batch[b, :, :] -
-                                  self.global_height_gt_batch[b, :, :]})
+                                  self.global_height_gt_batch[b, :, :],
+                            'interpolation': 'none'})
 
         plot_images.insert(9,{"title": "Direction Map",
-                            'im': self.global_directionmap_batch[b, :, :]})
+                            'im': self.global_directionmap_batch[b, :, :],
+                            'interpolation': 'none'})
 
         plot_images.insert(10,{"title": "Path Map",
                             'scatter': np.array(
                                 [np.array(e["large_pos"]) - self.pad for e in
                                  self.global_error_dict.values() if
                                  e["batch"] == b]),
-                            'im': self.global_errormap[b, 2, :, :]})
+                            'im': self.global_errormap[b, 2, :, :],
+                            'interpolation': 'none'})
 
         plot_images.append({"title": "Raw Bottom",
                             'im': self.global_raw_bottom_top[b, 0, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]})
+                                  self.pad:-self.pad - 1],
+                            'interpolation': 'none'})
 
         plot_images.append({"title": "Raw Top",
                             'im': self.global_raw_bottom_top[b, 1, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]})
+                                  self.pad:-self.pad - 1],
+                            'interpolation': 'none'})
 
         if self.downsample:
             plot_images.append({"title": "Raw Downsample",
                                 'im': self.global_raw_bottom_top[b, 2, self.pad:-self.pad - 1,
-                                      self.pad:-self.pad - 1]})
+                                      self.pad:-self.pad - 1],
+                                'interpolation': 'none'})
 
 
         plot_images.append({"title": "Memb Bottom",
                             'im': self.global_batch_bottom_top[b, 0, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]}) 
+                                  self.pad:-self.pad - 1],
+                            'interpolation': 'none'})
 
         plot_images.append({"title": "Memb Tob",
                             'im': self.global_batch_bottom_top[b, 1, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1]}) 
+                                  self.pad:-self.pad - 1],
+                            'interpolation': 'none'})
         
         if self.downsample:
             plot_images.append({"title": "Memb Downsample",
                                 'im': self.global_batch_bottom_top[b, 2, self.pad:-self.pad - 1,
-                                      self.pad:-self.pad - 1]})
+                                      self.pad:-self.pad - 1],
+                                'interpolation': 'none'})
 
         timemap = np.array(self.global_timemap[b, :, :])
         timemap[timemap < 0] = 0
