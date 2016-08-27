@@ -91,6 +91,7 @@ def train_script_v1(options):
 
     Memento = exp.BatcherBatcherBatcher(
                             scale_height_factor=options.scale_height_factor, 
+                            max_mem_size=options.exp_mem_size,
                             pl=patch_len,
                             warmstart=options.exp_warmstart,
                             n_channels=n_channels,
@@ -469,6 +470,7 @@ def get_options():
     p.add('--exp_acceptance_rate', default=3)
     p.add('--no-exp_height', dest='exp_height', action='store_false')
     p.add('--no-exp_save', dest='exp_save', action='store_false')
+    p.add('--exp_mem_size', default=20000, type=int)
     p.add('--exp_load', default="None", type=str)
 
     p.add('--max_iter', default=10000000000000, type=int)
