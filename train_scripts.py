@@ -86,8 +86,16 @@ def train_script_v1(options):
     #                           allow_input_downcast=True)
 
     n_channels = 4
+    sample_indices = None
+    val_sample_indices = None
+
     if ("zstack" in options.net_arch):
         n_channels += 4
+        if 'repr' in options.train_version:
+            sample_indices = np.arange(1,192,3)
+        if 'repr' in options.valid_version:
+            val_sample_indices = np.arange(1,192,3)
+
     if ("down" in options.net_arch):
         n_channels += 2
 
@@ -125,7 +133,7 @@ def train_script_v1(options):
            scale_height_factor=options.scale_height_factor,
            perfect_play=options.perfect_play,
            add_height_b=options.add_height_penalty)
-    bm.init_batch()
+    bm.init_batch(allowed_slices=sample_indices)
 
     if options.val_b:
         bm_val = BM(membrane_path_val, label=label_path_val,
@@ -138,9 +146,9 @@ def train_script_v1(options):
                     clip_method=options.clip_method,
                     timos_seeds_b=options.timos_seeds_b,
                     z_stack=("zstack" in options.net_arch),
-					downsample = ("down" in options.net_arch),
+                    downsample = ("down" in options.net_arch),
                     scale_height_factor=options.scale_height_factor)
-        bm_val.init_batch()
+        bm_val.init_batch(allowed_slices=val_sample_indices)
 
     if options.padding_b:
         options.global_edge_len = bm.global_el
@@ -191,13 +199,13 @@ def train_script_v1(options):
                 membrane, gt, seeds, ids = bm.get_batches()
             except:
                 print "Warning: queue empty... resetting bm"
-                bm.init_batch()
+                bm.init_batch(allowed_slices=sample_indices)
                 bm.draw_debug_image(
                     "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
                     (iteration, bm.counter, free_voxel),
                     path=save_net_path_reset)
                 if options.val_b:
-                    bm_val.init_batch()
+                    bm_val.init_batch(allowed_slices=sample_indices)
                     bm_val.draw_debug_image(
                         "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
                         (iteration, bm.counter, free_voxel),
@@ -305,12 +313,12 @@ def train_script_v1(options):
                                         ['ft loss no reg no dropout', 'ft loss'])
 
                 if options.val_b:
-                    bm_val.init_batch()
+                    bm_val.init_batch(allowed_slices=sample_indices)
 
                 if options.reset_after_fine_tune:
-                    bm.init_batch()
+                    bm.init_batch(allowed_slices=sample_indices)
                     if options.val_b:
-                        bm_val.init_batch()
+                        bm_val.init_batch(allowed_slices=sample_indices)
                     free_voxel = free_voxel_empty
 
         # pre-training
@@ -362,8 +370,8 @@ def train_script_v1(options):
                     "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
                     (iteration, bm.counter, free_voxel),
                     path=save_net_path_reset)
-                bm_val.init_batch()
-            bm.init_batch()
+                bm_val.init_batch(allowed_slices=sample_indices)
+            bm.init_batch(allowed_slices=sample_indices)
             free_voxel = free_voxel_empty
 
         # monitor training and plot loss

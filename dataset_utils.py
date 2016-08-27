@@ -280,14 +280,18 @@ class HoneyBatcherPredict(object):
         self.max_batch = 0
         self.counter = 0
 
-    def prepare_global_batch(self, start=0, inherit_code=False):
+    def prepare_global_batch(self, start=0, inherit_code=False, allowed_slices=None):
         # initialize two global batches = region where CNNs compete
         # against each other
         # get indices for global batches in raw/ label cubes
-        if start is None:
-            ind_b = np.random.permutation(self.n_slices)[:self.bs]
+        if allowed_slices is None:
+            if start is None:
+                ind_b = np.random.permutation(self.n_slices)[:self.bs]
+            else:
+                ind_b = np.arange(start + self.bs)
         else:
-            ind_b = np.arange(start + self.bs)
+            ind_b = np.random.permutation(allowed_slices)[:self.bs]
+
         # indices to raw, correct for label which edge len is -self.pl shorter
         if not self.downsample:
             ind_x = np.random.randint(0,
@@ -475,7 +479,7 @@ class HoneyBatcherPredict(object):
               seed[1] - self.pad:seed[1] + self.pad]
         return height
 
-    def init_batch(self, start=None):
+    def init_batch(self, start=None, allowed_slices = None):
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype='float32')
         self.global_raw = np.zeros((self.bs, self.global_el, self.global_el),
@@ -494,7 +498,7 @@ class HoneyBatcherPredict(object):
         self.global_heightmap_batch = np.empty(self.label_shape)
         self.global_heightmap_batch.fill(np.inf)
         # set global_batch and global_label_batch
-        self.prepare_global_batch(start=start)
+        self.prepare_global_batch(start=start, allowed_slices = allowed_slices)
         self.get_seed_coords()
         self.get_seed_ids()
         self.initialize_priority_queue()
