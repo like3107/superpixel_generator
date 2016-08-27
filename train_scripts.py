@@ -485,5 +485,15 @@ def get_options():
 if __name__ == '__main__':
 
     options = get_options()
+
+	# remove unnecessary parameter combinations
+	if options.exp_bs == 0:
+		options.exp_save = False
+		options.exp_load = "None"
+
+	if options.batch_size_ft = 0:
+		options.fine_tune_b = False
+
+
     u.print_options_for_net(options)
     train_script_v1(options)
