@@ -172,9 +172,9 @@ def train_script_v1(options):
         iteration += 1
         free_voxel -= 1
 
-        if (iteration % options.save_counter == 0 or free_voxel <= 201)\
+        if (iteration % options.save_counter == 0 or free_voxel == 0)\
                 and options.save_net_b:
-            if free_voxel <= 201:
+            if free_voxel == 0:
                 net_save_name = 'reset_'
             else:
                 net_save_name = ''
@@ -350,7 +350,7 @@ def train_script_v1(options):
                 #     Memento.forget()
 
         # reset bms
-        if free_voxel <= 201 \
+        if free_voxel == 0 \
             or (options.fast_reset
                 and (free_voxel_empty / 4)  % (iteration + 1) == 0
                 and free_voxel_empty - free_voxel > 1000):
@@ -390,8 +390,8 @@ def train_script_v1(options):
             else:
                 loss_valid = 100.
             print '\x1b[2K\r loss train %.4f, loss train_noreg %.4f, ' \
-                  'loss_validation %.4f, iteration %i' % \
-                  (loss_train, loss_train_no_reg, loss_valid, iteration),
+                  'loss_validation %.4f, iteration %i, exp_mem %i' % \
+                  (loss_train, loss_train_no_reg, loss_valid, iteration, len(Memento)),
             sys.stdout.flush()
 
             if options.save_net_b:
