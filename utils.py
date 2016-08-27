@@ -165,9 +165,9 @@ def get_stack_indices(name,network):
                 return np.arange(1,64*3,3)
         else:
             print "Removing dataset slices for touching blocks"
-                sample_indices = range(ds_step*3)
-                # remove indexes back to front to keep the order
-                for i in numpy.arange(ds_step*2,0,-ds_step):
+            sample_indices = range(ds_step*3)
+            # remove indexes back to front to keep the order
+            for i in np.arange(ds_step*2,0,-ds_step):
                 del sample_indices[i]
                 del sample_indices[i-1]
                 return sample_indices
@@ -176,7 +176,7 @@ def get_n_channels(network):
     n_channels = 4
     if ("zstack" in network):
         n_channels += 4
-    if ("down" in options.net_arch):
+    if ("down" in network):
         n_channels += 2
     return n_channels
 
