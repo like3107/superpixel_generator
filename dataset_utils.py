@@ -351,7 +351,7 @@ class HoneyBatcherPredict(object):
                                       self.rl - self.global_el + 1,
                                       size=self.bs)
         else:
-            assert(self.global_el % 2 == 0)
+            assert(self.global_el % 4 == 0)
             ind_x = np.random.randint(self.global_el/2,
                                       self.rl - 2*self.global_el + 1,
                                       size=self.bs)
