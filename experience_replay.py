@@ -6,11 +6,15 @@ class BatcherBatcherBatcher:
     """
     Remember training instances and create (stochastically prioritized) replay batches
     """
-    def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40, warmstart=1000, n_channels=4):
-        self.first = np.empty((max_mem_size, n_channels, pl, pl),dtype='float32')
+    def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40,
+                 n_channels=4, warmstart=1000, accept_rate=3):
+        self.pl = pl
+        self.first = np.empty((max_mem_size, n_channels, self.pl, self.pl),
+                              dtype='float32')
         self.second = np.empty((max_mem_size, 4, 1, 1),dtype='float32')
         self.length = 0
         self.max_mem_size = max_mem_size
+        self.accept_rate = accept_rate      # how many to select of a batch
         # determined by histogram of cliped height map
         self.height_histo = np.array([0.01946579,
                                       0.16362278,
@@ -22,6 +26,7 @@ class BatcherBatcherBatcher:
                                       0.08274214,
                                       0.0802579 ,
                                       0.05349225])
+        self.nb = len(self.height_histo)        # number of bins
         self.scale_height_factor = scale_height_factor
         self.warmstart = warmstart
         assert(self.warmstart < self.max_mem_size)
@@ -33,50 +38,67 @@ class BatcherBatcherBatcher:
         """
         adds a batch with additional information (batch_second) to the
         memory.
+        first:  pre-train
+        second: gt or ft
         """
         bs = batch_first.shape[0]
         if self.length < self.warmstart:
+            # fill up: save everything
             self.first[self.length:self.length+bs] = batch_first
             self.second[self.length:self.length+bs] = batch_second
             self.length += bs
         elif self.length == self.max_mem_size:
             # memory is full, replace based on height
-            steps = np.linspace(0, 20*self.scale_height_factor, 2*self.scale_height_factor)
-            digit = np.digitize(batch_second.mean(axis=1)[:,0,0], steps) -1
+            steps = np.linspace(0, self.pl / 2 * self.scale_height_factor,
+                                self.nb)
+            # orient to left of bin
+            digit = np.digitize(batch_second.mean(axis=1)[:,0,0], steps) - 1
             probs = self.height_histo[digit]
-            accepted = (probs > np.random.random(probs.shape))
+            accepted = (probs > np.random.random(probs.shape) *
+                        1. / self.accept_rate)
             chosen_bs = np.sum(accepted)
+            # below is going to be replaced by chosen
             chosen_m = np.random.choice(np.arange(self.max_mem_size),
                                          size=chosen_bs,
                                          replace=False)
             self.first[chosen_m] = batch_first[accepted]
             self.second[chosen_m] = batch_second[accepted]
-            self.length += chosen_bs
         elif 0 <= self.max_mem_size - (self.length + bs):
             # there is enough space to fit the whole batch
             # --> add subset of batch
-            steps = np.linspace(0, 20*self.scale_height_factor, 10)
-            digit = np.digitize(batch_second.mean(axis=1)[:,0,0], steps) -1
+            steps = np.linspace(0, self.pl / 2 * self.scale_height_factor,
+                                self.nb)
+            digit = np.digitize(batch_second.mean(axis=1)[:,0,0], steps) - 1
             probs = self.height_histo[digit]
-            accepted = (probs > np.random.random(probs.shape))
+            accepted = (probs > np.random.random(probs.shape) *
+                        1. / self.accept_rate)
             chosen_bs = np.sum(accepted)
-            self.first[self.length:self.length+chosen_bs] = batch_first[accepted]
-            self.second[self.length:self.length+chosen_bs] = batch_second[accepted]
+            self.first[self.length:self.length + chosen_bs] = \
+                batch_first[accepted]
+            self.second[self.length:self.length + chosen_bs] = \
+                batch_second[accepted]
             self.length += chosen_bs
         else:
             # the whole batch does not fit anymore(fill up memory)
+            print "adding leftover batch"
             left_over = self.max_mem_size - self.length
-            self.first[-self.length:] = batch_first[np.random.choice(np.arange(bs),
-                                        size=left_over, replace=False)]
-            self.length += left_over
+            self.first[self.length:] = \
+                batch_first[np.random.choice(np.arange(bs),
+                                             size=left_over,
+                                             replace=False)]
+            self.second[self.length:] = \
+                batch_second[np.random.choice(np.arange(bs),
+                                             size=left_over,
+                                             replace=False)]
+            self.length = self.max_mem_size
 
     def get_batch(self, batchsize):
         # return batch of max size if requested batch size is bigger than memory
-        if (batchsize > len(self)):
+        if batchsize > self.length:
             print "WARNING: requesting larger batch than memory, reducing output size"
-            batchsize = len(self)
+            batchsize = self.length
 
-        choices = np.random.choice(np.arange(len(self)),
+        choices = np.random.choice(np.arange(self.length),
                                            size=batchsize,
                                            replace=False)
         return self.first[choices], self.second[choices]
@@ -86,12 +108,21 @@ class BatcherBatcherBatcher:
         with h5py.File(file_name, 'w') as out_h5: 
             out_h5.create_dataset("length",data=int(len(self)),dtype=int)
             if not self.scale_height_factor is None:
-                out_h5.create_dataset("scale_height_factor",data=float(self.scale_height_factor),dtype=float)
-                out_h5.create_dataset("mem/second",data=self.second/float(self.scale_height_factor),dtype='float32',compression='gzip')
+                out_h5.create_dataset("scale_height_factor",
+                                      data=float(self.scale_height_factor),
+                                      dtype=float)
+                out_h5.create_dataset(
+                    "mem/second",
+                    data=self.second / float(self.scale_height_factor),
+                    dtype='float32',compression='gzip')
             else:
                 out_h5.create_dataset("scale_height_factor",data=1.,dtype=float)
-                out_h5.create_dataset("mem/second",data=self.second,dtype='float32',compression='gzip')
-            out_h5.create_dataset("mem/first",data=self.first,dtype='float32')
+                out_h5.create_dataset("mem/second",
+                                        data=self.second,
+                                        dtype='float32',
+                                        compression='gzip')
+            out_h5.create_dataset("mem/first",data=self.first,dtype='float32',
+                                              compression='gzip')
 
     def load(self, file_name):
         with h5py.File(file_name, 'r') as in_h5: 
@@ -250,12 +281,6 @@ class BatchMemento:
                 self.memory = []
                 self.priority = []
 
-def stack_batch(b1, b2):
-    return np.stack((b1,b2)).swapaxes(0,1)
-
-def flatten_stack(batch):
-    return np.concatenate((batch[:,0],batch[:,1]),axis=0)
-    
 
 if __name__ == '__main__':
     # M = BatchMemento()

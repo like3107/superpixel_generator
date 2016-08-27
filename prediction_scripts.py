@@ -10,6 +10,7 @@ import h5py as h
 from os import makedirs
 from os.path import exists
 
+
 def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
     if not exists(path):
         error = 'path: %s does not exist, check' % path
