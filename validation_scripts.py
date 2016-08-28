@@ -8,15 +8,8 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
     assert (gt_path != gt)  # specify either gt path or gt as np array
     assert (pred_path != pred)    # specify either raw path or raw as np array
 
-    if 'zstack' in gt_path:
-        allowed_indices = range(1, 64*3, 3)
-    else:
-        allowed_indices = None
-
     if isinstance(gt_path, str):
         gt = du.load_h5(gt_path, h5_key=gt_key)[0]
-        if allowed_indices is not None:
-            gt = gt[allowed_indices]
     if isinstance(pred_path, str):
         pred = du.load_h5(pred_path, h5_key=pred_key)[0]
     print 'gt', gt.shape, 'pred', pred.shape
