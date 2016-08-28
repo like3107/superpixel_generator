@@ -224,12 +224,14 @@ def train_script_v1(options):
         # fine-tuning: update height difference errors
         if iteration % 100 == 0:
             if options.fine_tune_b \
-                    and (Memento_ft.count_new() + len(bm.global_error_dict) >= options.batch_size_ft)\
+                    and (Memento_ft.count_new() + len(bm.global_error_dict) >=
+                             options.batch_size_ft)\
                     and iteration > options.pre_train_iter:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 save_net_path_pre = save_net_path_ft
-                print "mem size ", len(Memento_ft), Memento_ft.count_new(), len(bm.global_error_dict)
+                print "mem size ", len(Memento_ft), Memento_ft.count_new(), \
+                    len(bm.global_error_dict)
 
                 Memento_ft.add_to_memory(
                     exp.stack_batch(error_b_type1, error_b_type2),

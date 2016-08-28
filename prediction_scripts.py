@@ -65,8 +65,8 @@ def pred_script_v2_wrapper(
     assert (os.path.exists(membrane_path))
     assert (os.path.exists(raw_path))
     assert (os.path.exists(net_file))
-    print 'gt path', gt_path
     create_network_folder_structure(pred_save_folder)
+    print 'gt path', gt_path
     print 'net', net_file
 
     processes = []
@@ -74,27 +74,35 @@ def pred_script_v2_wrapper(
     for start in range(0, slices_total, chunk_size):
         print 'start slice %i till %i' % (start, start + chunk_size)
         time.sleep(1)
-        processes.append(Process(
-            target=pred_script_v2,
-            args=(q,),
-            kwargs=({'slices':range(start, start + chunk_size, 1),
-                     'batch_size':chunk_size,
-                     'n_slices':slices_total,
-                     'net_file':net_file,
-                     'raw_path':raw_path,
-                     'membrane_path':membrane_path,
-                     'global_edge_len':global_edge_len,
-                     'pred_save_folder':pred_save_folder,
-                     'timos_seeds_b':timos_seeds_b}),
-             ))
-
-    for p in processes:
-        time.sleep(8)
-        p.start()
-
-    for p in processes:
-        print 'joining'
-        p.join()
+        # processes.append(Process(
+        #     target=pred_script_v2,
+        #     args=(q,),
+        #     kwargs=({'slices':range(start, start + chunk_size, 1),
+        #              'batch_size':chunk_size,
+        #              'n_slices':slices_total,
+        #              'net_file':net_file,
+        #              'raw_path':raw_path,
+        #              'membrane_path':membrane_path,
+        #              'global_edge_len':global_edge_len,
+        #              'pred_save_folder':pred_save_folder,
+        #              'timos_seeds_b':timos_seeds_b}),
+        #      ))
+        pred_script_v2(q, slices=range(start, start + chunk_size, 1),
+                    batch_size=chunk_size,
+                    n_slices=slices_total,
+                    net_file=net_file,
+                    raw_path=raw_path,
+                    membrane_path=membrane_path,
+                    global_edge_len=global_edge_len,
+                    pred_save_folder=pred_save_folder,
+                    timos_seeds_b=timos_seeds_b)
+    # for p in processes:
+    #     time.sleep(8)
+    #     p.start()
+    #
+    # for p in processes:
+    #     print 'joining'
+    #     p.join()
 
     import glob
     def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
@@ -147,7 +155,7 @@ def pred_script_v2(
     print 'pred script v2 start %i till %i' % (slices[0], slices[-1])
 
     assert (n_slices % batch_size == 0)
-
+    print options['net_arch']
     # all params entered.......................
 
     # initialize the net
@@ -158,24 +166,31 @@ def pred_script_v2(
             batch_size=batch_size, raw=raw_path,
             patch_len=patch_len, global_edge_len=global_edge_len,
             padding_b=True, timos_seeds_b=timos_seeds_b, slices=slices,
+            z_stack=("zstack" in options['net_arch']),
+            downsample = ("down" in options['net_arch'])
             #tmp
             # label='./data/volumes/label_first_repr.h5',
             # height_gt='./data/volumes/height_first_repr.h5'
             )
-
-    assert (bm.rl == bm.global_el)
+    print bm.rl, bm.global_el
+    if "down" in options['net_arch']:
+        assert (bm.rl == bm.global_el + bm.pl)
+    else:
+        assert (bm.rl == bm.global_el)
     u.load_network(net_file, l_out)
 
-    sample_indices = u.get_stack_indices(raw_path,options['net_arch'])
-    bm.init_batch(start=0, allowed_slices=sample_indices)
-
+    # sample_indices = u.get_stack_indices(raw_path,options['net_arch'])
+    # bm.init_batch(start=0, allowed_slices=sample_indices)
+    bm.init_batch(start=0)
     for j in range((bm.global_el - bm.pl) ** 2):
         print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
         raw, centers, ids = bm.get_batches()
         # raw, _, centers, ids = bm.get_batches()
+        print raw.shape
         probs = probs_f(raw)
         bm.update_priority_queue(probs, centers, ids)
-        if j % (global_edge_len ** 2/ 4) == 0:
+        # tmp 40 -> 4
+        if j % (global_edge_len ** 2/ 40) == 0:
             print 'saving %i' % j
             bm.draw_debug_image('b_0_pred_%i_slice_%02i' %
                                 (j, slices[0]),

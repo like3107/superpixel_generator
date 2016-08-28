@@ -68,6 +68,7 @@ def draw_image(image_info, target):
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
     target.axis('off')
 
+
 def save_images(image_dicts, path, name, terminate=False, column_size=3):
     if len(image_dicts) == 0:
         return
@@ -150,6 +151,7 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
     du.save_h5(save_path + net_name, h5_keys, h5_values, overwrite='w')
     save_options(save_path + net_name, add)
 
+
 def get_stack_indices(name,network):
 
     if 'first' in name:
@@ -174,6 +176,7 @@ def get_stack_indices(name,network):
                 del sample_indices[i-1]
                 return sample_indices
 
+
 def get_n_channels(network):
     n_channels = 4
     if ("zstack" in network):
@@ -181,6 +184,7 @@ def get_n_channels(network):
     if ("down" in network):
         n_channels += 2
     return n_channels
+
 
 def create_network_folder_structure(save_net_path,
                                     save_net_path_pre='',
@@ -242,7 +246,6 @@ def save_options(load_path, options):
                     net_h5.create_dataset("options/"+op_key,data=op_val)
 
 
-
 def print_options_for_net(options):
     to_print = str([options.net_name, options.load_net_b, options.load_net_path,
                 options.train_version, options.valid_version, options.val_b,
@@ -255,6 +258,7 @@ def print_options_for_net(options):
                 options.exp_height, options.exp_save, options.exp_load, options.net_arch])
     print to_print[1:-1]
     print
+
 
 def plot_train_val_errors(all_y_values, x_values, save_path, names):
     fig = plt.figure()
@@ -273,6 +277,7 @@ def plot_train_val_errors(all_y_values, x_values, save_path, names):
     fig.savefig(save_path)
     plt.close(fig)
     return
+
 
 if __name__ == '__main__':
     path = './data/nets/cnn_v5/preds_0'
