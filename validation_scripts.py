@@ -4,10 +4,14 @@ import dataset_utils as du
 
 
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
-                          pred_key=None, gt_key=None, slice_by_slice=True,
-                          allowed_indices=None):
+                          pred_key=None, gt_key=None, slice_by_slice=True):
     assert (gt_path != gt)  # specify either gt path or gt as np array
     assert (pred_path != pred)    # specify either raw path or raw as np array
+
+    if 'zstack' in gt_path:
+        allowed_indices = range(1, 64*3, 3)
+    else:
+        allowed_indices = None
 
     if isinstance(gt_path, str):
         gt = du.load_h5(gt_path, h5_key=gt_key)[0]
@@ -425,16 +429,17 @@ def make_val_dic(all_means, all_vars):
 if __name__ == '__main__':
     print   
     # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
-    pred_path='./data/nets/suarons_eye/preds_first_repr_big_zstacknet_256000/final.h5'
+    pred_path='./data/preds/timo_second_repr_big_zstack.h5'
     # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './data/volumes/label_first_repr_big_zstack.h5'
+    gt_path = './data/volumes/label_second_repr_big_zstack.h5'
 
     print  'gt path'
     print pred_path
+
     validate_segmentation(
         pred_path=pred_path,
         gt_path=gt_path,
-        slice_by_slice=True, allowed_indices=range(1, 3*64, 3))
+        slice_by_slice=True)
 
 
