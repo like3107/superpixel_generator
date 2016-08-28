@@ -124,7 +124,8 @@ def train_script_v1(options):
            downsample = ("down" in options.net_arch),
            scale_height_factor=options.scale_height_factor,
            perfect_play=options.perfect_play,
-           add_height_b=options.add_height_penalty)
+           add_height_b=options.add_height_penalty,
+           max_penalty_pixel=options.max_penalty_pixel)
     bm.init_batch(allowed_slices=sample_indices)
 
     if options.val_b:
@@ -139,7 +140,8 @@ def train_script_v1(options):
                     timos_seeds_b=options.timos_seeds_b,
                     z_stack=("zstack" in options.net_arch),
                     downsample = ("down" in options.net_arch),
-                    scale_height_factor=options.scale_height_factor)
+                    scale_height_factor=options.scale_height_factor,
+                    max_penalty_pixel=options.max_penalty_pixel)
         bm_val.init_batch(allowed_slices=val_sample_indices)
 
     if options.padding_b:
@@ -464,7 +466,7 @@ def get_options():
                                       action='store_false')
     p.add('--scale_height_factor', default=100,type=float)
     p.add('--ahp', dest='add_height_penalty', action='store_true')
-
+    p.add('--max_penalty_pixel', default=3, type=float)
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)
