@@ -97,7 +97,9 @@ def train_script_v1(options):
                             pl=patch_len,
                             warmstart=options.exp_warmstart,
                             n_channels=n_channels,
-                            accept_rate=options.exp_acceptance_rate)
+                            accept_rate=options.exp_acceptance_rate,
+                            use_loss=options.exp_loss,
+                            weight_last=options.exp_wlast)
 
     if options.exp_load != "None":
         np.random.seed(len(options.net_name))
@@ -328,7 +330,7 @@ def train_script_v1(options):
                 Memento.add_to_memory(membrane, gt)
                 # start using exp replay only after #options.exp_warmstart iterations
                 if iteration >= options.exp_warmstart:
-                    membrane, gt = Memento.get_batch(options.batch_size +
+                    membrane, gt, mem_choice = Memento.get_batch(options.batch_size +
                                                      options.exp_bs)
 
             if options.augment_pretraining:
@@ -339,8 +341,8 @@ def train_script_v1(options):
                 loss_train, individual_loss = loss_train_f(membrane, gt)
 
             # for old memento (ft)
-                # if options.exp_bs > 0 and options.exp_warmstart < iteration:
-            #     Memento.update_loss(individual_loss, mem_choice)
+            if options.exp_bs > 0 and options.exp_warmstart < iteration:
+                Memento.update_loss(individual_loss, mem_choice)
                 # tmp use if memento blows up the ram :)
                 # if iteration % 1000 == 0 and options.exp_bs > 0:
                 #     Memento.forget()
@@ -457,6 +459,7 @@ def get_options():
 
     # training general
     p.add('--no-val', dest='val_b', action='store_false')
+    p.add('--export_quick_eval', action='store_true')
     p.add('--save_counter', default=10000, type=int)
     p.add('--dummy_data', dest='dummy_data_b', action='store_true')
     p.add('--global_edge_len', default=300, type=int)
@@ -491,6 +494,8 @@ def get_options():
     p.add('--no-exp_save', dest='exp_save', action='store_false')
     p.add('--exp_mem_size', default=20000, type=int)
     p.add('--exp_load', default="None", type=str)
+    p.add('--no-exp_loss', dest='exp_loss', action='store_false')
+    p.add('--exp_wlast', default=1., type=float)
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')

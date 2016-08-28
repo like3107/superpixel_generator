@@ -68,24 +68,26 @@ def pred_script_v2_wrapper(
     assert (os.path.exists(membrane_path))
     assert (os.path.exists(raw_path))
     assert (os.path.exists(net_file))
-    create_network_folder_structure(pred_save_folder)
     print 'gt path', gt_path
+    create_network_folder_structure(pred_save_folder)
     print 'net', net_file
 
     processes = []
     q = Queue()
 
-    step_size = chunk_size
+    factor = 1
     if 'zstack' in raw_path:
-        step_size *= 3
+        factor = 3
 
-    for start in range(0, slices_total, step_size):
-        print 'start slice %i till %i' % (start, start + step_size)
+    for start in range(0, slices_total * factor, chunk_size * factor):
+        print 'start slice %i till %i' % (start, start + chunk_size * factor)
+
         time.sleep(1)
         processes.append(Process(
             target=pred_script_v2,
             args=(q,),
-            kwargs=({'slices':range(start, start + step_size, 1),
+            kwargs=({'slices':range(start, start + chunk_size * factor,
+                                    1),
                      'batch_size':chunk_size,
                      'n_slices':slices_total,
                      'net_file':net_file,
@@ -95,7 +97,8 @@ def pred_script_v2_wrapper(
                      'pred_save_folder':pred_save_folder,
                      'timos_seeds_b':timos_seeds_b}),
              ))
-        # pred_script_v2(q, slices=range(start, start + chunk_size, 1),
+        # debug
+        # pred_script_v2(q, slices=range(start, start + chunk_size, factor),
         #             batch_size=chunk_size,
         #             n_slices=slices_total,
         #             net_file=net_file,
@@ -182,7 +185,7 @@ def pred_script_v2(
             # label='./data/volumes/label_first_repr.h5',
             # height_gt='./data/volumes/height_first_repr.h5'
             )
-    print bm.rl, bm.global_el
+    # print bm.rl, bm.global_el
     if "down" in options['net_arch']:
         assert (bm.rl == bm.global_el + bm.pl)
     else:
@@ -198,8 +201,7 @@ def pred_script_v2(
         # raw, _, centers, ids = bm.get_batches()
         probs = probs_f(raw)
         bm.update_priority_queue(probs, centers, ids)
-        # tmp 40 -> 4
-        if j % (global_edge_len ** 2/ 40) == 0:
+        if j % (global_edge_len ** 2/ 4) == 0:
             print 'saving %i' % j
             bm.draw_debug_image('b_0_pred_%i_slice_%02i' %
                                 (j, slices[0]),
@@ -273,10 +275,10 @@ if __name__ == '__main__':
         options.save_validation = options.pred_save_folder + 'numbanumba.txt'
 
     if options.data_version != '':
-        print 'here'
         options.raw_path = './data/volumes/raw_%s.h5' % options.data_version
         options.membrane_path =  './data/volumes/membranes_%s.h5' % options.data_version
-        # options.gt_path =  './data/volumes/label_%s.h5' % options.data_version
+        if 'zstack' not in options.raw_path:
+            options.gt_path =  './data/volumes/label_%s.h5' % options.data_version
 
     if '+' in  options.raw_path:
         assert (options.slices_total == 125)
@@ -286,6 +288,11 @@ if __name__ == '__main__':
             assert (options.global_edge_len == 1450)
         if 'C' in options.raw_path:
             assert (options.global_edge_len == 1250)
+
+    if 'zstack' in options.raw_path:
+        assert ('cut' in options.gt_path)
+        assert (options.slices_total == 64)
+        assert (options.global_edge_len == 600)
 
     prediction = pred_script_v2_wrapper(
                         chunk_size=options.chunk_size,
