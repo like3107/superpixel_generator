@@ -96,8 +96,34 @@ def prepare_data_mc(segmentation):
     for slice in segmentation:
         slice += max_id
         max_id = np.max(slice) + 1
-    segmentation = np.swapaxes(segmentation, 0, 2).swapaxes(0, 1).astype(np.uint64)
+    segmentation = np.swapaxes(segmentation, 0, 2).astype(np.uint64)
     return segmentation
+
+
+def prepare_aligned_test_data(path):
+    print 'preparing test data for prediction'
+    for version in ['A+', 'B+', 'C+']:
+        print 'version', version
+        memb_probs_path = path + '/sample%s_cantorV5_pmaps_corrected.h5' % version
+        raw_path = path + '/sample%s_raw_corrected.h5' % version
+
+        memb_probs = load_h5(memb_probs_path)[0]
+        raw = load_h5(raw_path)[0]
+        print 'before: memb, raw', memb_probs.shape, raw.shape
+        memb_probs = memb_probs.swapaxes(0, 2)
+        raw = raw.swapaxes(0, 2)
+        if version == 'A+':
+            raw = np.pad(raw, ((0, 0), (38, 37), (0, 0)), 'reflect')
+            memb_probs = np.pad(memb_probs, ((0, 0), (38, 37), (0, 0)), 'reflect')
+        if version == 'B+':
+            raw = np.pad(raw, ((0, 0), (75, 75), (0, 0)), 'reflect')
+            memb_probs = np.pad(memb_probs, ((0, 0), (75, 75), (0, 0)), 'reflect')
+        print 'after: memb, raw', memb_probs.shape, raw.shape
+
+        save_h5(path + '/membranes_test_%s.h5' % version, 'data', data=memb_probs,
+                overwrite='w')
+        save_h5(path + '/raw_test_%s.h5' % version, 'data', data=raw,
+                overwrite='w')
 
 
 def cut_consti_data(vol_path, names=['raw', 'label', 'membranes', 'height'],
@@ -249,7 +275,8 @@ class HoneyBatcherPredict(object):
                  membrane_key=None,  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  z_stack = False, downsample = False, slices=None,
-                 timos_seeds_b=True, perfect_play=False):
+                 timos_seeds_b=True, perfect_play=False,
+                 max_penalty_pixel=3):
 
         """
         batch loader. Use either for predict. For valId and train use:
@@ -321,6 +348,8 @@ class HoneyBatcherPredict(object):
             print self.rl , self.global_el , self.pl
             assert (self.rl - self.global_el - self.pl >= 0)
             self.n_channels += 2
+
+        self.max_penalty_pixel = max_penalty_pixel
 
         self.global_batch = None  # includes padding, nn input
         self.global_raw = None
@@ -744,19 +773,22 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  timos_seeds_b=True, slices=None,
                  z_stack = False, downsample = False,
                  scale_height_factor=None, perfect_play=False,
-                 add_height_b=False):
-        super(HoneyBatcherPath, self).__init__(membranes=membranes,
-                                               membrane_key=membrane_key,
-                                               raw=raw, raw_key=raw_key,
-                                               batch_size=batch_size,
-                                               global_edge_len=global_edge_len,
-                                               patch_len=patch_len,
-                                               padding_b=padding_b,
-                                               timos_seeds_b=timos_seeds_b,
-                                               z_stack = z_stack,
-                                               downsample = downsample,
-                                               slices=slices,
-                                               perfect_play=perfect_play)
+                 add_height_b=False,
+                 max_penalty_pixel=3):
+        super(HoneyBatcherPath, self).__init__(
+            membranes=membranes,
+            membrane_key=membrane_key,
+            raw=raw, raw_key=raw_key,
+            batch_size=batch_size,
+            global_edge_len=global_edge_len,
+            patch_len=patch_len,
+            padding_b=padding_b,
+            timos_seeds_b=timos_seeds_b,
+            z_stack = z_stack,
+            downsample = downsample,
+            slices=slices,
+            perfect_play=perfect_play,
+            max_penalty_pixel=max_penalty_pixel)
 
         if isinstance(label, str):
             self.labels = load_h5(label, h5_key=label_key,
@@ -961,7 +993,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             else:   # remember to pass on
                 self.error_indicator_pass[b] = \
                     min(error_indicator + self.scaling,
-                        (self.pad + 3) * self.scaling +       # don't go to high
+                        (self.pad + self.max_penalty_pixel) *
+                        self.scaling +       # don't go to high
                         np.random.randint(self.scaling) / 5.)
             self.global_errormap[b, 1,
                                  center_x - self.pad,
@@ -1844,7 +1877,12 @@ def height_to_grad(height):
     return grad
 
 if __name__ == '__main__':
-    generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
+    path = '/media/liory/DAF6DBA2F6DB7D67/cremi/cremi_testdata'
+    prepare_aligned_test_data(path)
+
+
+
+    # generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
 
     # generate_dummy_data(20, 300, 40, save_path='')
 
