@@ -159,14 +159,15 @@ def get_stack_indices(name,network):
     elif 'second' in name:
         ds_step = 75
     else:
+        print "using all slices continuously"
         return None
 
     if 'zstack' in network:
         if not 'zstack' in name:
             print "WARNING: you are probably using the wrong dataset for a zstack network!" 
         if 'repr' in name:
-                print "Using every third slice (1:64*3:3), due to zstack"
-                return np.arange(1,64*3,3)
+            print "Using every third slice (1:64*3:3), due to zstack"
+            return np.arange(1,64*3,3)
         else:
             print "Removing dataset slices for touching blocks"
             sample_indices = range(ds_step*3)
@@ -174,7 +175,7 @@ def get_stack_indices(name,network):
             for i in np.arange(ds_step*2,0,-ds_step):
                 del sample_indices[i]
                 del sample_indices[i-1]
-                return sample_indices
+            return sample_indices
 
 
 def get_n_channels(network):

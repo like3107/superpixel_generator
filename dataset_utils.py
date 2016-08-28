@@ -301,6 +301,7 @@ class HoneyBatcherPredict(object):
                             self.global_el - self.pl,
                             self.global_el - self.pl)
 
+        print "patch_len, global_edge_len, self.rl", patch_len, global_edge_len, self.rl
         assert (patch_len <= global_edge_len)
         assert (global_edge_len <= self.rl)
 
@@ -317,6 +318,7 @@ class HoneyBatcherPredict(object):
             
         self.downsample = downsample
         if self.downsample:
+            print self.rl , self.global_el , self.pl
             assert (self.rl - self.global_el - self.pl >= 0)
             self.n_channels += 2
 
@@ -363,7 +365,6 @@ class HoneyBatcherPredict(object):
                                       self.rl - self.global_el + 1,
                                       size=self.bs)
         else:
-            assert(self.pl % 4 == 0)
             # tmp
             # print 'start stop', self.pl * 2, self.rl - self.global_el + 1 - self.pl,
             # print 'raw', self.rl, 'global', self.global_el

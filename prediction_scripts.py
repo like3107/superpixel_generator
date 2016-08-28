@@ -72,13 +72,18 @@ def pred_script_v2_wrapper(
 
     processes = []
     q = Queue()
-    for start in range(0, slices_total, chunk_size):
+
+    step_size = chunk_size
+    if 'zstack' in raw_path:
+        step_size *= 3
+
+    for start in range(0, slices_total, step_size):
         print 'start slice %i till %i' % (start, start + chunk_size)
         time.sleep(1)
         processes.append(Process(
             target=pred_script_v2,
             args=(q,),
-            kwargs=({'slices':range(start, start + chunk_size, 1),
+            kwargs=({'slices':range(start, start + step_size, 1),
                      'batch_size':chunk_size,
                      'n_slices':slices_total,
                      'net_file':net_file,
@@ -180,9 +185,9 @@ def pred_script_v2(
         assert (bm.rl == bm.global_el)
     u.load_network(net_file, l_out)
 
-    # sample_indices = u.get_stack_indices(raw_path,options['net_arch'])
-    # bm.init_batch(start=0, allowed_slices=sample_indices)
-    bm.init_batch(start=0)
+    sample_indices = u.get_stack_indices(raw_path,options['net_arch'])
+    bm.init_batch(start=0, allowed_slices=sample_indices)
+
     for j in range((bm.global_el - bm.pl) ** 2):
         print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
         raw, centers, ids = bm.get_batches()
