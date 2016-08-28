@@ -40,6 +40,34 @@ def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
     return output
 
 
+
+def get_stack_indices(name, network):
+
+    if 'first' in name:
+        ds_step = 50
+    elif 'second' in name:
+        ds_step = 75
+    else:
+        print "using all slices continuously"
+        return None
+
+    if 'zstack' in network:
+        if not 'zstack' in name:
+            print "WARNING: you are probably using the wrong dataset for a zstack network!"
+        if 'repr' in name:
+            print "Using every third slice (1:64*3:3), due to zstack"
+            return np.arange(1, 64 * 3, 3)
+        else:
+            print "Removing dataset slices for touching blocks"
+            sample_indices = range(ds_step * 3)
+            # remove indexes back to front to keep the order
+            for i in np.arange(ds_step * 2, 0, -ds_step):
+                del sample_indices[i]
+                del sample_indices[i - 1]
+            return sample_indices
+
+
+
 def save_h5(path, h5_key, data, overwrite='w-'):
     f = h.File(path, overwrite)
     if isinstance(h5_key, str):
@@ -48,6 +76,7 @@ def save_h5(path, h5_key, data, overwrite='w-'):
         for key, values in zip(h5_key, data):
             f.create_dataset(key, data=values)
     f.close()
+
 
 def pred_script_v2_wrapper(
         chunk_size=None,
@@ -78,7 +107,7 @@ def pred_script_v2_wrapper(
         step_size *= 3
 
     for start in range(0, slices_total, step_size):
-        print 'start slice %i till %i' % (start, start + chunk_size)
+        print 'start slice %i till %i' % (start, start + step_size)
         time.sleep(1)
         processes.append(Process(
             target=pred_script_v2,
@@ -126,8 +155,9 @@ def pred_script_v2_wrapper(
     #            'data', data=prediction, overwrite='w')
     #
     import validation_scripts as vs
+    sample_indices = get_stack_indices(raw_path, options['net_arch'])
     return vs.validate_segmentation(pred_path=pred_save_folder + '/final.h5',
-                             gt_path=gt_path)
+                             gt_path=gt_path, allowed_indices=sample_indices)
 
 
 def pred_script_v2(
@@ -185,7 +215,7 @@ def pred_script_v2(
         assert (bm.rl == bm.global_el)
     u.load_network(net_file, l_out)
 
-    sample_indices = u.get_stack_indices(raw_path,options['net_arch'])
+    sample_indices = get_stack_indices(raw_path,options['net_arch'])
     bm.init_batch(start=0, allowed_slices=sample_indices)
 
     for j in range((bm.global_el - bm.pl) ** 2):
