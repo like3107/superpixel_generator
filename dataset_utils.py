@@ -322,9 +322,9 @@ class HoneyBatcherPredict(object):
             assert (self.rl - self.global_el - self.pl >= 0)
             self.n_channels += 2
 
-        self.global_batch = None  # includes padding, nn input
-        self.global_raw = None
-        self.global_claims = None  # includes padding, tri-map, inp
+        self.global_batch = None    # includes padding, nn input
+        self.global_raw = None      # includes padding, nn input
+        self.global_claims = None   # includes padding, tri-map, inp
         self.global_heightmap_batch = None      # no padding
         self.global_down = None
         self.global_batch_bottom_top = None

@@ -59,7 +59,8 @@ def pred_script_v2_wrapper(
         membrane_path='',
         raw_path='',
         gt_path = '',
-        timos_seeds_b=None
+        timos_seeds_b=None,
+        validate=True
         ):
 
     assert (slices_total % chunk_size == 0)
@@ -104,7 +105,7 @@ def pred_script_v2_wrapper(
         #             pred_save_folder=pred_save_folder,
         #             timos_seeds_b=timos_seeds_b)
     for p in processes:
-        time.sleep(8)
+        time.sleep(8)           # for GPU claim
         p.start()
 
     for p in processes:
@@ -112,6 +113,7 @@ def pred_script_v2_wrapper(
         p.join()
 
     import glob
+
     def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
         files = sorted(glob.glob(path_to_folder + '/final_slice' + '*.h5'))
         le_final = np.zeros((n_slices, edge_len, edge_len), dtype=np.uint64)
@@ -126,25 +128,26 @@ def pred_script_v2_wrapper(
     # du.save_h5(pred_save_folder + net_name + 'pred_final.h5',
     #            'data', data=prediction, overwrite='w')
     #
-    import validation_scripts as vs
-    return vs.validate_segmentation(pred_path=pred_save_folder + '/final.h5',
-                             gt_path=gt_path)
+    if validate:
+        import validation_scripts as vs
+        return vs.validate_segmentation(pred_path=pred_save_folder + '/final.h5',
+                                 gt_path=gt_path)
 
 
 def pred_script_v2(
         q,
         # net to load
-        net_file='',
+        net_file='',            # do not change here!
         # data
-        membrane_path='',
-        raw_path='',
-        pred_save_folder='',
-        global_edge_len=0,  # 1250  + patch_len for memb
+        membrane_path='',       # do not change here!
+        raw_path='',            # do not change here!
+        pred_save_folder='',    # do not change here!
+        global_edge_len=0,      # do not change here!
         # set below at wrapper!!!
-        batch_size=None,  # do not change here!
+        batch_size=None,        # do not change here!
         slices=None,      # do not change here
         n_slices=None,       # do not change here
-        timos_seeds_b=None
+        timos_seeds_b=None,
         ):
 
     # import within script du to multi-processing and GPU usage
@@ -196,7 +199,7 @@ def pred_script_v2(
         probs = probs_f(raw)
         bm.update_priority_queue(probs, centers, ids)
         # tmp 40 -> 4
-        if j % (global_edge_len ** 2/ 4) == 0:
+        if j % (global_edge_len ** 2/ 40) == 0:
             print 'saving %i' % j
             bm.draw_debug_image('b_0_pred_%i_slice_%02i' %
                                 (j, slices[0]),
@@ -250,6 +253,8 @@ if __name__ == '__main__':
     p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
     p.add('--timos_seeds_b', action='store_false')
     p.add('--save_validation', default="",type=str)
+    p.add('--no_val', dest='val', action='store_false', default=True)
+
     options = p.parse_args()
 
     if options.net_file == '':
@@ -271,7 +276,16 @@ if __name__ == '__main__':
         print 'here'
         options.raw_path = './data/volumes/raw_%s.h5' % options.data_version
         options.membrane_path =  './data/volumes/membranes_%s.h5' % options.data_version
-        options.gt_path =  './data/volumes/label_%s.h5' % options.data_version
+        # options.gt_path =  './data/volumes/label_%s.h5' % options.data_version
+
+    if '+' in  options.raw_path:
+        assert (options.slices_total == 125)
+        if 'A' in options.raw_path:
+            assert (options.global_edge_len == 1340)
+        if 'B' in options.raw_path:
+            assert (options.global_edge_len == 1450)
+        if 'C' in options.raw_path:
+            assert (options.global_edge_len == 1250)
 
     prediction = pred_script_v2_wrapper(
                         chunk_size=options.chunk_size,
@@ -282,7 +296,8 @@ if __name__ == '__main__':
                         membrane_path=options.membrane_path,
                         raw_path=options.raw_path,
                         gt_path=options.gt_path,
-                        timos_seeds_b=options.timos_seeds_b)
+                        timos_seeds_b=options.timos_seeds_b,
+                        validate=options.val)
 
     if options.save_validation != "":
         if options.save_validation.endswith(".json"):
