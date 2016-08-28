@@ -8,7 +8,7 @@ class BatcherBatcherBatcher:
     """
     def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40,
                  n_channels=4, warmstart=1000, accept_rate=3, use_loss = True,
-                 epsilon = 1000):
+                 epsilon = 100, weight_last = 1.):
         self.pl = pl
         self.first = np.empty((max_mem_size, n_channels, self.pl, self.pl),
                               dtype='float32')
@@ -18,7 +18,8 @@ class BatcherBatcherBatcher:
         self.accept_rate = accept_rate      # how many to select of a batch
         self.epsilon = epsilon
         # determined by histogram of cliped height map
-        self.height_histo = np.array([0.01946579,
+        self.height_histo = np.array([0.0001,
+            # original was 0.01946579,
                                       0.16362278,
                                       0.15049561,
                                       0.12307298,
@@ -27,13 +28,15 @@ class BatcherBatcherBatcher:
                                       0.09685287,
                                       0.08274214,
                                       0.0802579 ,
-                                      0.05349225])
+                                      0.05349225 * weight_last])
+        self.height_histo /= np.sum(self.height_histo)
+
         self.nb = len(self.height_histo)        # number of bins
         self.scale_height_factor = scale_height_factor
         self.use_loss = use_loss
         if self.use_loss:
             print "using Memento with loss sampling"
-            self.loss = np.zeros((max_mem_size), dtype='float32')
+            self.loss = np.ones((max_mem_size), dtype='float32') * 10000
         self.warmstart = warmstart
         assert(self.warmstart < self.max_mem_size)
 
