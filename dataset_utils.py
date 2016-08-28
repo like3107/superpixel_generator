@@ -1218,6 +1218,31 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 for n,info in error.items():
                     out_h5.create_dataset("error/"+str(error_name[0])+"_"+str(error_name[1])+"_"+str(error_name[2])+"/"+n,data=np.array(info))
 
+    def save_quick_eval(self, name, path, score=True):
+        print "name, path",name, path
+        if not exists(path):
+            makedirs(path)
+        with h5py.File(path+'/'+name+'pred.h5', 'w') as out_h5:
+            out_h5.create_dataset("claims",
+                        data=self.global_claims[:, self.pad:-self.pad,
+                                  self.pad:-self.pad ] ,compression="gzip")
+        with h5py.File(path+'/'+name+'_gt.h5', 'w') as out_h5:
+            out_h5.create_dataset("gt_labels",
+                        data=self.global_label_batch ,compression="gzip")
+
+        if score:
+            import validation_scripts as vs
+
+            print "path",path+'/'+name+'pred.h5', "gt_path",path+'/'+name+'_gt.h5'
+
+            val_score = vs.validate_segmentation(pred_path=path+'/'+name+'pred.h5',
+                                            gt_path=path+'/'+name+'_gt.h5')
+            print val_score
+
+            import json
+            with open(path+'/'+name+'_score.json', 'w') as f:
+                f.write(json.dumps(val_score))
+
     def draw_batch(self, raw_batch, image_name,
                    path='./data/nets/debug/images/',
                    save=True, gt=None, probs=None):

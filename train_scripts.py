@@ -368,6 +368,13 @@ def train_script_v1(options):
                     "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
                     (iteration, bm.counter, free_voxel),
                     path=save_net_path_reset)
+                if options.export_quick_eval:
+                    print "doing quick eval"
+                    bm_val.save_quick_eval(
+                    "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
+                    (iteration, bm.counter, free_voxel),debug_path)
+                else:
+                    print "skipping quick eval"
                 bm_val.init_batch(allowed_slices=val_sample_indices)
             bm.init_batch(allowed_slices=sample_indices)
             free_voxel = free_voxel_empty
