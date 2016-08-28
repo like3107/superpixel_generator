@@ -7,7 +7,8 @@ class BatcherBatcherBatcher:
     Remember training instances and create (stochastically prioritized) replay batches
     """
     def __init__(self, scale_height_factor=None, max_mem_size=20000, pl=40,
-                 n_channels=4, warmstart=1000, accept_rate=3):
+                 n_channels=4, warmstart=1000, accept_rate=3, use_loss = True,
+                 epsilon = 1000):
         self.pl = pl
         self.first = np.empty((max_mem_size, n_channels, self.pl, self.pl),
                               dtype='float32')
@@ -15,6 +16,7 @@ class BatcherBatcherBatcher:
         self.length = 0
         self.max_mem_size = max_mem_size
         self.accept_rate = accept_rate      # how many to select of a batch
+        self.epsilon = epsilon
         # determined by histogram of cliped height map
         self.height_histo = np.array([0.01946579,
                                       0.16362278,
@@ -28,6 +30,10 @@ class BatcherBatcherBatcher:
                                       0.05349225])
         self.nb = len(self.height_histo)        # number of bins
         self.scale_height_factor = scale_height_factor
+        self.use_loss = use_loss
+        if self.use_loss:
+            print "using Memento with loss sampling"
+            self.loss = np.zeros((max_mem_size), dtype='float32')
         self.warmstart = warmstart
         assert(self.warmstart < self.max_mem_size)
 
@@ -92,17 +98,26 @@ class BatcherBatcherBatcher:
                                              replace=False)]
             self.length = self.max_mem_size
 
-    def get_batch(self, batchsize):
+    def update_loss(self, loss ,choices):
+        self.loss[choices] = np.mean(loss,axis=1)
+
+    def get_batch(self, batchsize, use_loss=False):
         # return batch of max size if requested batch size is bigger than memory
         if batchsize > self.length:
             print "WARNING: requesting larger batch than memory, reducing output size"
             batchsize = self.length
 
-        choices = np.random.choice(np.arange(self.length),
-                                           size=batchsize,
-                                           replace=False)
-        return self.first[choices], self.second[choices]
+        if self.use_loss:
+            choices = np.random.choice(np.arange(self.length),
+                                               size=batchsize,
+                                               p=self.getprob(),
+                                               replace=False)
+        else:
+            choices = np.random.choice(np.arange(self.length),
+                                               size=batchsize,
+                                               replace=False)
 
+        return self.first[choices], self.second[choices], choices
 
     def save(self, file_name):
         with h5py.File(file_name, 'w') as out_h5: 
@@ -121,6 +136,10 @@ class BatcherBatcherBatcher:
                                         data=self.second,
                                         dtype='float32',
                                         compression='gzip')
+
+            if self.use_loss:
+                out_h5.create_dataset("loss",data=self.loss)
+
             out_h5.create_dataset("mem/first",data=self.first,dtype='float32',
                                               compression='gzip')
 
@@ -132,6 +151,13 @@ class BatcherBatcherBatcher:
             self.max_mem_size = in_h5["mem/first"].shape[0]
             if not self.scale_height_factor is None:
                 self.second *= self.scale_height_factor
+            if "loss" in in_h5.keys():
+                self.loss = in_h5["loss"].value
+
+    def getprob(self):
+        priority = self.loss[:self.length] +  self.epsilon
+        priority /= np.sum(priority)
+        return priority
 
 def stack_batch(b1, b2):
     return np.stack((b1,b2)).swapaxes(0,1)
