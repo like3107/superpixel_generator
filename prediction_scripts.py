@@ -255,7 +255,13 @@ if __name__ == '__main__':
         options.net_file = './data/nets/' + options.net_name + '/' + options.net_number
 
     if options.pred_save_folder == '':
-        options.pred_save_folder = './data/nets/' + options.net_name + '/preds_c'+options.net_number+'/'
+        if options.data_version == '':
+            options.pred_save_folder = './data/nets/' + options.net_name + \
+                                       '/preds_'+options.net_number+'/'
+        else:
+            options.pred_save_folder = './data/nets/' + options.net_name + \
+                                       '/preds_' +options.data_version + \
+                                       options.net_number+'/'
 
     if options.save_validation == "":
         options.save_validation = options.pred_save_folder + 'numbanumba.txt'
