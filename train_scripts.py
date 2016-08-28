@@ -174,10 +174,10 @@ def train_script_v1(options):
                            '%snet_%i' % (net_save_name, iteration),
                            add=options._get_kwargs())
 
-            if options.exp_save:
-                Memento.save(save_net_path +'/exp/exp_%i.h5' % iteration)
+            if options.exp_save and free_voxel == 0:
+                Memento.save(save_net_path +'/exp/exp_last_reset.h5')
                 if options.fine_tune_b:
-                    Memento_ft.save(save_net_path +'/exp/exp_ft_%i.h5' % iteration)
+                    Memento_ft.save(save_net_path +'/exp/exp_ft_last_reset.h5')
 
         # predict val
         if options.val_b:
@@ -484,7 +484,7 @@ def get_options():
     p.add('--exp_bs', default=16, type=int)
     p.add('--exp_ft_bs', default=8, type=int)
     p.add('--exp_warmstart', default=1000, type=int)
-    p.add('--exp_acceptance_rate', default=3, type=int)
+    p.add('--exp_acceptance_rate', default=0.1, type=float)
     p.add('--no-exp_height', dest='exp_height', action='store_false')
     p.add('--no-exp_save', dest='exp_save', action='store_false')
     p.add('--exp_mem_size', default=20000, type=int)

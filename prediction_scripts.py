@@ -49,6 +49,7 @@ def save_h5(path, h5_key, data, overwrite='w-'):
             f.create_dataset(key, data=values)
     f.close()
 
+
 def pred_script_v2_wrapper(
         chunk_size=None,
         slices_total=None,
@@ -78,7 +79,7 @@ def pred_script_v2_wrapper(
         step_size *= 3
 
     for start in range(0, slices_total, step_size):
-        print 'start slice %i till %i' % (start, start + chunk_size)
+        print 'start slice %i till %i' % (start, start + step_size)
         time.sleep(1)
         processes.append(Process(
             target=pred_script_v2,
@@ -255,7 +256,13 @@ if __name__ == '__main__':
         options.net_file = './data/nets/' + options.net_name + '/' + options.net_number
 
     if options.pred_save_folder == '':
-        options.pred_save_folder = './data/nets/' + options.net_name + '/preds_c'+options.net_number+'/'
+        if options.data_version == '':
+            options.pred_save_folder = './data/nets/' + options.net_name + \
+                                       '/preds_'+options.net_number+'/'
+        else:
+            options.pred_save_folder = './data/nets/' + options.net_name + \
+                                       '/preds_' +options.data_version + \
+                                       options.net_number+'/'
 
     if options.save_validation == "":
         options.save_validation = options.pred_save_folder + 'numbanumba.txt'
@@ -287,21 +294,21 @@ if __name__ == '__main__':
             f.write(str(prediction['Variational information split']))
             f.write("+-")
             f.write(str(prediction['Variational information split_error']))
-            f.write(",") 
+            f.write(",")
             f.write(str(prediction['Variational information merge']))
             f.write("+-")
             f.write(str(prediction['Variational information merge_error']))
-            f.write(",") 
+            f.write(",")
             f.write(str(prediction['Adapted Rand error']))
             f.write("+-")
             f.write(str(prediction['Adapted Rand error_error']))
-            f.write(",") 
+            f.write(",")
             f.write(str(prediction['Adapted Rand error precision']))
-            f.write("+-") 
+            f.write("+-")
             f.write(str(prediction['Adapted Rand error precision_error']))
             f.write(",")
             f.write(str(prediction['Adapted Rand error recall']))
-            f.write("+-") 
+            f.write("+-")
             f.write(str(prediction['Adapted Rand error recall_error']))
             f.close()
 
