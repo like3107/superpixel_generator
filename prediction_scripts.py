@@ -166,7 +166,8 @@ def pred_script_v2(
     assert (bm.rl == bm.global_el)
     u.load_network(net_file, l_out)
 
-    bm.init_batch(start=0)
+    sample_indices = u.get_stack_indices(raw_path,options['net_arch'])
+    bm.init_batch(start=0, allowed_slices=sample_indices)
 
     for j in range((bm.global_el - bm.pl) ** 2):
         print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
@@ -211,7 +212,7 @@ if __name__ == '__main__':
     p.add('-c', '--my-config', is_config_file=True, help='config file path')
 
     # multiprocessing params
-    p.add('--chunk_size', default=8, type=int)
+    p.add('--chunk_size', default=16, type=int)
     p.add('--slices_total', default=64, type=int)     # number z slices
 
     # network params

@@ -160,8 +160,10 @@ def get_stack_indices(name,network):
         return None
 
     if 'zstack' in network:
+        if not 'zstack' in name:
+            print "WARNING: you are probably using the wrong dataset for a zstack network!" 
         if 'repr' in name:
-                print "Using every third slice (0:64*3:3), due to zstack"
+                print "Using every third slice (1:64*3:3), due to zstack"
                 return np.arange(1,64*3,3)
         else:
             print "Removing dataset slices for touching blocks"

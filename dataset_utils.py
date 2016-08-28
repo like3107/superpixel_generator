@@ -340,7 +340,11 @@ class HoneyBatcherPredict(object):
             else:
                 ind_b = np.arange(start + self.bs)
         else:
-            ind_b = np.random.permutation(allowed_slices)[:self.bs]
+            if start is None:
+                ind_b = np.random.permutation(allowed_slices)[:self.bs]
+            else:
+                ind_b = allowed_slices[start:start + self.bs]
+        print ind_b
 
         # indices to raw, correct for label which edge len is -self.pl shorter
         if not self.downsample:
