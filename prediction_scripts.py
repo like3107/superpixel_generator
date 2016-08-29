@@ -90,22 +90,23 @@ def pred_script_v2_wrapper(
             if i == 0:
                 ov_start = 0
                 ov_end = 1
-                sample_slices = range(0, start + chunk_size)  # repeat first
+                sample_slices = range(0, chunk_size)  # repeat first
             elif i == n_chunks - 1:
                 ov_start = 1
                 ov_end = 0
-                sample_slices = range(1, start + chunk_size)  # repeat last
+                sample_slices = range(1, chunk_size + 1)  # repeat last
             else:
                 ov_start = 1
                 ov_end = 1
-                sample_slices = range(1, start + chunk_size) # throw away first and last
+                sample_slices = range(1, chunk_size + 1) # throw away first and last
 
         print 'start slice %i till %i' % (start - ov_start,
                                           start + chunk_size * factor - ov_end)
         print 'slices:', range(start - ov_start,
                                     start + chunk_size * factor + ov_end,
                                     1)
-        print 'sample indices', sample_slices
+        print 'sample indices w', sample_slices
+        print chunk_size
         time.sleep(1)
         processes.append(Process(
             target=pred_script_v2,
@@ -237,6 +238,13 @@ def pred_script_v2(
             bm.draw_debug_image('b_0_pred_%i_slice_%02i' %
                                 (j, slices[0]),
                                 path=pred_save_folder)
+            du.save_h5(pred_save_folder + '/recent_slice_%03i.h5' % slices[0],
+                       'data',
+                       data=bm.global_claims[:,
+                                  bm.pad:-bm.pad,
+                                  bm.pad:-bm.pad].astype(np.uint64),
+                       overwrite='w')
+
     bm.draw_debug_image('b_0_pred_%i_slice_%02i' %
                         ((bm.global_el - bm.pl) ** 2, slices[0]),
                         path=pred_save_folder)

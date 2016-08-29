@@ -116,28 +116,28 @@ def prepare_data_mc(segmentation):
 
 def prepare_aligned_test_data(path):
     print 'preparing test data for prediction'
-    for version in ['A+', 'B+', 'C+']:
+    for version in ['A+', 'C+']:
         print 'version', version
-        memb_probs_path = path + '/sample%s_cantorV5_pmaps_corrected.h5' % version
+        memb_probs_path = path + '/sample%s_cantorFinal_pmaps_corrected.h5' % version
         raw_path = path + '/sample%s_raw_corrected.h5' % version
 
         memb_probs = load_h5(memb_probs_path)[0]
-        raw = load_h5(raw_path)[0]
-        print 'before: memb, raw', memb_probs.shape, raw.shape
+        # raw = load_h5(raw_path)[0]
+        print 'before: memb, raw', memb_probs.shape
         memb_probs = memb_probs.swapaxes(0, 2)
-        raw = raw.swapaxes(0, 2)
+        # raw = raw.swapaxes(0, 2)
         if version == 'A+':
-            raw = np.pad(raw, ((0, 0), (38, 37), (0, 0)), 'reflect')
+            # raw = np.pad(raw, ((0, 0), (38, 37), (0, 0)), 'reflect')
             memb_probs = np.pad(memb_probs, ((0, 0), (38, 37), (0, 0)), 'reflect')
         if version == 'B+':
-            raw = np.pad(raw, ((0, 0), (75, 75), (0, 0)), 'reflect')
+            # raw = np.pad(raw, ((0, 0), (75, 75), (0, 0)), 'reflect')
             memb_probs = np.pad(memb_probs, ((0, 0), (75, 75), (0, 0)), 'reflect')
-        print 'after: memb, raw', memb_probs.shape, raw.shape
+        print 'after: memb, raw', memb_probs.shape
 
         save_h5(path + '/membranes_test_%s.h5' % version, 'data', data=memb_probs,
                 overwrite='w')
-        save_h5(path + '/raw_test_%s.h5' % version, 'data', data=raw,
-                overwrite='w')
+        # save_h5(path + '/raw_test_%s.h5' % version, 'data', data=raw,
+        #         overwrite='w')
 
 
 def cut_consti_data(vol_path, names=['raw', 'label', 'membranes', 'height'],
@@ -383,6 +383,7 @@ class HoneyBatcherPredict(object):
             self.n_channels += 2
 
         self.max_penalty_pixel = max_penalty_pixel
+
         self.global_batch = None  # includes padding, nn input
         self.global_raw = None
         self.global_claims = None  # includes padding, tri-map, inp
