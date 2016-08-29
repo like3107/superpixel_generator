@@ -757,7 +757,9 @@ class HoneyBatcherPredict(object):
         plot_images.append({"title": "Memb Input",
                             'im': self.global_batch[b, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1],
-                            'interpolation': 'none'})
+                            'interpolation': 'none',
+                            'scatter': np.array(
+                                   self.global_seeds[b]) - self.pad})
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
                             'im': self.global_claims[b, self.pad:-self.pad - 1,
