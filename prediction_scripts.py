@@ -59,7 +59,8 @@ def pred_script_v2_wrapper(
         membrane_path='',
         raw_path='',
         gt_path = '',
-        timos_seeds_b=None
+        timos_seeds_b=None,
+        overlap_b=False
         ):
 
     assert (slices_total % chunk_size == 0)
@@ -78,14 +79,38 @@ def pred_script_v2_wrapper(
     if 'zstack' in raw_path:
         factor = 3
 
-    for start in range(0, slices_total * factor, chunk_size * factor):
-        print 'start slice %i till %i' % (start, start + chunk_size * factor)
+    ov_start, ov_end = 0, 0
+    starts = range(0, slices_total * factor, chunk_size * factor)
+    n_chunks = len(starts)
+    sample_slices = None
+    for i, start in enumerate(starts):
 
+        if overlap_b:
+            if i == 0:
+                ov_start = 0
+                ov_end = 1
+                sample_slices = range(0, start + chunk_size)  # repeat first
+            elif i == n_chunks - 1:
+                ov_start = 1
+                ov_end = 0
+                sample_slices = range(1, start + chunk_size)  # repeat last
+            else:
+                ov_start = 1
+                ov_end = 1
+                sample_slices = range(1, start + chunk_size) # throw away first and last
+
+        print 'start slice %i till %i' % (start - ov_start,
+                                          start + chunk_size * factor - ov_end)
+        print 'slices:', range(start - ov_start,
+                                    start + chunk_size * factor + ov_end,
+                                    1)
+        print 'sample indices', sample_slices
         time.sleep(1)
         processes.append(Process(
             target=pred_script_v2,
             args=(q,),
-            kwargs=({'slices':range(start, start + chunk_size * factor,
+            kwargs=({'slices':range(start - ov_start,
+                                    start + chunk_size * factor + ov_end,
                                     1),
                      'batch_size':chunk_size,
                      'n_slices':slices_total,
@@ -94,8 +119,10 @@ def pred_script_v2_wrapper(
                      'membrane_path':membrane_path,
                      'global_edge_len':global_edge_len,
                      'pred_save_folder':pred_save_folder,
-                     'timos_seeds_b':timos_seeds_b}),
+                     'timos_seeds_b':timos_seeds_b,
+                     'sample_slices':sample_slices}),
              ))
+
         # debug
         # pred_script_v2(q, slices=range(start, start + chunk_size, factor),
         #             batch_size=chunk_size,
@@ -106,7 +133,9 @@ def pred_script_v2_wrapper(
         #             global_edge_len=global_edge_len,
         #             pred_save_folder=pred_save_folder,
         #             timos_seeds_b=timos_seeds_b)
+    #
     # exit()
+
     for p in processes:
         time.sleep(8)
         p.start()
@@ -148,7 +177,8 @@ def pred_script_v2(
         batch_size=None,  # do not change here!
         slices=None,      # do not change here
         n_slices=None,       # do not change here
-        timos_seeds_b=None
+        timos_seeds_b=None,
+        sample_slices=None,
         ):
 
     # import within script du to multi-processing and GPU usage
@@ -189,9 +219,9 @@ def pred_script_v2(
     else:
         assert (bm.rl == bm.global_el)
     u.load_network(net_file, l_out)
-
-    sample_indices = u.get_stack_indices(raw_path,options['net_arch'])
-    bm.init_batch(start=0, allowed_slices=sample_indices)
+    if sample_slices is None:
+        sample_slices= u.get_stack_indices(raw_path,options['net_arch'])
+    bm.init_batch(start=0, allowed_slices=sample_slices)
 
     for j in range((bm.global_el - bm.pl)**2):
         print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
@@ -253,7 +283,9 @@ if __name__ == '__main__':
     p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
     p.add('--timos_seeds_b', action='store_false')
     p.add('--save_validation', default="",type=str)
+    p.add('--overlap', default=False, action='store_true')
     options = p.parse_args()
+    print 'top', options.overlap
 
     if options.net_file == '':
         options.net_file = './data/nets/' + options.net_name + '/' + options.net_number
@@ -277,6 +309,7 @@ if __name__ == '__main__':
             options.gt_path =  './data/volumes/label_%s.h5' % options.data_version
 
     if 'zstack' in options.raw_path:
+        assert (not options.overlap)
         assert ('zstack' in options.gt_path)
         assert ('cut' in options.gt_path)
         assert (options.slices_total == 64)
@@ -286,6 +319,7 @@ if __name__ == '__main__':
         else:
             assert (options.global_edge_len == 300)
             assert ('big' not in options.gt_path)
+
     prediction = pred_script_v2_wrapper(
                         chunk_size=options.chunk_size,
                         slices_total=options.slices_total,
@@ -295,7 +329,8 @@ if __name__ == '__main__':
                         membrane_path=options.membrane_path,
                         raw_path=options.raw_path,
                         gt_path=options.gt_path,
-                        timos_seeds_b=options.timos_seeds_b)
+                        timos_seeds_b=options.timos_seeds_b,
+                        overlap_b=options.overlap)
 
     if options.save_validation != "":
         if options.save_validation.endswith(".json"):

@@ -27,7 +27,6 @@ def double_ws(path_to_seg, path_to_gt, save_path):
                                           thresh_seg_cc, sigma_dist_trf,
                                           somethingunimportant)
     du.save_h5(save_path, 'data', data=seg2, overwrite='w')
-    exit()
 
 
 

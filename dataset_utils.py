@@ -13,6 +13,7 @@ from ws_timo import wsDtseeds
 from matplotlib import pyplot as plt
 from Queue import PriorityQueue
 import utils as u
+from scipy import stats
 from scipy.ndimage import convolve, gaussian_filter
 from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
@@ -281,6 +282,26 @@ def segmenation_to_membrane_core(label_image):
     boundary= np.float32((gx ** 2 + gy ** 2) > 0)
     height = distance_transform_edt(boundary == 0)
     return boundary, height
+
+
+def create_holes(batch):
+    x, y = np.mgrid[0:40:1, 0:40:1]
+    for b in range(batch):
+        if np.random.random() > 0.5:
+            pos = np.dstack((x, y))
+            rand_mat = np.random.random((2, 2)) * np.random.random()*20
+            rand_mat = np.dot(rand_mat, rand_mat.T)
+
+            rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
+                                           rand_mat)
+
+            gauss = rv.pdf(pos).astype(np.float32)
+            gauss /= np.max(gauss)
+            gauss = 1. - gauss
+            gauss_d = gauss[::2, ::2]
+            batch[b, 0, :, :] *= gauss
+            batch[b, 9, :, :] *= gauss_d
+    return batch
 
 
 class HoneyBatcherPredict(object):
@@ -1894,9 +1915,10 @@ def height_to_grad(height):
 if __name__ == '__main__':
     # path = '/media/liory/DAF6DBA2F6DB7D67/cremi/cremi_testdata'
     # prepare_aligned_test_data(path)
-    path = './data/volumes/'
-    cut_reprs(path)
-
+    # path = './data/volumes/'
+    # cut_reprs(path)
+    a = np.random.random((40, 40))
+    create_holes(a)
 
     # generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
 
