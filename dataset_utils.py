@@ -284,13 +284,12 @@ def segmenation_to_membrane_core(label_image):
     return boundary, height
 
 
-def create_holes(batch):
+def create_holes(batch, fov):
     x, y = np.mgrid[0:40:1, 0:40:1]
     for b in range(batch):
         if np.random.random() > 0.5:
             pos = np.dstack((x, y))
             rand_mat = np.random.random((2, 2)) * np.random.random()*20
-            rand_mat = np.dot(rand_mat, rand_mat.T)
 
             rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
                                            rand_mat)
@@ -300,7 +299,7 @@ def create_holes(batch):
             gauss = 1. - gauss
             gauss_d = gauss[::2, ::2]
             batch[b, 0, :, :] *= gauss
-            batch[b, 9, :, :] *= gauss_d
+            batch[b, 9, fov/4:-fov/4, fov/4:-fov/4] *= gauss_d
     return batch
 
 

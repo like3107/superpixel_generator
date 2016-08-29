@@ -59,9 +59,9 @@ def pred_script_v2_wrapper(
         membrane_path='',
         raw_path='',
         gt_path = '',
-        timos_seeds_b=None
-        validate = True
-        overlap_b = False
+        timos_seeds_b=None,
+        validate = True,
+        overlap_b = False,
         ):
 
     assert (slices_total % chunk_size == 0)

@@ -334,7 +334,7 @@ def train_script_v1(options):
                                                      options.exp_bs)
 
             if options.create_holes:
-                membrane = du.create_holes(membrane)
+                membrane = du.create_holes(membrane, patch_len)
 
             if options.augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
