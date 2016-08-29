@@ -13,6 +13,7 @@ from ws_timo import wsDtseeds
 from matplotlib import pyplot as plt
 from Queue import PriorityQueue
 import utils as u
+from scipy import stats
 from scipy.ndimage import convolve, gaussian_filter
 from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
@@ -20,6 +21,19 @@ from skimage.morphology import label
 import h5py
 # from cv2 import dilate, erode
 
+
+def cut_reprs(path):
+    label_path = path + 'label_first_repr_big_zstack_cut.h5'
+    memb_path = path + 'membranes_first_repr_big_zstack.h5'
+    raw_path = path + 'raw_first_repr_big_zstack.h5'
+
+    label = load_h5(label_path)[0][:, :300, :300].astype(np.uint64)
+    memb = load_h5(memb_path)[0][:, :300, :300]
+    raw = load_h5(raw_path)[0][:, :300, :300]
+
+    save_h5(path + 'label_first_repr_zstack_cut.h5', 'data', data=label, overwrite='w')
+    # save_h5(path + 'membranes_first_repr_zstack.h5', 'data', data=memb)
+    # save_h5(path + 'raw_first_repr_zstack.h5', 'data', data=raw)
 
 
 def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
@@ -270,6 +284,26 @@ def segmenation_to_membrane_core(label_image):
     return boundary, height
 
 
+def create_holes(batch):
+    x, y = np.mgrid[0:40:1, 0:40:1]
+    for b in range(batch):
+        if np.random.random() > 0.5:
+            pos = np.dstack((x, y))
+            rand_mat = np.random.random((2, 2)) * np.random.random()*20
+            rand_mat = np.dot(rand_mat, rand_mat.T)
+
+            rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
+                                           rand_mat)
+
+            gauss = rv.pdf(pos).astype(np.float32)
+            gauss /= np.max(gauss)
+            gauss = 1. - gauss
+            gauss_d = gauss[::2, ::2]
+            batch[b, 0, :, :] *= gauss
+            batch[b, 9, :, :] *= gauss_d
+    return batch
+
+
 class HoneyBatcherPredict(object):
     def __init__(self, membranes, raw=None, raw_key=None,
                  membrane_key=None,  batch_size=10,
@@ -363,6 +397,9 @@ class HoneyBatcherPredict(object):
         self.coordinate_offset = np.array([[-1,0],[0,-1],[1,0],[0,1]],dtype=np.int)
         self.direction_array = np.arange(4)
         self.error_indicator_pass = np.zeros((batch_size))
+
+        self.timo_min_len = 15
+        self.timo_sigma = 1.5
         # debug
         self.max_batch = 0
         self.counter = 0
@@ -466,7 +503,7 @@ class HoneyBatcherPredict(object):
         if inherit_code:
             return ind_b, ind_x, ind_y
 
-    def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.25):
+    def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
@@ -499,7 +536,7 @@ class HoneyBatcherPredict(object):
             for b in range(self.bs):
                 x, y = wsDtseeds(
                     self.global_batch[b, self.pad:-self.pad, self.pad:-self.pad],
-                    thresh, 15, 1.6, groupSeeds=True)
+                    thresh, self.timo_min_len, self.timo_sigma, groupSeeds=True)
                 seeds = \
                     [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
                 self.global_seeds.append(seeds)
@@ -743,7 +780,9 @@ class HoneyBatcherPredict(object):
         plot_images.append({"title": "Memb Input",
                             'im': self.global_batch[b, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1],
-                            'interpolation': 'none'})
+                            'interpolation': 'none',
+                            'scatter': np.array(
+                                   self.global_seeds[b]) - self.pad})
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
                             'im': self.global_claims[b, self.pad:-self.pad - 1,
@@ -1190,6 +1229,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         return raw_batch
 
+    def count_new_path_errors(self):
+        return len([v for v in self.global_error_dict.values() if not used in v])
+
     def reconstruct_path_error_inputs(self):
         error_I_timelist = []
         error_I_pos_list = []
@@ -1202,15 +1244,17 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_II_direction = []
 
         for error in self.global_error_dict.values():
-            error_batch_list.append(error["batch"])
-            error_I_timelist.append(error["e1_time"])
-            error_I_direction.append(error["e1_direction"])
-            error_I_pos_list.append(error["e1_pos"])
-            error_I_id_list.append(error["large_id"])
-            error_II_pos_list.append(error["e2_pos"])
-            error_II_direction.append(error["e2_direction"])
-            error_II_time_list.append(error["e2_time"])
-            error_II_id_list.append(error["small_id"])
+            if not "used" in error:
+                error["used"] = True
+                error_batch_list.append(error["batch"])
+                error_I_timelist.append(error["e1_time"])
+                error_I_direction.append(error["e1_direction"])
+                error_I_pos_list.append(error["e1_pos"])
+                error_I_id_list.append(error["large_id"])
+                error_II_pos_list.append(error["e2_pos"])
+                error_II_direction.append(error["e2_direction"])
+                error_II_time_list.append(error["e2_time"])
+                error_II_id_list.append(error["small_id"])
 
         reconst_e1 = self.reconstruct_input_at_timepoint(error_I_timelist,
                                                          error_I_pos_list,
@@ -1876,10 +1920,40 @@ def height_to_grad(height):
     return grad
 
 if __name__ == '__main__':
-    path = '/media/liory/DAF6DBA2F6DB7D67/cremi/cremi_testdata'
-    prepare_aligned_test_data(path)
+    # path = '/media/liory/DAF6DBA2F6DB7D67/cremi/cremi_testdata'
+    # prepare_aligned_test_data(path)
+    # path = './data/volumes/'
+    # cut_reprs(path)
+    a = np.random.random((40, 40))
+    create_holes(a)
 
+    bm = HoneyBatcherPath('./data/volumes/membranes_second.h5' ,\
+                        label = './data/volumes/label_second.h5' ,\
+                        height_gt = './data/volumes/height_second.h5' ,\
+                        raw = './data/volumes/raw_second.h5' ,\
+                        batch_size = 1 ,\
+                        patch_len = 40 ,\
+                        global_edge_len = 1210 ,\
+                        padding_b = False ,\
+                        find_errors_b = False ,\
+                        clip_method = 'clip' ,\
+                        timos_seeds_b = True ,\
+                        z_stack = True ,\
+                        downsample = True ,\
+                        scale_height_factor = 60.0 ,\
+                        perfect_play = False ,\
+                        add_height_b = False ,\
+                        max_penalty_pixel = 3)
 
+    sigma = 1
+    for ml in np.arange(1,10,2):
+        # for sigma in np.arange(0.1,2,0.1):
+        bm.timo_sigma = sigma
+        bm.timo_sigma = 1.1
+        bm.timo_min_len = ml
+        bm.init_batch(allowed_slices=[70])
+        bm.draw_debug_image('seed_%f_%i.png' % (sigma, ml), path='./data/nets/debug/images/')
+                        
 
     # generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
 

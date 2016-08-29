@@ -507,7 +507,7 @@ def wsDtseeds(pmap, pmin, minMembraneSize, sigmaMinima,
 
 if __name__ == '__main__':
     memb_path = ''
-    version = 'first_repr'
+    version = 'first_repr_zstack'
     memb_path = './data/volumes/membranes_%s.h5' % version
     threshold_dist_trf = 0.3
     thres_memb_cc = 15
@@ -515,9 +515,9 @@ if __name__ == '__main__':
     sigma_dist_trf = 2
     somethingunimportant = 0
     two_dim = True
-    memb_probs = load_h5(memb_path)[0]
+    memb_probs = load_h5(memb_path)[0][1::3]
     groupSeeds = True
-    print 'herher'
+    print 'TImos Waterhshed'
     segmentation = np.zeros((64, 300, 300))
 
     all_seeds = []
@@ -539,6 +539,7 @@ if __name__ == '__main__':
                               groupSeeds=groupSeeds)
     segmentation = segmentation.astype(np.uint64)
     # save_h5('./data/preds/ws_2D_timo_b.h5', 'pred', segmentation, 'w')
-    save_h5('./data/preds/timo_seeds_frist_repr.h5', 'pred', segmentation, 'w')
+    print 'save', './data/preds/timo_%s.h5' %version,
+    save_h5('./data/preds/timo_%s.h5' %version, 'pred', segmentation, 'w')
     # f = open('./data/preds/timo_seeds_%s.pkl' % version, mode='w`')
     # pickle.dump(all_seeds, f)
