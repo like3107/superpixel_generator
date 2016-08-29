@@ -277,10 +277,15 @@ if __name__ == '__main__':
             options.gt_path =  './data/volumes/label_%s.h5' % options.data_version
 
     if 'zstack' in options.raw_path:
+        assert ('zstack' in options.gt_path)
         assert ('cut' in options.gt_path)
         assert (options.slices_total == 64)
-        assert (options.global_edge_len == 600)
-
+        if 'big' in options.raw_path:
+            assert (options.global_edge_len == 600)
+            assert ('big' in options.gt_path)
+        else:
+            assert (options.global_edge_len == 300)
+            assert ('big' not in options.gt_path)
     prediction = pred_script_v2_wrapper(
                         chunk_size=options.chunk_size,
                         slices_total=options.slices_total,

@@ -21,6 +21,19 @@ import h5py
 # from cv2 import dilate, erode
 
 
+def cut_reprs(path):
+    label_path = path + 'label_first_repr_big_zstack_cut.h5'
+    memb_path = path + 'membranes_first_repr_big_zstack.h5'
+    raw_path = path + 'raw_first_repr_big_zstack.h5'
+
+    label = load_h5(label_path)[0][:, :300, :300]
+    memb = load_h5(memb_path)[0][:, :300, :300]
+    raw = load_h5(raw_path)[0][:, :300, :300]
+
+    save_h5(path + 'label_first_repr_zstack_cut.h5', 'data', data=label)
+    save_h5(path + 'membranes_first_repr_zstack.h5', 'data', data=memb)
+    save_h5(path + 'raw_first_repr_zstack.h5', 'data', data=raw)
+
 
 def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
     if not exists(path):
@@ -1877,9 +1890,10 @@ def height_to_grad(height):
     return grad
 
 if __name__ == '__main__':
-    path = '/media/liory/DAF6DBA2F6DB7D67/cremi/cremi_testdata'
-    prepare_aligned_test_data(path)
-
+    # path = '/media/liory/DAF6DBA2F6DB7D67/cremi/cremi_testdata'
+    # prepare_aligned_test_data(path)
+    path = './data/volumes/'
+    cut_reprs(path)
 
 
     # generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
