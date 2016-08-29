@@ -377,6 +377,9 @@ class HoneyBatcherPredict(object):
         self.coordinate_offset = np.array([[-1,0],[0,-1],[1,0],[0,1]],dtype=np.int)
         self.direction_array = np.arange(4)
         self.error_indicator_pass = np.zeros((batch_size))
+
+        self.timo_min_len = 15
+        self.timo_sigma = 1.5
         # debug
         self.max_batch = 0
         self.counter = 0
@@ -513,7 +516,7 @@ class HoneyBatcherPredict(object):
             for b in range(self.bs):
                 x, y = wsDtseeds(
                     self.global_batch[b, self.pad:-self.pad, self.pad:-self.pad],
-                    thresh, 15, 1., groupSeeds=True)
+                    thresh, self.timo_min_len, self.timo_sigma, groupSeeds=True)
                 seeds = \
                     [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
                 self.global_seeds.append(seeds)
@@ -1204,6 +1207,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         return raw_batch
 
+    def count_new_path_errors(self):
+        return len([v for v in self.global_error_dict.values() if not used in v])
+
     def reconstruct_path_error_inputs(self):
         error_I_timelist = []
         error_I_pos_list = []
@@ -1216,15 +1222,17 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_II_direction = []
 
         for error in self.global_error_dict.values():
-            error_batch_list.append(error["batch"])
-            error_I_timelist.append(error["e1_time"])
-            error_I_direction.append(error["e1_direction"])
-            error_I_pos_list.append(error["e1_pos"])
-            error_I_id_list.append(error["large_id"])
-            error_II_pos_list.append(error["e2_pos"])
-            error_II_direction.append(error["e2_direction"])
-            error_II_time_list.append(error["e2_time"])
-            error_II_id_list.append(error["small_id"])
+            if not "used" in error:
+                error["used"] = True
+                error_batch_list.append(error["batch"])
+                error_I_timelist.append(error["e1_time"])
+                error_I_direction.append(error["e1_direction"])
+                error_I_pos_list.append(error["e1_pos"])
+                error_I_id_list.append(error["large_id"])
+                error_II_pos_list.append(error["e2_pos"])
+                error_II_direction.append(error["e2_direction"])
+                error_II_time_list.append(error["e2_time"])
+                error_II_id_list.append(error["small_id"])
 
         reconst_e1 = self.reconstruct_input_at_timepoint(error_I_timelist,
                                                          error_I_pos_list,
@@ -1895,6 +1903,34 @@ if __name__ == '__main__':
     path = './data/volumes/'
     cut_reprs(path)
 
+
+    bm = HoneyBatcherPath('./data/volumes/membranes_second.h5' ,\
+                        label = './data/volumes/label_second.h5' ,\
+                        height_gt = './data/volumes/height_second.h5' ,\
+                        raw = './data/volumes/raw_second.h5' ,\
+                        batch_size = 1 ,\
+                        patch_len = 40 ,\
+                        global_edge_len = 1210 ,\
+                        padding_b = False ,\
+                        find_errors_b = False ,\
+                        clip_method = 'clip' ,\
+                        timos_seeds_b = True ,\
+                        z_stack = True ,\
+                        downsample = True ,\
+                        scale_height_factor = 60.0 ,\
+                        perfect_play = False ,\
+                        add_height_b = False ,\
+                        max_penalty_pixel = 3)
+
+    sigma = 1
+    for ml in np.arange(1,10,2):
+        # for sigma in np.arange(0.1,2,0.1):
+        bm.timo_sigma = sigma
+        bm.timo_sigma = 1.1
+        bm.timo_min_len = ml
+        bm.init_batch(allowed_slices=[70])
+        bm.draw_debug_image('seed_%f_%i.png' % (sigma, ml), path='./data/nets/debug/images/')
+                        
 
     # generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
 
