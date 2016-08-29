@@ -26,13 +26,13 @@ def cut_reprs(path):
     memb_path = path + 'membranes_first_repr_big_zstack.h5'
     raw_path = path + 'raw_first_repr_big_zstack.h5'
 
-    label = load_h5(label_path)[0][:, :300, :300]
+    label = load_h5(label_path)[0][:, :300, :300].astype(np.uint64)
     memb = load_h5(memb_path)[0][:, :300, :300]
     raw = load_h5(raw_path)[0][:, :300, :300]
 
-    save_h5(path + 'label_first_repr_zstack_cut.h5', 'data', data=label)
-    save_h5(path + 'membranes_first_repr_zstack.h5', 'data', data=memb)
-    save_h5(path + 'raw_first_repr_zstack.h5', 'data', data=raw)
+    save_h5(path + 'label_first_repr_zstack_cut.h5', 'data', data=label, overwrite='w')
+    # save_h5(path + 'membranes_first_repr_zstack.h5', 'data', data=memb)
+    # save_h5(path + 'raw_first_repr_zstack.h5', 'data', data=raw)
 
 
 def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
