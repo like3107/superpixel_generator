@@ -480,7 +480,7 @@ class HoneyBatcherPredict(object):
         if inherit_code:
             return ind_b, ind_x, ind_y
 
-    def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.25):
+    def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
@@ -513,7 +513,7 @@ class HoneyBatcherPredict(object):
             for b in range(self.bs):
                 x, y = wsDtseeds(
                     self.global_batch[b, self.pad:-self.pad, self.pad:-self.pad],
-                    thresh, 15, 1.6, groupSeeds=True)
+                    thresh, 15, 1., groupSeeds=True)
                 seeds = \
                     [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
                 self.global_seeds.append(seeds)
