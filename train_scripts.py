@@ -333,7 +333,7 @@ def train_script_v1(options):
                     membrane, gt, mem_choice = Memento.get_batch(options.batch_size +
                                                      options.exp_bs)
 
-            if options.set_zero(membrane):
+            if options.create_holes:
                 membrane = du.create_holes(membrane)
 
             if options.augment_pretraining:
@@ -506,14 +506,14 @@ def get_options():
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')
-
+    p
     return p.parse_args()
 
 
 if __name__ == '__main__':
 
     options = get_options()
-
+    print options
     # remove unnecessary parameter combinations
     if options.exp_bs == 0:
         options.exp_save = False
