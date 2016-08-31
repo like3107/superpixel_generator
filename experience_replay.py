@@ -146,12 +146,24 @@ class BatcherBatcherBatcher:
             out_h5.create_dataset("mem/first",data=self.first,dtype='float32',
                                               compression='gzip')
 
-    def load(self, file_name):
-        with h5py.File(file_name, 'r') as in_h5: 
-            self.length = in_h5["length"].value
-            self.first = in_h5["mem/first"].value
-            self.second = in_h5["mem/second"].value
-            self.max_mem_size = in_h5["mem/first"].shape[0]
+    def load(self, file_name, load_max_mem_size=True):
+        with h5py.File(file_name, 'r') as in_h5:
+            if load_max_mem_size:
+                self.max_mem_size = in_h5["mem/first"].shape[0]
+                self.length = in_h5["length"].value
+                self.first = in_h5["mem/first"].value
+                self.second = in_h5["mem/second"].value
+            else:       # loaded is bigger than initialized ep
+                length = in_h5["length"].value
+                if length >= self.max_mem_size:
+                    self.length = self.max_mem_size
+                    self.first = in_h5["mem/first"].value[:self.max_mem_size]
+                    self.second = in_h5["mem/second"].value[:self.max_mem_size]
+                else:
+                    self.length = length
+                    self.first = in_h5["mem/first"].value
+                    self.second = in_h5["mem/second"].value
+
             if not self.scale_height_factor is None:
                 self.second *= self.scale_height_factor
             if "loss" in in_h5.keys():

@@ -212,9 +212,9 @@ def create_network_folder_structure(save_net_path,
     if not os.path.exists(save_net_path + '/exp'):
         os.mkdir(save_net_path + '/exp')
     if train_mode:
-        code_save_folder = '/code_train'
+        code_save_folder = '/code_train/'
     else:
-        code_save_folder = '/code_predict'
+        code_save_folder = '/code_predict/'
     if not os.path.exists(save_net_path + code_save_folder):
         os.mkdir(save_net_path + code_save_folder)
     os.system('cp -rf *.py ' + save_net_path + code_save_folder)

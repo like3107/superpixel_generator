@@ -507,18 +507,20 @@ def wsDtseeds(pmap, pmin, minMembraneSize, sigmaMinima,
 
 if __name__ == '__main__':
     memb_path = ''
-    version = 'first_repr_zstack'
+    version = 'a'
     memb_path = './data/volumes/membranes_%s.h5' % version
+    gt_path = './data/volumes/label_%s.h5' % version
+    gt = load_h5(gt_path)[0]
     threshold_dist_trf = 0.3
     thres_memb_cc = 15
     thresh_seg_cc = 85
     sigma_dist_trf = 2
     somethingunimportant = 0
     two_dim = True
-    memb_probs = load_h5(memb_path)[0][1::3]
+    memb_probs = load_h5(memb_path)[0]
     groupSeeds = True
     print 'TImos Waterhshed'
-    segmentation = np.zeros((64, 300, 300))
+    segmentation = np.zeros((125, 1250, 1250))
 
     all_seeds = []
     if two_dim:
@@ -538,6 +540,8 @@ if __name__ == '__main__':
                               somethingunimportant,
                               groupSeeds=groupSeeds)
     segmentation = segmentation.astype(np.uint64)
+    import validation_scripts
+    validation_scripts.validate_segmentation(segmentation, gt)
     # save_h5('./data/preds/ws_2D_timo_b.h5', 'pred', segmentation, 'w')
     print 'save', './data/preds/timo_%s.h5' %version,
     save_h5('./data/preds/timo_%s.h5' %version, 'pred', segmentation, 'w')
