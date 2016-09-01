@@ -13,6 +13,7 @@ from ws_timo import wsDtseeds
 from matplotlib import pyplot as plt
 from Queue import PriorityQueue
 import utils as u
+from scipy import stats
 from scipy.ndimage import convolve, gaussian_filter
 from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
@@ -92,9 +93,9 @@ def make_array_cumulative(array):
 
 def prpare_seg_path_wrapper(path, names):
     for name in names:
-        segmentation = load_h5(path + name)[0]
+        segmentation = load_h5(path + 'seg_%s.h5' % name)[0]
         segmentation = prepare_data_mc(segmentation)
-        save_h5(path + 'pred_' + name, 'data',
+        save_h5(path + 'seg_%s_MC.h5' % name, 'data',
                 data=segmentation.astype(np.uint32), overwrite='w')
 
 
@@ -110,14 +111,17 @@ def prepare_data_mc(segmentation):
         slice += max_id
         max_id = np.max(slice) + 1
     segmentation = np.swapaxes(segmentation, 0, 2).astype(np.uint64)
+    segmentation = segmentation[:, 75:-75, :]
+    print 'seg fi', segmentation.shape
+    # exit()
     return segmentation
 
 
 def prepare_aligned_test_data(path):
     print 'preparing test data for prediction'
-    for version in ['A+', 'B+', 'C+']:
+    for version in ['A+', 'C+']:
         print 'version', version
-        memb_probs_path = path + '/sample%s_cantorV5_pmaps_corrected.h5' % version
+        memb_probs_path = path + '/sample%s_cantorFinal_pmaps_corrected.h5' % version
         raw_path = path + '/sample%s_raw_corrected.h5' % version
 
         memb_probs = load_h5(memb_probs_path)[0]
@@ -281,6 +285,54 @@ def segmenation_to_membrane_core(label_image):
     boundary= np.float32((gx ** 2 + gy ** 2) > 0)
     height = distance_transform_edt(boundary == 0)
     return boundary, height
+
+
+def create_holes(batch, fov):
+    x, y = np.mgrid[0:40:1, 0:40:1]
+    for b in range(batch.shape[0]):
+        if np.random.random() > 0.5:
+            if np.random.random() > 0.9:
+                batch[b, 0, :, :] = 0
+                batch[b, 8, fov / 4:-fov / 4, fov / 4:-fov / 4] = 0
+            else:
+                pos = np.dstack((x, y))
+                rand_mat = np.diag(np.random.rand(2)) * 800
+                rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
+                                               rand_mat)
+                gauss = rv.pdf(pos).astype(np.float32)
+                gauss /= np.max(gauss)
+                gauss = 1. - gauss
+                gauss_d = gauss[::2, ::2]
+                batch[b, 0, :, :] *= gauss
+                batch[b, 8, fov/4:-fov/4, fov/4:-fov/4] *= gauss_d
+
+        if np.random.random() > 0.5:
+            if np.random.random() > 0.9:
+                batch[b, 6, :, :] = 0
+            else:
+                pos = np.dstack((x, y))
+                rand_mat = np.diag(np.random.random(2)) * 800
+
+                rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
+                                               rand_mat)
+                gauss = rv.pdf(pos).astype(np.float32)
+                gauss /= np.max(gauss)
+                gauss = 1. - gauss
+                batch[b, 6, :, :] *= gauss
+        if np.random.random() > 0.5:
+            if np.random.random() > 0.9:
+                batch[b, 7, :, :] = 0
+            else:
+                pos = np.dstack((x, y))
+                rand_mat = np.diag(np.random.random(2)) * 800
+                rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
+                                               rand_mat)
+
+                gauss = rv.pdf(pos).astype(np.float32)
+                gauss /= np.max(gauss)
+                gauss = 1. - gauss
+                batch[b, 7, :, :] *= gauss
+    return batch
 
 
 class HoneyBatcherPredict(object):
@@ -1913,86 +1965,101 @@ def height_to_grad(height):
     return grad
 
 if __name__ == '__main__':
+    # path = '/media/liory/DAF6DBA2F6DB7D67/cremi/final/CREMI-pmaps-padded/'
+    # names = ['B+_double']
+    #
+    # prpare_seg_path_wrapper(path, names)
+    #
+    # pass
     # path = '/media/liory/DAF6DBA2F6DB7D67/cremi/cremi_testdata'
     # prepare_aligned_test_data(path)
-    path = './data/volumes/'
-    cut_reprs(path)
+    # path = './data/volumes/'
+    # cut_reprs(path)
 
 
-    bm = HoneyBatcherPath('./data/volumes/membranes_second.h5' ,\
-                        label = './data/volumes/label_second.h5' ,\
-                        height_gt = './data/volumes/height_second.h5' ,\
-                        raw = './data/volumes/raw_second.h5' ,\
-                        batch_size = 1 ,\
-                        patch_len = 40 ,\
-                        global_edge_len = 1210 ,\
-                        padding_b = False ,\
-                        find_errors_b = False ,\
-                        clip_method = 'clip' ,\
-                        timos_seeds_b = True ,\
-                        z_stack = True ,\
-                        downsample = True ,\
-                        scale_height_factor = 60.0 ,\
-                        perfect_play = False ,\
-                        add_height_b = False ,\
-                        max_penalty_pixel = 3)
+    fig, ax = plt.subplots(4, 10)
+    for j in range(10):
+        a = np.ones((1, 10, 40, 40))
+        a = create_holes(a, 40)
 
-    sigma = 1
-    for ml in np.arange(1,10,2):
-        # for sigma in np.arange(0.1,2,0.1):
-        bm.timo_sigma = sigma
-        bm.timo_sigma = 1.1
-        bm.timo_min_len = ml
-        bm.init_batch(allowed_slices=[70])
-        bm.draw_debug_image('seed_%f_%i.png' % (sigma, ml), path='./data/nets/debug/images/')
-                        
+        for n, i in enumerate([0, 8, 6, 7]):
+            ax[n, j].imshow(a[0, i], cmap='gray')
+    plt.show()
 
-    # generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
-
-    # generate_dummy_data(20, 300, 40, save_path='')
-
-    # loading of cremi
-    # path = './data/sample_A_20160501.hdf'
-    # /da
-    # a = make_array_cumulative(a)
-    # save_h5('./data/label_a.h5', 'labels', a, 'w')
-    # plt.imshow(a[5, :, :], cmap='Dark2')
-    # plt.show()
-
-    # loading from BM
-
-    # segmentation_to_membrane('./data/volumes/label_a.h5',"./data/volumes/height_a.h5")
-    # segmentation_to_membrane('./data/volumes/label_b.h5',"./data/volumes/height_b.h5")
-    
-    # bm = BatchManV0(raw_path, label_path, batch_size=10, patch_len=60,
-    #                 global_edge_len=95)
-    # bm.init_train_batch()
-
-    # net_name = 'cnn_ID2_trash'
-    # label_path = './data/volumes/label_a.h5'
-    # label_path_val = './data/volumes/label_b.h5'
-    # height_gt_path = './data/volumes/height_a.h5'
-    # height_gt_key = 'height'
-    # height_gt_path_val = './data/volumes/height_b.h5'
-    # height_gt_key_val = 'height'
-    # raw_path = './data/volumes/membranes_a.h5'
-    # raw_path_val = './data/volumes/membranes_b.h5'
-    # save_net_path = './data/nets/' + net_name + '/'
-    # load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
-    # tmp_path = '/media/liory/ladata/bla'        # debugging
-    # batch_size = 5         # > 4
-    # global_edge_len = 300
-    # patch_len= 40
+    # bm = HoneyBatcherPath('./data/volumes/membranes_second.h5' ,\
+    #                     label = './data/volumes/label_second.h5' ,\
+    #                     height_gt = './data/volumes/height_second.h5' ,\
+    #                     raw = './data/volumes/raw_second.h5' ,\
+    #                     batch_size = 1 ,\
+    #                     patch_len = 40 ,\
+    #                     global_edge_len = 1210 ,\
+    #                     padding_b = False ,\
+    #                     find_errors_b = False ,\
+    #                     clip_method = 'clip' ,\
+    #                     timos_seeds_b = True ,\
+    #                     z_stack = True ,\
+    #                     downsample = True ,\
+    #                     scale_height_factor = 60.0 ,\
+    #                     perfect_play = False ,\
+    #                     add_height_b = False ,\
+    #                     max_penalty_pixel = 3)
     #
-    # bm = BatchManV0(raw_path, label_path,
-    #                 height_gt=height_gt_path,
-    #                 height_gt_key=height_gt_key,
-    #                 batch_size=batch_size,
-    #                 patch_len=patch_len, global_edge_len=global_edge_len,
-    #                 padding_b=True,find_errors=True)
-    # gt_seeds_b = True
-    # seeds = bm.init_train_path_batch()
-    # seeds = np.array(seeds[4])
+    # sigma = 1
+    # for ml in np.arange(1,10,2):
+    #     # for sigma in np.arange(0.1,2,0.1):
+    #     bm.timo_sigma = sigma
+    #     bm.timo_sigma = 1.1
+    #     bm.timo_min_len = ml
+    #     bm.init_batch(allowed_slices=[70])
+    #     bm.draw_debug_image('seed_%f_%i.png' % (sigma, ml), path='./data/nets/debug/images/')
+    #
+    #
+    # # generate_quick_eval_big_FOV_z_slices('./data/volumes/', suffix='_first')
+    #
+    # # generate_dummy_data(20, 300, 40, save_path='')
+    #
+    # # loading of cremi
+    # # path = './data/sample_A_20160501.hdf'
+    # # /da
+    # # a = make_array_cumulative(a)
+    # # save_h5('./data/label_a.h5', 'labels', a, 'w')
+    # # plt.imshow(a[5, :, :], cmap='Dark2')
+    # # plt.show()
+    #
+    # # loading from BM
+    #
+    # # segmentation_to_membrane('./data/volumes/label_a.h5',"./data/volumes/height_a.h5")
+    # # segmentation_to_membrane('./data/volumes/label_b.h5',"./data/volumes/height_b.h5")
+    #
+    # # bm = BatchManV0(raw_path, label_path, batch_size=10, patch_len=60,
+    # #                 global_edge_len=95)
+    # # bm.init_train_batch()
+    #
+    # # net_name = 'cnn_ID2_trash'
+    # # label_path = './data/volumes/label_a.h5'
+    # # label_path_val = './data/volumes/label_b.h5'
+    # # height_gt_path = './data/volumes/height_a.h5'
+    # # height_gt_key = 'height'
+    # # height_gt_path_val = './data/volumes/height_b.h5'
+    # # height_gt_key_val = 'height'
+    # # raw_path = './data/volumes/membranes_a.h5'
+    # # raw_path_val = './data/volumes/membranes_b.h5'
+    # # save_net_path = './data/nets/' + net_name + '/'
+    # # load_net_path = './data/nets/cnn_ID_2/net_300000'      # if load true
+    # # tmp_path = '/media/liory/ladata/bla'        # debugging
+    # # batch_size = 5         # > 4
+    # # global_edge_len = 300
+    # # patch_len= 40
+    # #
+    # # bm = BatchManV0(raw_path, label_path,
+    # #                 height_gt=height_gt_path,
+    # #                 height_gt_key=height_gt_key,
+    # #                 batch_size=batch_size,
+    # #                 patch_len=patch_len, global_edge_len=global_edge_len,
+    # #                 padding_b=True,find_errors=True)
+    # # gt_seeds_b = True
+    # # seeds = bm.init_train_path_batch()
+    # # seeds = np.array(seeds[4])
     # heights = np.random.random(size=batch_size)
     # b = 4
     # raw_batch, gts, centers, ids = bm.get_path_batches()

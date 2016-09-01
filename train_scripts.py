@@ -330,6 +330,9 @@ def train_script_v1(options):
                     membrane, gt, mem_choice = Memento.get_batch(options.batch_size +
                                                      options.exp_bs)
 
+            if options.create_holes:
+                membrane = du.create_holes(membrane, patch_len)
+
             if options.augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
                 loss_train, individual_loss = loss_train_f(a_membrane, a_gt)
@@ -431,6 +434,8 @@ def train_script_v1(options):
             # bm.draw_debug_image("train_iteration_%08i_counter_%i_freevoxel_%i" %
             #                     (iteration, bm.counter, free_voxel),
             #                     path=save_net_path + '/images/')
+
+
 def get_options():
     p = configargparse.ArgParser(default_config_files=['./data/config/training.conf'])
 
@@ -471,6 +476,8 @@ def get_options():
     p.add('--batch_size', default=16, type=int)
     p.add('--no-augment_pretraining', dest='augment_pretraining',
                                       action='store_false')
+    p.add('--create_holes', action='store_true', default=False)
+
     p.add('--scale_height_factor', default=100,type=float)
     p.add('--ahp', dest='add_height_penalty', action='store_true')
     p.add('--max_penalty_pixel', default=3, type=float)
@@ -496,13 +503,14 @@ def get_options():
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')
-
+    p
     return p.parse_args()
+
 
 if __name__ == '__main__':
 
     options = get_options()
-
+    print options
     # remove unnecessary parameter combinations
     if options.exp_bs == 0:
         options.exp_save = False
