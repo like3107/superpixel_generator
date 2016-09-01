@@ -70,6 +70,7 @@ def pred_script_v2_wrapper(
     print 'gt path', gt_path
     create_network_folder_structure(pred_save_folder)
     print 'net', net_file
+    print "raw",raw_path
 
     processes = []
     q = Queue()
@@ -157,6 +158,7 @@ def pred_script_v2(
     import dataset_utils as du
     from theano.sandbox import cuda as c
     c.use('gpu0')
+    print "netfile",net_file 
     options = u.load_options(net_file)
 
     BM = du.HoneyBatcherPredict

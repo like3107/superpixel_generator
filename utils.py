@@ -72,14 +72,18 @@ def draw_image(image_info, target):
 def save_images(image_dicts, path, name, terminate=False, column_size=3):
     if len(image_dicts) == 0:
         return
-    f, ax = plt.subplots(ncols=column_size, nrows=((len(image_dicts)-1) / column_size) + 1)
+    f, ax = plt.subplots(ncols=column_size, nrows=((len(image_dicts)-1) / column_size) + 1, figsize=(6,6))
     if ((len(image_dicts)-1) / column_size) + 1 > 1:
         for i, image_info in enumerate(image_dicts):
             draw_image(image_info, ax[i / column_size, i % column_size])
     else:
         for i, image_info in enumerate(image_dicts):
             draw_image(image_info, ax[i])
-    f.savefig(path + name, dpi=400)
+    if name.endswith('pdf'):
+        f.savefig(path + name, format='pdf')
+    else:
+        f.savefig(path + name, dpi=400)
+    
     plt.close()
     if terminate:
         exit()
@@ -227,6 +231,7 @@ def load_network(load_path, l_last):
 
 
 def load_options(load_path, options={}):
+    print "laoding net file ", load_path
     with h5py.File(load_path, 'r') as net_file:
         for op_key, op_val in [(k, net_file['options/'+k].value)\
                                 for k in net_file['options'].keys()]:

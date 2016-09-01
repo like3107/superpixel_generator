@@ -1071,6 +1071,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                          start_position[0] - self.pad,
                                          start_position[1] - self.pad] 
 
+                e1_length = 0
                 for pos, d in self.get_path_to_root(start_position, batch):
                     # debug
                     # shortest path of error type II to root (1st crossing)
@@ -1091,10 +1092,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                                  pos[0],
                                                                  pos[1]]
                         error_I["e1_direction"] = current_direction
+                        error_I["e1_length"] = e1_length
+
+
                         assert(current_direction >= 0)
                     current_direction = d
                     prev_in_other_region = in_other_region
+                    e1_length += 1
 
+                e1_length = error_I["e1_length"]
                 if plateau_backtrace:
                     new_pos, new_d = self.find_end_of_plateau(error_I["e1_pos"],
                                                               error_I["e1_direction"],
@@ -1104,6 +1110,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                              new_pos[0],
                                                              new_pos[1]]
                     error_I["e1_direction"] = new_d
+                    error_I["e1_length"] = e1_length
+                    e1_length += 1
                     assert(new_d >= 0)
                 self.counter += 1
 
@@ -1209,8 +1217,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         return raw_batch
 
+    def check_error(self, error):
+        return not 'used' in error and error['e1_length'] > 5
+
+
     def count_new_path_errors(self):
-        return len([v for v in self.global_error_dict.values() if not used in v])
+        return len([v for v in self.global_error_dict.values() if self.check_error(v)])
 
     def reconstruct_path_error_inputs(self):
         error_I_timelist = []
@@ -1224,7 +1236,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_II_direction = []
 
         for error in self.global_error_dict.values():
-            if not "used" in error:
+            print "errorlength",error['e1_length']
+            if self.check_error(error):
                 error["used"] = True
                 error_batch_list.append(error["batch"])
                 error_I_timelist.append(error["e1_time"])

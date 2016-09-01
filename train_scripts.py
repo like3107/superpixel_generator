@@ -314,9 +314,6 @@ def train_script_v1(options):
                                         save_net_path + 'ft_training.png',
                                         ['ft loss no reg no dropout', 'ft loss'])
 
-                if options.val_b:
-                    bm_val.init_batch(allowed_slices=val_sample_indices)
-
                 if options.reset_after_fine_tune:
                     bm.init_batch(allowed_slices=sample_indices)
                     if options.val_b:
