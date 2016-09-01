@@ -4,6 +4,7 @@ To install
 
     conda create --name ws_timo -c ilastik wsdt
     pip install configargparse
+    pip install natsort
     source activate ws_timo
     conda install matplotlib
     conda install scipy
