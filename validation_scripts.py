@@ -422,14 +422,16 @@ def make_val_dic(all_means, all_vars):
 if __name__ == '__main__':
     print   
     # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
-    pred_path='./data/nets/V5_BN_bigreg_fixed_HEP/' \
-              'predsnet_a_336994/pred_final_V5_BN_bigreg_fixed_HEP_net_336994.h5'
+    pred_path='./data/preds/timo_first_repr_zstack.h5'
+    pred_path='./data/preds/tmp.h5'
+    pred_path='./data/preds/preds_first_repr_big_zstacknet_632000.h5'
     # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './data/volumes/old/label_a.h5'
+    gt_path = './data/volumes/label_first_repr_big_zstack_cut.h5'
 
-
+    print  'gt path'
     print pred_path
+
     validate_segmentation(
         pred_path=pred_path,
         gt_path=gt_path,

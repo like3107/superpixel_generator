@@ -192,12 +192,39 @@ class NetBuilder():
                             b=np.random.random(4)*10+10.)
         return l_in, l_12, fov
 
-    def build_net_v5_BN(self, n_classes = 4, n_channels = 4):
+    def build_net_v5_BN(self, n_classes = 4,
+                              n_channels = 4,
+                              n_filt = [20, 25, 60, 30]):
         fov = 40    # field of view = patch length
         filt = [7, 6, 6]
-        n_filt = [20, 25, 60, 30, n_classes]
+        n_filt += [n_classes]
         pool = [2, 2]
 
+        # 40
+        l_in = L.InputLayer((None, n_channels, fov, fov))
+        l_1 = L.batch_norm(L.Conv2DLayer(l_in, n_filt[0], filt[0]))
+
+        l_2 = L.MaxPool2DLayer(l_1, pool[0])
+        # 17
+        l_3 = L.batch_norm(L.Conv2DLayer(l_2, n_filt[1], filt[1]))
+        l_4 = L.MaxPool2DLayer(l_3, pool[1])
+        # 6
+        l_5 = L.Conv2DLayer(l_4, n_filt[2], 5, filt[2],
+                            nonlinearity=las.nonlinearities.rectify)
+        l_6 = L.Conv2DLayer(l_5, n_filt[3], 1,
+                            nonlinearity=las.nonlinearities.rectify)
+        l_7 = L.Conv2DLayer(l_6, n_filt[4], 1,
+                            nonlinearity=las.nonlinearities.rectify,
+                            b=np.random.random(n_classes)*10+10.)
+        return l_in, l_7, fov
+
+    def build_net_v6_BN(self, n_classes = 4,
+                              n_channels = 4,
+                              n_filt = [20, 25, 60, 30]):
+        fov = 30
+        filt = [3, 5, 5]
+        n_filt += [n_classes]
+        pool = [2, 2]
         # 40
         l_in = L.InputLayer((None, n_channels, fov, fov))
         l_1 = L.batch_norm(L.Conv2DLayer(l_in, n_filt[0], filt[0]))
@@ -321,12 +348,6 @@ class NetBuilder():
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov
 
-    def build_ID_v5_hydra_zstack_o(self):
-        l_in, l_9, fov = self.build_net_v5_zstack(n_channels=8)
-        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
-        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
-
 
     def build_ID_v5_hydra_zstack_o(self):
         l_in, l_9, fov = self.build_net_v5_BN(n_channels=8)
@@ -339,6 +360,19 @@ class NetBuilder():
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov
+
+    def build_ID_v6_hydra_zstack_down_big(self):
+        l_in, l_9, fov = self.build_net_v5_BN(n_channels=10,n_filt = [30, 40, 60, 30])
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return l_in, l_in_direction, l_9, l_10, fov
+
+    def build_ID_v6_hydra_zstack_down(self):
+        l_in, l_9, fov = self.build_net_v6_BN(n_channels=10)
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return l_in, l_in_direction, l_9, l_10, fov
+    
 
     def build_ID_v5_hydra_BN(self):
         l_in, l_9, fov = self.build_net_v5_BN()

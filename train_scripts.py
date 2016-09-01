@@ -85,11 +85,11 @@ def train_script_v1(options):
     #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
     #                           allow_input_downcast=True)
 
-    n_channels = 4
-    if ("zstack" in options.net_arch):
-        n_channels += 4
-    if ("down" in options.net_arch):
-        n_channels += 2
+    n_channels = u.get_n_channels(options.net_arch)
+    sample_indices = u.get_stack_indices(options.train_version,
+                                       options.net_arch)
+    val_sample_indices = u.get_stack_indices(options.valid_version,
+                                       options.net_arch)
 
     Memento = exp.BatcherBatcherBatcher(
                             scale_height_factor=options.scale_height_factor, 
@@ -97,7 +97,9 @@ def train_script_v1(options):
                             pl=patch_len,
                             warmstart=options.exp_warmstart,
                             n_channels=n_channels,
-                            accept_rate=options.exp_acceptance_rate)
+                            accept_rate=options.exp_acceptance_rate,
+                            use_loss=options.exp_loss,
+                            weight_last=options.exp_wlast)
 
     if options.exp_load != "None":
         np.random.seed(len(options.net_name))
@@ -124,8 +126,9 @@ def train_script_v1(options):
            downsample = ("down" in options.net_arch),
            scale_height_factor=options.scale_height_factor,
            perfect_play=options.perfect_play,
-           add_height_b=options.add_height_penalty)
-    bm.init_batch()
+           add_height_b=options.add_height_penalty,
+           max_penalty_pixel=options.max_penalty_pixel)
+    bm.init_batch(allowed_slices=sample_indices)
 
     if options.val_b:
         bm_val = BM(membrane_path_val, label=label_path_val,
@@ -138,9 +141,10 @@ def train_script_v1(options):
                     clip_method=options.clip_method,
                     timos_seeds_b=options.timos_seeds_b,
                     z_stack=("zstack" in options.net_arch),
-					downsample = ("down" in options.net_arch),
-                    scale_height_factor=options.scale_height_factor)
-        bm_val.init_batch()
+                    downsample = ("down" in options.net_arch),
+                    scale_height_factor=options.scale_height_factor,
+                    max_penalty_pixel=options.max_penalty_pixel)
+        bm_val.init_batch(allowed_slices=val_sample_indices)
 
     if options.padding_b:
         options.global_edge_len = bm.global_el
@@ -164,9 +168,9 @@ def train_script_v1(options):
         iteration += 1
         free_voxel -= 1
 
-        if (iteration % options.save_counter == 0 or free_voxel <= 201)\
+        if (iteration % options.save_counter == 0 or free_voxel == 0)\
                 and options.save_net_b:
-            if free_voxel <= 201:
+            if free_voxel == 0:
                 net_save_name = 'reset_'
             else:
                 net_save_name = ''
@@ -174,10 +178,10 @@ def train_script_v1(options):
                            '%snet_%i' % (net_save_name, iteration),
                            add=options._get_kwargs())
 
-            if options.exp_save:
-                Memento.save(save_net_path +'/exp/exp_%i.h5' % iteration)
+            if options.exp_save and free_voxel == 0:
+                Memento.save(save_net_path +'/exp/exp_last_reset.h5')
                 if options.fine_tune_b:
-                    Memento_ft.save(save_net_path +'/exp/exp_ft_%i.h5' % iteration)
+                    Memento_ft.save(save_net_path +'/exp/exp_ft_last_reset.h5')
 
         # predict val
         if options.val_b:
@@ -191,13 +195,13 @@ def train_script_v1(options):
                 membrane, gt, seeds, ids = bm.get_batches()
             except:
                 print "Warning: queue empty... resetting bm"
-                bm.init_batch()
+                bm.init_batch(allowed_slices=sample_indices)
                 bm.draw_debug_image(
                     "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
                     (iteration, bm.counter, free_voxel),
                     path=save_net_path_reset)
                 if options.val_b:
-                    bm_val.init_batch()
+                    bm_val.init_batch(allowed_slices=val_sample_indices)
                     bm_val.draw_debug_image(
                         "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
                         (iteration, bm.counter, free_voxel),
@@ -216,16 +220,22 @@ def train_script_v1(options):
                 out_h5.create_dataset("seeds",data=seeds ,compression="gzip")
                 out_h5.create_dataset("ids",data=ids ,compression="gzip")
                 out_h5.create_dataset("probs",data=probs ,compression="gzip")
+                bm.serialize_to_h5("batchtest.h5",path=debug_path)
+                for i in range(options.batch_size):
+                    bm.draw_debug_image(
+                        "debug_batch"+str(i),path=debug_path, b=i)
 
         # fine-tuning: update height difference errors
         if iteration % 100 == 0:
             if options.fine_tune_b \
-                    and (Memento_ft.count_new() + len(bm.global_error_dict) >= options.batch_size_ft)\
+                    and (Memento_ft.count_new() + bm.count_new_path_errors() >=
+                             options.batch_size_ft)\
                     and iteration > options.pre_train_iter:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 save_net_path_pre = save_net_path_ft
-                print "mem size ", len(Memento_ft), Memento_ft.count_new(), len(bm.global_error_dict)
+                print "ft errors size ", bm.count_new_path_errors(), len(Memento_ft), Memento_ft.count_new(), \
+                    len(bm.global_error_dict)
 
                 Memento_ft.add_to_memory(
                     exp.stack_batch(error_b_type1, error_b_type2),
@@ -304,13 +314,10 @@ def train_script_v1(options):
                                         save_net_path + 'ft_training.png',
                                         ['ft loss no reg no dropout', 'ft loss'])
 
-                if options.val_b:
-                    bm_val.init_batch()
-
                 if options.reset_after_fine_tune:
-                    bm.init_batch()
+                    bm.init_batch(allowed_slices=sample_indices)
                     if options.val_b:
-                        bm_val.init_batch()
+                        bm_val.init_batch(allowed_slices=val_sample_indices)
                     free_voxel = free_voxel_empty
 
         # pre-training
@@ -320,8 +327,11 @@ def train_script_v1(options):
                 Memento.add_to_memory(membrane, gt)
                 # start using exp replay only after #options.exp_warmstart iterations
                 if iteration >= options.exp_warmstart:
-                    membrane, gt = Memento.get_batch(options.batch_size +
+                    membrane, gt, mem_choice = Memento.get_batch(options.batch_size +
                                                      options.exp_bs)
+
+            if options.create_holes:
+                membrane = du.create_holes(membrane, patch_len)
 
             if options.augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
@@ -331,14 +341,14 @@ def train_script_v1(options):
                 loss_train, individual_loss = loss_train_f(membrane, gt)
 
             # for old memento (ft)
-                # if options.exp_bs > 0 and options.exp_warmstart < iteration:
-            #     Memento.update_loss(individual_loss, mem_choice)
+            if options.exp_bs > 0 and options.exp_warmstart < iteration:
+                Memento.update_loss(individual_loss, mem_choice)
                 # tmp use if memento blows up the ram :)
                 # if iteration % 1000 == 0 and options.exp_bs > 0:
                 #     Memento.forget()
 
         # reset bms
-        if free_voxel <= 201 \
+        if free_voxel == 0 \
             or (options.fast_reset
                 and (free_voxel_empty / 4)  % (iteration + 1) == 0
                 and free_voxel_empty - free_voxel > 1000):
@@ -362,8 +372,15 @@ def train_script_v1(options):
                     "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
                     (iteration, bm.counter, free_voxel),
                     path=save_net_path_reset)
-                bm_val.init_batch()
-            bm.init_batch()
+                if options.export_quick_eval:
+                    print "doing quick eval"
+                    bm_val.save_quick_eval(
+                    "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
+                    (iteration, bm.counter, free_voxel),debug_path)
+                else:
+                    print "skipping quick eval"
+                bm_val.init_batch(allowed_slices=val_sample_indices)
+            bm.init_batch(allowed_slices=sample_indices)
             free_voxel = free_voxel_empty
 
         # monitor training and plot loss
@@ -378,8 +395,8 @@ def train_script_v1(options):
             else:
                 loss_valid = 100.
             print '\x1b[2K\r loss train %.4f, loss train_noreg %.4f, ' \
-                  'loss_validation %.4f, iteration %i' % \
-                  (loss_train, loss_train_no_reg, loss_valid, iteration),
+                  'loss_validation %.4f, iteration %i, exp_mem %i' % \
+                  (loss_train, loss_train_no_reg, loss_valid, iteration, len(Memento)),
             sys.stdout.flush()
 
             if options.save_net_b:
@@ -417,6 +434,8 @@ def train_script_v1(options):
             # bm.draw_debug_image("train_iteration_%08i_counter_%i_freevoxel_%i" %
             #                     (iteration, bm.counter, free_voxel),
             #                     path=save_net_path + '/images/')
+
+
 def get_options():
     p = configargparse.ArgParser(default_config_files=['./data/config/training.conf'])
 
@@ -442,6 +461,7 @@ def get_options():
 
     # training general
     p.add('--no-val', dest='val_b', action='store_false')
+    p.add('--export_quick_eval', action='store_true')
     p.add('--save_counter', default=10000, type=int)
     p.add('--dummy_data', dest='dummy_data_b', action='store_true')
     p.add('--global_edge_len', default=300, type=int)
@@ -456,9 +476,11 @@ def get_options():
     p.add('--batch_size', default=16, type=int)
     p.add('--no-augment_pretraining', dest='augment_pretraining',
                                       action='store_false')
+    p.add('--create_holes', action='store_true', default=False)
+
     p.add('--scale_height_factor', default=100,type=float)
     p.add('--ahp', dest='add_height_penalty', action='store_true')
-
+    p.add('--max_penalty_pixel', default=3, type=float)
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)
@@ -471,21 +493,24 @@ def get_options():
     p.add('--exp_bs', default=16, type=int)
     p.add('--exp_ft_bs', default=8, type=int)
     p.add('--exp_warmstart', default=1000, type=int)
-    p.add('--exp_acceptance_rate', default=3, type=int)
+    p.add('--exp_acceptance_rate', default=0.1, type=float)
     p.add('--no-exp_height', dest='exp_height', action='store_false')
     p.add('--no-exp_save', dest='exp_save', action='store_false')
     p.add('--exp_mem_size', default=20000, type=int)
     p.add('--exp_load', default="None", type=str)
+    p.add('--no-exp_loss', dest='exp_loss', action='store_false')
+    p.add('--exp_wlast', default=1., type=float)
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')
-
+    p
     return p.parse_args()
+
 
 if __name__ == '__main__':
 
     options = get_options()
-
+    print options
     # remove unnecessary parameter combinations
     if options.exp_bs == 0:
         options.exp_save = False

@@ -49,6 +49,7 @@ def save_h5(path, h5_key, data, overwrite='w-'):
             f.create_dataset(key, data=values)
     f.close()
 
+
 def pred_script_v2_wrapper(
         chunk_size=None,
         slices_total=None,
@@ -58,26 +59,62 @@ def pred_script_v2_wrapper(
         membrane_path='',
         raw_path='',
         gt_path = '',
-        timos_seeds_b=None
+        timos_seeds_b=None,
+        validate = True,
+        overlap_b = False,
         ):
 
     assert (slices_total % chunk_size == 0)
+    print membrane_path
     assert (os.path.exists(membrane_path))
     assert (os.path.exists(raw_path))
     assert (os.path.exists(net_file))
     print 'gt path', gt_path
     create_network_folder_structure(pred_save_folder)
     print 'net', net_file
+    print "raw",raw_path
 
     processes = []
     q = Queue()
-    for start in range(0, slices_total, chunk_size):
-        print 'start slice %i till %i' % (start, start + chunk_size)
+
+    factor = 1
+    if 'zstack' in raw_path:
+        factor = 3
+
+    ov_start, ov_end = 0, 0
+    starts = range(0, slices_total * factor, chunk_size * factor)
+    n_chunks = len(starts)
+    sample_slices = None
+    for i, start in enumerate(starts):
+
+        if overlap_b:
+            if i == 0:
+                ov_start = 0
+                ov_end = 1
+                sample_slices = range(0, chunk_size)  # repeat first
+            elif i == n_chunks - 1:
+                ov_start = 1
+                ov_end = 0
+                sample_slices = range(1, chunk_size + 1)  # repeat last
+            else:
+                ov_start = 1
+                ov_end = 1
+                sample_slices = range(1, chunk_size + 1) # throw away first and last
+
+        print 'start slice %i till %i' % (start - ov_start,
+                                          start + chunk_size * factor - ov_end)
+        print 'slices:', range(start - ov_start,
+                                    start + chunk_size * factor + ov_end,
+                                    1)
+        print 'sample indices w', sample_slices
+        print chunk_size
         time.sleep(1)
         processes.append(Process(
             target=pred_script_v2,
             args=(q,),
-            kwargs=({'slices':range(start, start + chunk_size, 1),
+            kwargs=({'slices':range(start - ov_start,
+                                    start + chunk_size * factor + ov_end,
+                                    1),
                      'batch_size':chunk_size,
                      'n_slices':slices_total,
                      'net_file':net_file,
@@ -85,11 +122,25 @@ def pred_script_v2_wrapper(
                      'membrane_path':membrane_path,
                      'global_edge_len':global_edge_len,
                      'pred_save_folder':pred_save_folder,
-                     'timos_seeds_b':timos_seeds_b}),
+                     'timos_seeds_b':timos_seeds_b,
+                     'sample_slices':sample_slices}),
              ))
 
+        # debug
+        # pred_script_v2(q, slices=range(start, start + chunk_size, factor),
+        #             batch_size=chunk_size,
+        #             n_slices=slices_total,
+        #             net_file=net_file,
+        #             raw_path=raw_path,
+        #             membrane_path=membrane_path,
+        #             global_edge_len=global_edge_len,
+        #             pred_save_folder=pred_save_folder,
+        #             timos_seeds_b=timos_seeds_b)
+    #
+    # exit()
+
     for p in processes:
-        time.sleep(8)
+        time.sleep(8)           # for GPU claim
         p.start()
 
     for p in processes:
@@ -97,6 +148,7 @@ def pred_script_v2_wrapper(
         p.join()
 
     import glob
+
     def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
         files = sorted(glob.glob(path_to_folder + '/final_slice' + '*.h5'))
         le_final = np.zeros((n_slices, edge_len, edge_len), dtype=np.uint64)
@@ -111,25 +163,27 @@ def pred_script_v2_wrapper(
     # du.save_h5(pred_save_folder + net_name + 'pred_final.h5',
     #            'data', data=prediction, overwrite='w')
     #
-    import validation_scripts as vs
-    return vs.validate_segmentation(pred_path=pred_save_folder + '/final.h5',
-                             gt_path=gt_path)
+    if validate:
+        import validation_scripts as vs
+        return vs.validate_segmentation(pred_path=pred_save_folder + '/final.h5',
+                                 gt_path=gt_path)
 
 
 def pred_script_v2(
         q,
         # net to load
-        net_file='',
+        net_file='',            # do not change here!
         # data
-        membrane_path='',
-        raw_path='',
-        pred_save_folder='',
-        global_edge_len=0,  # 1250  + patch_len for memb
+        membrane_path='',       # do not change here!
+        raw_path='',            # do not change here!
+        pred_save_folder='',    # do not change here!
+        global_edge_len=0,      # do not change here!
         # set below at wrapper!!!
-        batch_size=None,  # do not change here!
+        batch_size=None,        # do not change here!
         slices=None,      # do not change here
         n_slices=None,       # do not change here
-        timos_seeds_b=None
+        timos_seeds_b=None,
+        sample_slices=None,
         ):
 
     # import within script du to multi-processing and GPU usage
@@ -138,6 +192,7 @@ def pred_script_v2(
     import dataset_utils as du
     from theano.sandbox import cuda as c
     c.use('gpu0')
+    print "netfile",net_file 
     options = u.load_options(net_file)
 
     BM = du.HoneyBatcherPredict
@@ -147,7 +202,7 @@ def pred_script_v2(
     print 'pred script v2 start %i till %i' % (slices[0], slices[-1])
 
     assert (n_slices % batch_size == 0)
-
+    print options['net_arch']
     # all params entered.......................
 
     # initialize the net
@@ -158,15 +213,21 @@ def pred_script_v2(
             batch_size=batch_size, raw=raw_path,
             patch_len=patch_len, global_edge_len=global_edge_len,
             padding_b=True, timos_seeds_b=timos_seeds_b, slices=slices,
+            z_stack=("zstack" in options['net_arch']),
+            downsample = ("down" in options['net_arch'])
             #tmp
             # label='./data/volumes/label_first_repr.h5',
             # height_gt='./data/volumes/height_first_repr.h5'
             )
-
-    assert (bm.rl == bm.global_el)
+    # print bm.rl, bm.global_el
+    if "down" in options['net_arch']:
+        assert (bm.rl == bm.global_el + bm.pl)
+    else:
+        assert (bm.rl == bm.global_el)
     u.load_network(net_file, l_out)
-
-    bm.init_batch(start=0)
+    if sample_slices is None:
+        sample_slices= u.get_stack_indices(raw_path,options['net_arch'])
+    bm.init_batch(start=0, allowed_slices=sample_slices)
 
     for j in range((bm.global_el - bm.pl) ** 2):
         print '\r remaining %.4f ' % (float(j) / (bm.global_el - bm.pl) ** 2),
@@ -179,6 +240,13 @@ def pred_script_v2(
             bm.draw_debug_image('b_0_pred_%i_slice_%02i' %
                                 (j, slices[0]),
                                 path=pred_save_folder)
+            du.save_h5(pred_save_folder + '/recent_slice_%03i.h5' % slices[0],
+                       'data',
+                       data=bm.global_claims[:,
+                                  bm.pad:-bm.pad,
+                                  bm.pad:-bm.pad].astype(np.uint64),
+                       overwrite='w')
+
     bm.draw_debug_image('b_0_pred_%i_slice_%02i' %
                         ((bm.global_el - bm.pl) ** 2, slices[0]),
                         path=pred_save_folder)
@@ -211,7 +279,7 @@ if __name__ == '__main__':
     p.add('-c', '--my-config', is_config_file=True, help='config file path')
 
     # multiprocessing params
-    p.add('--chunk_size', default=8, type=int)
+    p.add('--chunk_size', default=16, type=int)
     p.add('--slices_total', default=64, type=int)     # number z slices
 
     # network params
@@ -221,22 +289,50 @@ if __name__ == '__main__':
     p.add('--net_number', default='',type=str)
 
     # data params
+    p.add('--data_version', default='', type=str)
     p.add('--global_edge_len', default=300, type=int) # has to be same as max(x)=max(y)
     p.add('--membrane_path', default='./data/volumes/membranes_first_repr.h5')
     p.add('--raw_path', default='./data/volumes/raw_first_repr.h5')
     p.add('--gt_path', default='./data/volumes/label_first_repr.h5')
     p.add('--timos_seeds_b', action='store_false')
     p.add('--save_validation', default="",type=str)
+    p.add('--no_val', dest='val', action='store_false', default=True)
+    p.add('--overlap', default=False, action='store_true')
+
     options = p.parse_args()
 
     if options.net_file == '':
         options.net_file = './data/nets/' + options.net_name + '/' + options.net_number
 
     if options.pred_save_folder == '':
-        options.pred_save_folder = './data/nets/' + options.net_name + '/preds_c'+options.net_number+'/'
+        if options.data_version == '':
+            options.pred_save_folder = './data/nets/' + options.net_name + \
+                                       '/preds_'+options.net_number+'/'
+        else:
+            options.pred_save_folder = './data/nets/' + options.net_name + \
+                                       '/preds_' +options.data_version + \
+                                       options.net_number+'/'
 
     if options.save_validation == "":
         options.save_validation = options.pred_save_folder + 'numbanumba.txt'
+
+    if options.data_version != '':
+        options.raw_path = './data/volumes/raw_%s.h5' % options.data_version
+        options.membrane_path =  './data/volumes/membranes_%s.h5' % options.data_version
+        if 'zstack' not in options.raw_path:
+            options.gt_path =  './data/volumes/label_%s.h5' % options.data_version
+
+    if 'zstack' in options.raw_path:
+        assert (not options.overlap)
+        assert ('zstack' in options.gt_path)
+        assert ('cut' in options.gt_path)
+        assert (options.slices_total == 64)
+        if 'big' in options.raw_path:
+            assert (options.global_edge_len == 600)
+            assert ('big' in options.gt_path)
+        else:
+            assert (options.global_edge_len == 300)
+            assert ('big' not in options.gt_path)
 
     prediction = pred_script_v2_wrapper(
                         chunk_size=options.chunk_size,
@@ -247,7 +343,10 @@ if __name__ == '__main__':
                         membrane_path=options.membrane_path,
                         raw_path=options.raw_path,
                         gt_path=options.gt_path,
-                        timos_seeds_b=options.timos_seeds_b)
+                        timos_seeds_b=options.timos_seeds_b,
+                        overlap_b=options.overlap,
+                        validate = options.val)
+
 
     if options.save_validation != "":
         if options.save_validation.endswith(".json"):
@@ -259,21 +358,21 @@ if __name__ == '__main__':
             f.write(str(prediction['Variational information split']))
             f.write("+-")
             f.write(str(prediction['Variational information split_error']))
-            f.write(",") 
+            f.write(",")
             f.write(str(prediction['Variational information merge']))
             f.write("+-")
             f.write(str(prediction['Variational information merge_error']))
-            f.write(",") 
+            f.write(",")
             f.write(str(prediction['Adapted Rand error']))
             f.write("+-")
             f.write(str(prediction['Adapted Rand error_error']))
-            f.write(",") 
+            f.write(",")
             f.write(str(prediction['Adapted Rand error precision']))
-            f.write("+-") 
+            f.write("+-")
             f.write(str(prediction['Adapted Rand error precision_error']))
             f.write(",")
             f.write(str(prediction['Adapted Rand error recall']))
-            f.write("+-") 
+            f.write("+-")
             f.write(str(prediction['Adapted Rand error recall_error']))
             f.close()
 

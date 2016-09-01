@@ -68,17 +68,22 @@ def draw_image(image_info, target):
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
     target.axis('off')
 
+
 def save_images(image_dicts, path, name, terminate=False, column_size=3):
     if len(image_dicts) == 0:
         return
-    f, ax = plt.subplots(ncols=column_size, nrows=((len(image_dicts)-1) / column_size) + 1)
+    f, ax = plt.subplots(ncols=column_size, nrows=((len(image_dicts)-1) / column_size) + 1, figsize=(6,6))
     if ((len(image_dicts)-1) / column_size) + 1 > 1:
         for i, image_info in enumerate(image_dicts):
             draw_image(image_info, ax[i / column_size, i % column_size])
     else:
         for i, image_info in enumerate(image_dicts):
             draw_image(image_info, ax[i])
-    f.savefig(path + name, dpi=400)
+    if name.endswith('pdf'):
+        f.savefig(path + name, format='pdf')
+    else:
+        f.savefig(path + name, dpi=400)
+    
     plt.close()
     if terminate:
         exit()
@@ -151,6 +156,47 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
     save_options(save_path + net_name, add)
 
 
+def get_stack_indices(name,network):
+
+    if 'first' in name:
+        ds_step = 50
+    elif 'second' in name:
+        ds_step = 75
+    else:
+        print "using all slices continuously"
+        return None
+
+    if 'zstack' in network:
+        if not 'zstack' in name:
+            print "WARNING: you are probably using the wrong dataset for a zstack network!"
+            # assert ('zstack' in name)
+        if 'repr' in name:
+            print "Using every third slice (1:64*3:3), due to zstack"
+            return np.arange(1,64*3,3)
+        else:
+            print "Removing dataset slices for touching blocks"
+            sample_indices = range(ds_step*3)
+            # remove indexes back to front to keep the order
+            for i in np.arange(ds_step*2,0,-ds_step):
+                del sample_indices[i]
+                del sample_indices[i-1]
+            return sample_indices
+
+
+# def get_allowed_indices_overlap():
+#     if
+
+
+
+
+def get_n_channels(network):
+    n_channels = 4
+    if ("zstack" in network):
+        n_channels += 4
+    if ("down" in network):
+        n_channels += 2
+    return n_channels
+
 
 def create_network_folder_structure(save_net_path,
                                     save_net_path_pre='',
@@ -170,9 +216,9 @@ def create_network_folder_structure(save_net_path,
     if not os.path.exists(save_net_path + '/exp'):
         os.mkdir(save_net_path + '/exp')
     if train_mode:
-        code_save_folder = '/code_train'
+        code_save_folder = '/code_train/'
     else:
-        code_save_folder = '/code_predict'
+        code_save_folder = '/code_predict/'
     if not os.path.exists(save_net_path + code_save_folder):
         os.mkdir(save_net_path + code_save_folder)
     os.system('cp -rf *.py ' + save_net_path + code_save_folder)
@@ -192,6 +238,7 @@ def load_network(load_path, l_last):
 
 
 def load_options(load_path, options={}):
+    print "laoding net file ", load_path
     with h5py.File(load_path, 'r') as net_file:
         for op_key, op_val in [(k, net_file['options/'+k].value)\
                                 for k in net_file['options'].keys()]:
@@ -212,7 +259,6 @@ def save_options(load_path, options):
                     net_h5.create_dataset("options/"+op_key,data=op_val)
 
 
-
 def print_options_for_net(options):
     to_print = str([options.net_name, options.load_net_b, options.load_net_path,
                 options.train_version, options.valid_version, options.val_b,
@@ -225,6 +271,7 @@ def print_options_for_net(options):
                 options.exp_height, options.exp_save, options.exp_load, options.net_arch])
     print to_print[1:-1]
     print
+
 
 def plot_train_val_errors(all_y_values, x_values, save_path, names):
     fig = plt.figure()
@@ -243,6 +290,7 @@ def plot_train_val_errors(all_y_values, x_values, save_path, names):
     fig.savefig(save_path)
     plt.close(fig)
     return
+
 
 if __name__ == '__main__':
     path = './data/nets/cnn_v5/preds_0'
