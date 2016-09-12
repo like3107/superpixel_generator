@@ -64,7 +64,8 @@ def draw_image(image_info, target):
     if 'scatter' in image_info:
         if len(image_info['scatter']) > 0:
             centers = np.array(image_info['scatter'])
-            target.scatter(centers[:, 1], centers[:, 0], s=1, marker='.', color='r')
+            target.scatter(centers[:, 1], centers[:, 0], s=1, marker='.',
+                           color='r')
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
     target.axis('off')
 
@@ -72,7 +73,9 @@ def draw_image(image_info, target):
 def save_images(image_dicts, path, name, terminate=False, column_size=3):
     if len(image_dicts) == 0:
         return
-    f, ax = plt.subplots(ncols=column_size, nrows=((len(image_dicts)-1) / column_size) + 1, figsize=(6,6))
+    f, ax = plt.subplots(ncols=column_size, nrows=((len(image_dicts)-1) /
+                                                   column_size) + 1,
+                         figsize=(6,6))
     if ((len(image_dicts)-1) / column_size) + 1 > 1:
         for i, image_info in enumerate(image_dicts):
             draw_image(image_info, ax[i / column_size, i % column_size])
@@ -83,14 +86,15 @@ def save_images(image_dicts, path, name, terminate=False, column_size=3):
         f.savefig(path + name, format='pdf')
     else:
         f.savefig(path + name, dpi=400)
-    
+
     plt.close()
     if terminate:
         exit()
 
 
 def save_images_sub(image_dicts,path,name):
-    p = multiprocessing.Process(target=save_images, args=(image_dicts,path,name,True))
+    p = multiprocessing.Process(target=save_images,
+                                args=(image_dicts,path,name,True))
     p.daemon = True
     p.start()
 
@@ -222,7 +226,7 @@ def create_network_folder_structure(save_net_path,
     if not os.path.exists(save_net_path + code_save_folder):
         os.mkdir(save_net_path + code_save_folder)
     os.system('cp -rf *.py ' + save_net_path + code_save_folder)
-    os.system('cp -rf ./data/config/*.conf ' + save_net_path + code_save_folder)
+    os.system('cp -rf ./../data/config/*.conf ' + save_net_path + code_save_folder)
 
 
 def load_network(load_path, l_last):
@@ -238,7 +242,6 @@ def load_network(load_path, l_last):
 
 
 def load_options(load_path, options={}):
-    print "laoding net file ", load_path
     with h5py.File(load_path, 'r') as net_file:
         for op_key, op_val in [(k, net_file['options/'+k].value)\
                                 for k in net_file['options'].keys()]:
