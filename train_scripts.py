@@ -1,6 +1,6 @@
 import matplotlib
-matplotlib.use('Agg')
-# matplotlib.use('Qt4Agg')
+# matplotlib.use('Agg')
+matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
 import theano
@@ -24,17 +24,17 @@ def train_script_v1(options):
 
     BM = du.HoneyBatcherPath
 
-    save_net_path = './data/nets/' + options.net_name + '/'
+    save_net_path = './../data/nets/' + options.net_name + '/'
 
-    raw_path ='./data/volumes/raw_%s.h5' % options.train_version
-    membrane_path ='./data/volumes/membranes_%s.h5' % options.train_version
-    label_path ='./data/volumes/label_%s.h5' % options.train_version
-    height_gt_path ='./data/volumes/height_%s.h5' % options.train_version
+    raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
+    membrane_path ='./../data/volumes/membranes_%s.h5' % options.train_version
+    label_path ='./../data/volumes/label_%s.h5' % options.train_version
+    height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version
 
-    raw_path_val ='./data/volumes/raw_%s.h5' % options.valid_version
-    membrane_path_val ='./data/volumes/membranes_%s.h5' % options.valid_version
-    label_path_val ='./data/volumes/label_%s.h5' % options.valid_version
-    height_gt_path_val ='./data/volumes/height_%s.h5' % options.valid_version
+    raw_path_val ='./../data/volumes/raw_%s.h5' % options.valid_version
+    membrane_path_val ='./../data/volumes/membranes_%s.h5' % options.valid_version
+    label_path_val ='./../data/volumes/label_%s.h5' % options.valid_version
+    height_gt_path_val ='./../data/volumes/height_%s.h5' % options.valid_version
 
     debug_path = save_net_path + "/batches"
     if not os.path.exists(debug_path):
@@ -71,9 +71,9 @@ def train_script_v1(options):
 
     if options.dummy_data_b:
         raw_path, membrane_path, height_gt_path, label_path = \
-            du.generate_dummy_data(options.batch_size, options.global_edge_len, patch_len)
+            du.generate_dummy_data(options.batch_size, options.global_edge_len)
         raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
-            du.generate_dummy_data(options.batch_size, options.global_edge_len, patch_len)
+            du.generate_dummy_data(options.batch_size, options.global_edge_len)
 
 
     print 'compiling theano functions'
@@ -89,7 +89,7 @@ def train_script_v1(options):
     sample_indices = u.get_stack_indices(options.train_version,
                                        options.net_arch)
     val_sample_indices = u.get_stack_indices(options.valid_version,
-                                       options.net_arch)
+                                             options.net_arch)
 
     Memento = exp.BatcherBatcherBatcher(
                             scale_height_factor=options.scale_height_factor, 
@@ -128,7 +128,9 @@ def train_script_v1(options):
            perfect_play=options.perfect_play,
            add_height_b=options.add_height_penalty,
            max_penalty_pixel=options.max_penalty_pixel)
+    print 'init'
     bm.init_batch(allowed_slices=sample_indices)
+    print 'dnoen'
 
     if options.val_b:
         bm_val = BM(membrane_path_val, label=label_path_val,
@@ -437,7 +439,7 @@ def train_script_v1(options):
 
 
 def get_options():
-    p = configargparse.ArgParser(default_config_files=['./data/config/training.conf'])
+    p = configargparse.ArgParser(default_config_files=['./../data/config/training.conf'])
 
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
@@ -453,7 +455,9 @@ def get_options():
     # train data paths
     def_train_version = 'second_repr'       # def change me
     p.add('--train_version', default=def_train_version)
-    p.add('--timos_seeds_b', default=True, type=bool)
+    p.add('--no_timos_seeds_b', action='store_false', default=True,
+          dest='timos_seeds_b')
+    p.add('--timos_seeds_b', action='store_false', default=True)
 
     # valid data paths
     def_valid_version = 'first_repr'
