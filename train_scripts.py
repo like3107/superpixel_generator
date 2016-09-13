@@ -85,7 +85,7 @@ def train_script_v1(options):
     #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
     #                           allow_input_downcast=True)
 
-    n_channels = u.get_n_channels(options.net_arch)
+    n_channels = u.get_n_channels(options.net_arch, raw_path=raw_path)
     sample_indices = u.get_stack_indices(options.train_version,
                                        options.net_arch)
     val_sample_indices = u.get_stack_indices(options.valid_version,

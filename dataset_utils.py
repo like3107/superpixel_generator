@@ -426,10 +426,12 @@ class HoneyBatcherPredict(object):
         if isinstance(raw, str):
             self.raw = load_h5(raw, h5_key=raw_key, slices=self.slices)[0]
             self.raw /= 256. - 0.5
-        else:
+        elif isinstance(raw, np.ndarray):
             self.raw = raw
             if self.slices is not None:
                 self.raw = self.raw[self.slices, :, :]
+        else:
+            self.raw = None
 
         # either pad raw or crop labels -> labels are always shifted by self.pad
         self.padding_b = padding_b
@@ -438,7 +440,8 @@ class HoneyBatcherPredict(object):
             factor = 1
             if downsample:
                 factor = 2
-            self.raw = mirror_cube(self.raw, self.pad * factor)
+            if self.raw is not None:
+                self.raw = mirror_cube(self.raw, self.pad * factor)
             self.membranes = mirror_cube(self.membranes, self.pad * factor)
 
         self.timos_seeds_b = timos_seeds_b
@@ -464,7 +467,9 @@ class HoneyBatcherPredict(object):
             raise Exception('try setting padding to True')
 
         # private
-        self.n_channels = 4
+        self.n_channels = 3
+        if self.raw is not None:
+            self.n_channels += 1
         self.perfect_play = perfect_play
         self.z_stack = z_stack
         if self.z_stack:
@@ -475,7 +480,9 @@ class HoneyBatcherPredict(object):
         if self.downsample:
             print self.rl , self.global_el , self.pl
             assert (self.rl - self.global_el - self.pl >= 0)
-            self.n_channels += 2
+            self.n_channels += 1
+            if self.raw is not None:
+                self.n_channels += 1
 
         self.max_penalty_pixel = max_penalty_pixel
 
@@ -532,10 +539,11 @@ class HoneyBatcherPredict(object):
                                       size=self.bs)
 
         for b in range(self.bs):
-            self.global_raw[b, :, :] = \
-                self.raw[ind_b[b],
-                         ind_x[b]:ind_x[b] + self.global_el,
-                         ind_y[b]:ind_y[b] + self.global_el]
+            if self.raw is not None:
+                self.global_raw[b, :, :] = \
+                    self.raw[ind_b[b],
+                             ind_x[b]:ind_x[b] + self.global_el,
+                             ind_y[b]:ind_y[b] + self.global_el]
 
             self.global_batch[b, :, :] = \
                 self.membranes[ind_b[b],
@@ -546,10 +554,11 @@ class HoneyBatcherPredict(object):
                 # mtp
                 index = np.clip([ind_b[b]-1,ind_b[b]+1], 0, self.n_slices-1)
                 # print ind_x[b], ind_y[b], self.global_el
-                self.global_raw_bottom_top[b, :, :, :] =\
-                        self.raw[index,
-                         ind_x[b]:ind_x[b] + self.global_el,
-                         ind_y[b]:ind_y[b] + self.global_el]
+                if self.raw is not None:
+                    self.global_raw_bottom_top[b, :, :, :] =\
+                            self.raw[index,
+                             ind_x[b]:ind_x[b] + self.global_el,
+                             ind_y[b]:ind_y[b] + self.global_el]
 
                 self.global_batch_bottom_top[b, :,:,:] =\
                     self.membranes[index,
@@ -561,10 +570,11 @@ class HoneyBatcherPredict(object):
                     self.membranes[ind_b[b],
                         ind_x[b]-self.pad:ind_x[b] + self.global_el + self.pad:2,
                         ind_y[b]-self.pad:ind_y[b] + self.global_el + self.pad:2]
-                self.global_down[b, 1,:, :] = \
-                    self.raw[ind_b[b],
-                        ind_x[b]-self.pad :ind_x[b] + self.global_el + self.pad:2,
-                        ind_y[b]-self.pad :ind_y[b] + self.global_el + self.pad:2]
+                if self.raw is not None:
+                    self.global_down[b, 1,:, :] = \
+                        self.raw[ind_b[b],
+                            ind_x[b]-self.pad :ind_x[b] + self.global_el + self.pad:2,
+                            ind_y[b]-self.pad :ind_y[b] + self.global_el + self.pad:2]
 
         if inherit_code:
             return ind_b, ind_x, ind_y
@@ -678,8 +688,10 @@ class HoneyBatcherPredict(object):
     def init_batch(self, start=None, allowed_slices = None):
         self.global_batch = np.zeros((self.bs, self.global_el, self.global_el),
                                      dtype='float32')
-        self.global_raw = np.zeros((self.bs, self.global_el, self.global_el),
-                                   dtype='float32')
+        if self.raw is not None:
+            self.global_raw = np.zeros((self.bs, self.global_el,
+                                        self.global_el),
+                                       dtype='float32')
 
         n_add_input_channels = 2
         if self.z_stack:
@@ -688,14 +700,18 @@ class HoneyBatcherPredict(object):
                          n_add_input_channels,
                          self.global_el, self.global_el),
                         dtype='float32')
-            self.global_raw_bottom_top = np.zeros((self.bs,
-                                                   n_add_input_channels,
-                                                   self.global_el,
-                                                   self.global_el),
-                                       dtype='float32')
+            if self.raw is not None:
+                self.global_raw_bottom_top = np.zeros((self.bs,
+                                                       n_add_input_channels,
+                                                       self.global_el,
+                                                       self.global_el),
+                                           dtype='float32')
         if self.downsample:
+            n_down = 1
+            if self.raw is not None:
+                n_down = 2
             self.global_down = np.zeros((self.bs, 
-                                        2,
+                                        n_down,
                                         self.global_el / 2 + self.pad,
                                         self.global_el / 2 + self.pad),
                                    dtype='float32')
@@ -748,13 +764,18 @@ class HoneyBatcherPredict(object):
                 time_put
 
     def get_network_input(self, center, b, Id, out):
+        last_index = 0
+        out[last_index, :, :] = self.crop_membrane(center, b)
+        last_index += 1
+        if self.raw is not None:
+            out[last_index, :, :] = self.crop_raw(center, b)
+            last_index += 1
 
-        out[0, :, :] = self.crop_membrane(center, b)
-        out[1, :, :] = self.crop_raw(center, b)
-        out[2:4, :, :] = self.crop_mask_claimed(center, b, Id)
+        out[last_index:last_index + 2, :, :] = \
+            self.crop_mask_claimed(center, b, Id)
+        last_index += 2
         
         # use last index to append other input information
-        last_index = 4
         if self.z_stack:
             out[last_index:last_index+2, :, :] = \
                 self.crop_raw_bottom_top(center, b)
@@ -763,8 +784,12 @@ class HoneyBatcherPredict(object):
             last_index += 4
 
         if self.downsample:
-            out[last_index:last_index + 2, :, :] = self.crop_downsample(center, b)
-            last_index += 2
+            n_add = 1
+            if self.raw is not None:
+                n_add = 2
+            out[last_index:last_index + n_add, :, :] = \
+                self.crop_downsample(center, b)
+            last_index += n_add
 
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
@@ -818,10 +843,11 @@ class HoneyBatcherPredict(object):
                          path='./data/nets/debug/images/',
                          save=True, b=0, inherite_code=False):
         plot_images = []
-        plot_images.append({"title": "Raw Input",
-                            'im': self.global_raw[b, self.pad:-self.pad - 1,
-                                  self.pad:-self.pad - 1],
-                            'interpolation': 'none'})
+        if self.raw is not None:
+            plot_images.append({"title": "Raw Input",
+                                'im': self.global_raw[b, self.pad:-self.pad - 1,
+                                      self.pad:-self.pad - 1],
+                                'interpolation': 'none'})
         plot_images.append({"title": "Memb Input",
                             'im': self.global_batch[b, self.pad:-self.pad - 1,
                                   self.pad:-self.pad - 1],
@@ -1563,11 +1589,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_errormap[b, 2, :, :],
                             'interpolation': 'none'})
         if self.z_stack:
-            plot_images.append({"title": "Raw Bottom",
-                                'im': self.global_raw_bottom_top[b, 0,
-                                      self.pad:-self.pad - 1,
-                                      self.pad:-self.pad - 1],
-                                'interpolation': 'none'})
+            if self.raw is not None:
+                plot_images.append({"title": "Raw Bottom",
+                                    'im': self.global_raw_bottom_top[b, 0,
+                                          self.pad:-self.pad - 1,
+                                          self.pad:-self.pad - 1],
+                                    'interpolation': 'none'})
 
             plot_images.append({"title": "Raw Top",
                                 'im': self.global_raw_bottom_top[b, 1,
@@ -1576,11 +1603,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                 'interpolation': 'none'})
 
         if self.downsample:
-            # tmp
-            plot_images.append({"title": "Raw Downsample",
-                                'im': self.global_down[b, 1, self.pad:-self.pad - 1,
-                                      self.pad:-self.pad - 1],
-                                'interpolation': 'none'})
+            if self.raw is not None:
+                plot_images.append({"title": "Raw Downsample",
+                                    'im': self.global_down[b, 1,
+                                              self.pad:-self.pad - 1,
+                                              self.pad:-self.pad - 1],
+                                    'interpolation': 'none'})
 
         if self.z_stack:
             plot_images.append({"title": "Memb Bottom",
@@ -1811,7 +1839,7 @@ def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
     #     ax[3, i].imshow(membrane_gt[i], cmap='gray', interpolation='none')
     # plt.show()
     assert (np.all(gt != 0))
-    return raw, raw, dist_trf, gt
+    return None, raw, dist_trf, gt
 
 
 def generate_dummy_data2(batch_size, edge_len, patch_len, save_path=None):

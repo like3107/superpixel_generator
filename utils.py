@@ -193,12 +193,17 @@ def get_stack_indices(name,network):
 
 
 
-def get_n_channels(network):
-    n_channels = 4
-    if ("zstack" in network):
-        n_channels += 4
-    if ("down" in network):
-        n_channels += 2
+def get_n_channels(network, raw_path=''):
+    n_channels = 3
+    if raw_path is not None:
+        n_channels += 1
+        n_add = 2
+    else:
+        n_add = 1
+    if "zstack" in network:
+        n_channels += (2 * n_add)
+    if "down" in network:
+        n_channels += n_add
     return n_channels
 
 
