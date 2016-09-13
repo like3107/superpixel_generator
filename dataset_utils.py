@@ -1806,7 +1806,7 @@ class DummyBM:
 def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
                         n_z=64,
                         padding_b=False,
-                        av_line_dens=0.1 # lines per pixel
+                        av_line_dens=0.05 # lines per pixel
                         ):
 
     raw = np.zeros((n_z, edge_len, edge_len), dtype='float32')
