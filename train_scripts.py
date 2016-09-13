@@ -1,6 +1,6 @@
 import matplotlib
-# matplotlib.use('Agg')
-matplotlib.use('Qt4Agg')
+matplotlib.use('Agg')
+# matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
 import theano

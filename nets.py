@@ -361,6 +361,12 @@ class NetBuilder():
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov
 
+    def build_ID_v5_hydra_down(self):
+        l_in, l_9, fov = self.build_net_v5_BN(n_channels=4)
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return l_in, l_in_direction, l_9, l_10, fov
+
     def build_ID_v6_hydra_zstack_down_big(self):
         l_in, l_9, fov = self.build_net_v5_BN(n_channels=10,n_filt = [30, 40, 60, 30])
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
