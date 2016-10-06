@@ -113,6 +113,10 @@ def train_script_v1(options):
                           L1_weight=options.regularization, margin=options.margin)
         Memento_ft = exp.BatchMemento()
 
+    print raw_path
+    print label_path
+    print height_gt_path
+
     print 'Loading data and Priority queue init'
     bm = BM(membrane_path, label=label_path,
            height_gt=height_gt_path,
@@ -127,6 +131,7 @@ def train_script_v1(options):
            scale_height_factor=options.scale_height_factor,
            perfect_play=options.perfect_play,
            add_height_b=options.add_height_penalty,
+           lowercomplete_e=options.lowercomplete_e,
            max_penalty_pixel=options.max_penalty_pixel)
     print 'init'
     bm.init_batch(allowed_slices=sample_indices)
@@ -145,6 +150,7 @@ def train_script_v1(options):
                     z_stack=("zstack" in options.net_arch),
                     downsample = ("down" in options.net_arch),
                     scale_height_factor=options.scale_height_factor,
+                    lowercomplete_e=options.lowercomplete_e,
                     max_penalty_pixel=options.max_penalty_pixel)
         bm_val.init_batch(allowed_slices=val_sample_indices)
 
@@ -294,12 +300,20 @@ def train_script_v1(options):
                     ft_loss_train_noreg = loss_valid_fine_f(batch_ft, batch_dir_ft)
                 probs_fine = probs_fine_f(batch_ft, batch_dir_ft)
 
+                bs = len(batch_dir_ft)
+                # print "probs",probs_fine
+                # print "max",np.maximum(probs_fine[bs/2:] - probs_fine[:bs/2] + options.margin,0)
+
                 ft_loss_train, individual_loss_fine = loss_train_fine_f(batch_ft, batch_dir_ft)
+
+                # print "ft_loss_train",ft_loss_train
+                # print "individual_loss_fine",individual_loss_fine
 
                 if options.augment_ft:
                     individual_loss_fine = du.average_ouput(individual_loss_fine, ft=True)
 
-                Memento_ft.update_loss(individual_loss_fine, mem_choice_ft)
+                # Memento_ft.update_loss(individual_loss_fine, mem_choice_ft)
+                Memento_ft.clear_memory()
 
                 with h5py.File(debug_path+"/ft_batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
                     out_h5.create_dataset("batch_ft",data=batch_ft, compression="gzip")
@@ -507,7 +521,8 @@ def get_options():
 
     p.add('--max_iter', default=10000000000000, type=int)
     p.add('--no_bash_backup', action='store_true')
-    p
+    p.add('--lowercomplete_e', default=0., type=float)
+
     return p.parse_args()
 
 

@@ -403,7 +403,7 @@ class HoneyBatcherPredict(object):
                  global_edge_len=110, patch_len=40, padding_b=False,
                  z_stack = False, downsample = False, slices=None,
                  timos_seeds_b=True, perfect_play=False,
-                 max_penalty_pixel=3):
+                 lowercomplete_e=0., max_penalty_pixel=3):
 
         """
         batch loader. Use either for predict. For valId and train use:
@@ -477,6 +477,7 @@ class HoneyBatcherPredict(object):
             assert (self.rl - self.global_el - self.pl >= 0)
             self.n_channels += 2
 
+        self.lowercomplete_e = lowercomplete_e 
         self.max_penalty_pixel = max_penalty_pixel
 
         self.global_batch = None  # includes padding, nn input
@@ -788,7 +789,8 @@ class HoneyBatcherPredict(object):
             cross_x, cross_y, cross_d = self.get_cross_coords(center)
             lower_bound = self.global_heightmap_batch[b,
                                                       center[0] - self.pad,
-                                                      center[1] - self.pad]
+                                                      center[1] - self.pad] + \
+                                                      self.lowercomplete_e
             if lower_bound == np.inf:
                 print "encountered inf for prediction center !!!!", \
                     b, center, Id, heights, lower_bound
@@ -857,6 +859,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  z_stack = False, downsample = False,
                  scale_height_factor=None, perfect_play=False,
                  add_height_b=False,
+                 lowercomplete_e=0.,
                  max_penalty_pixel=3):
         super(HoneyBatcherPath, self).__init__(
             membranes=membranes,
@@ -871,6 +874,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             downsample = downsample,
             slices=slices,
             perfect_play=perfect_play,
+            lowercomplete_e=lowercomplete_e,
             max_penalty_pixel=max_penalty_pixel)
 
         if isinstance(label, str):
@@ -1313,6 +1317,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         return raw_batch
 
     def check_error(self, error):
+        return not 'used' in error
         return not 'used' in error and error['e1_length'] > 5
 
 
@@ -1331,7 +1336,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_II_direction = []
 
         for error in self.global_error_dict.values():
-            print "errorlength",error['e1_length']
+            # print "errorlength",error['e1_length']
             if self.check_error(error):
                 error["used"] = True
                 error_batch_list.append(error["batch"])
