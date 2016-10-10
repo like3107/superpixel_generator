@@ -1158,6 +1158,117 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                current_position[1]-self.pad]
             yield current_position, current_direction
 
+
+    def find_global_error_paths(self):
+        for b in range(self.bs):
+            plot_images = []
+
+            # project claim id to ground truth id by lookup
+            gtmap = np.array([0]+self.global_id2gt[b].values())
+            print gtmap
+            print gtmap.shape
+            print self.global_claims[b].astype(int).shape
+            claim_projection = gtmap[self.global_claims[b].astype(int)]
+            not_found = np.zeros_like(claim_projection)
+
+            gx = convolve(claim_projection, np.array([-1., 0., 1.]).reshape(1, 3))
+            gy = convolve(claim_projection, np.array([-1., 0., 1.]).reshape(3, 1))
+
+            plot_images.append({"title": "claim",
+                                    'cmap': "rand",
+                                    'im': self.global_claims[b,self.pad:-self.pad,self.pad:-self.pad]})
+            plot_images.append({"title": "gt",
+                                    'cmap': "rand",
+                                    'im': self.global_label_batch[b]})
+            plot_images.append({"title": "mix",
+                            'cmap': "rand",
+                                'im': claim_projection[self.pad:-self.pad,self.pad:-self.pad]})
+            plot_images.append({"title": "overflow",
+                                    'cmap': "grey",
+                                    'im': self.global_errormap[b, 1]})
+            boundary = np.float32((gx ** 2 + gy ** 2) > 0)
+
+            path_fin_map = np.logical_and(boundary[self.pad:-self.pad,self.pad:-self.pad], self.global_errormap[b, 1])
+
+            path_fin_map[0,:] = 0
+            path_fin_map[-1,:] = 0
+            path_fin_map[:,0] = 0
+            path_fin_map[:,-1] = 0
+
+
+            plot_images.append({"title": "path_fin_0",
+                        'cmap': "grey",
+                        'im': path_fin_map})
+            np.logical_and(path_fin_map, (self.global_claims[b,self.pad:-self.pad,self.pad:-self.pad] > 0),out=path_fin_map)
+            plot_images.append({"title": "path_fin_1",
+                                    'cmap': "grey",
+                                    'im': path_fin_map})
+            u.save_images(plot_images, path="/home/swolf/local/src/data/debug/",name="path_test_"+str(b)+".png")
+
+            plot_images.append([])
+            plot_images.append([])
+            count = 0
+            for center_x,center_y in np.transpose(np.where(path_fin_map))+self.pad:
+                print "path for ",center_x,center_y
+                def error_index(b, id1, id2):
+                    return b, min(id1, id2), max(id1, id2)
+
+                small_pred = np.inf
+                new_error = {}
+
+
+                for x, y, direction in self.walk_cross_coords([center_x,center_y]):
+                    if claim_projection[x, y] != claim_projection[center_x, center_y]:
+                        reverse_direction = (direction + 2) % 4
+                        prediction = self.global_prediction_map[b,x-self.pad,y-self.pad,reverse_direction]
+                        if prediction < small_pred:
+                            small_pred = prediction
+                            new_error = {"batch": b,
+                                 "touch_time": self.global_timemap[b, x, y],
+                                 "large_pos": [center_x, center_y],
+                                 "large_direction": direction,
+                                 "large_id": self.global_claims[b,center_x-self.pad,center_y-self.pad],
+                                 "large_gtid": claim_projection[center_x-self.pad,center_y-self.pad],
+                                 "small_pos": [x, y],
+                                 "small_direction": reverse_direction,
+                                 "small_gtid": claim_projection[x-self.pad,y-self.pad],
+                                 "small_id": self.global_claims[b,x-self.pad,y-self.pad]}
+
+                self.global_errormap[b, 2, x-self.pad,y-self.pad] = -1
+                if new_error != {}:
+                    print new_error
+                    e_index = error_index(b, new_error["small_gtid"], new_error["large_gtid"])
+                    self.global_error_dict[e_index] = new_error
+                    self.find_type_I_error()
+                    self.find_source_of_II_error()
+
+                    plot_images[-2] = {"title": "Path Map",
+                            'scatter': np.array(
+                                [np.array(e["large_pos"]) - self.pad for e in
+                                 self.global_error_dict.values() if
+                                 e["batch"] == b]+ [np.array(e["small_pos"]) - self.pad for e in
+                                 self.global_error_dict.values() if
+                                 e["batch"] == b]),
+                            'im': self.global_errormap[b, 2, :, :],
+                            'interpolation': 'none'}
+
+                    plot_images[-1] = {"title": "not found",
+                                        'im': not_found,
+                                        'interpolation': 'none'}
+
+                    # u.save_images(plot_images, path="/home/swolf/local/src/data/debug/",name="path_test_"+str(b)+"_"+str(count)+".png")
+                    count += 1
+                else:
+                    print "no match found for path end"
+                    not_found[center_x-self.pad, center_y-self.pad] = 1
+                    for x, y, direction in self.walk_cross_coords([center_x,center_y]):
+                        print  claim_projection[x, y] ," should not be ", claim_projection[center_x, center_y]
+                        reverse_direction = (direction + 2) % 4
+                        print "prediction = ", self.global_prediction_map[b,x-self.pad,y-self.pad,reverse_direction]
+                    # raise Exception("no match found for path end")
+
+
+
     # 2nd crossing from own gt ID into other ID
     def find_type_I_error(self, plateau_backtrace=True):
         for error_I in self.global_error_dict.values():

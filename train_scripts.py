@@ -124,7 +124,7 @@ def train_script_v1(options):
            batch_size=options.batch_size,
            patch_len=patch_len, global_edge_len=options.global_edge_len,
            padding_b=options.padding_b,
-           find_errors_b=options.fine_tune_b,
+           find_errors_b=options.fine_tune_b and not options.rs_ft,
            clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
            z_stack=("zstack" in options.net_arch),
            downsample = ("down" in options.net_arch),
@@ -142,7 +142,7 @@ def train_script_v1(options):
                     height_gt=height_gt_path_val,
                     raw=raw_path_val,
                     batch_size=options.batch_size,
-                    find_errors_b=options.fine_tune_b,
+                    find_errors_b=options.fine_tune_b and not options.rs_ft,
                     patch_len=patch_len, global_edge_len=options.global_edge_len,
                     padding_b=options.padding_b,
                     clip_method=options.clip_method,
@@ -309,11 +309,11 @@ def train_script_v1(options):
                 # print "ft_loss_train",ft_loss_train
                 # print "individual_loss_fine",individual_loss_fine
 
-                if options.augment_ft:
-                    individual_loss_fine = du.average_ouput(individual_loss_fine, ft=True)
+                # if options.augment_ft:
+                #     individual_loss_fine = du.average_ouput(individual_loss_fine, ft=True)
 
                 # Memento_ft.update_loss(individual_loss_fine, mem_choice_ft)
-                Memento_ft.clear_memory()
+                # Memento_ft.clear_memory()
 
                 with h5py.File(debug_path+"/ft_batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
                     out_h5.create_dataset("batch_ft",data=batch_ft, compression="gzip")
@@ -369,20 +369,58 @@ def train_script_v1(options):
                 and (free_voxel_empty / 4)  % (iteration + 1) == 0
                 and free_voxel_empty - free_voxel > 1000):
 
-            if (len(bm.global_error_dict) > 0)\
-                        and iteration > options.pre_train_iter \
-                        and options.fine_tune_b:
-                error_b_type1, error_b_type2, dir1, dir2 = \
-                    bm.reconstruct_path_error_inputs()
+            # if (len(bm.global_error_dict) > 0)\
+            #             and iteration > options.pre_train_iter \
+            #             and options.fine_tune_b:
+                # error_b_type1, error_b_type2, dir1, dir2 = \
+                #     bm.reconstruct_path_error_inputs()
 
-                Memento_ft.add_to_memory(
-                    exp.stack_batch(error_b_type1, error_b_type2),
-                    exp.stack_batch(dir1, dir2))
+                # Memento_ft.add_to_memory(
+                #     exp.stack_batch(error_b_type1, error_b_type2),
+                #     exp.stack_batch(dir1, dir2))
 
             bm.draw_debug_image(
                 "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
                 (iteration, bm.counter, free_voxel),
                 path=save_net_path_reset)
+
+            bm.find_global_error_paths()
+            print 'Finetuning...'
+            if bm.count_new_path_errors() > 0:
+                error_b_type1, error_b_type2, dir1, dir2 = \
+                    bm.reconstruct_path_error_inputs()
+
+                batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
+                dir_ft = exp.stack_batch(dir1, dir2)
+                
+                batch_ft = exp.flatten_stack(batch_ft).astype(theano.config.floatX)
+                dir_ft = exp.flatten_stack(dir_ft).astype(np.int32)
+                p_ft = probs_fine_f(batch_ft, dir_ft)
+
+                print p_ft.shape, dir_ft.shape, batch_ft.shape
+                bs = batch_ft.shape[0]
+
+                print "finteuning with bs ",bs
+
+                save_net_path_pre = save_net_path_ft
+                ft_iteration += 1
+
+                # Memento_ft.get_batch(options.batch_size_ft + options.exp_ft_bs)
+                # if options.augment_ft:
+                #     batch_ft_t1, dir_t1 = du.augment_batch(batch_ft[:,0],
+                #                                            direction=dir_ft[:,0])
+                #     batch_ft_t2, dir_t2 = du.augment_batch(batch_ft[:,1],
+                #                                            direction=dir_ft[:,1])
+                #     batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
+                #     batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
+                # else:
+                    # batch_ft = exp.flatten_stack(batch_ft).astype(theano.config.floatX)
+                    # batch_dir_ft = exp.flatten_stack(dir_ft).astype(np.int32)
+
+                if options.val_b:
+                    ft_loss_train_noreg = loss_valid_fine_f(batch_ft, dir_ft)
+                # probs_fine = probs_fine_f(batch_ft, batch_dir_ft)
+
             if options.val_b:
                 bm_val.draw_debug_image(
                     "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
@@ -504,6 +542,7 @@ def get_options():
     p.add('--batch_size_ft', default=4, type=int)
     p.add('--reset_after_fine_tune', action='store_true')
     p.add('--no-ft', dest='fine_tune_b', action='store_false')
+    p.add('--reset-ft', dest='rs_ft', action='store_true')
     p.add('--margin', default=0.5, type=float)
     p.add('--no-aug-ft', dest='augment_ft', action='store_false')
     # experience replay
