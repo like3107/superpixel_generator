@@ -18,6 +18,7 @@ from scipy.ndimage import convolve, gaussian_filter
 from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
 from skimage.morphology import label
+from itertools import product
 import h5py
 # from cv2 import dilate, erode
 
@@ -402,7 +403,7 @@ class HoneyBatcherPredict(object):
                  membrane_key=None,  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  z_stack = False, downsample = False, slices=None,
-                 timos_seeds_b=True, perfect_play=False,
+                 seed_method="timo", perfect_play=False,
                  lowercomplete_e=0., max_penalty_pixel=3):
 
         """
@@ -441,7 +442,7 @@ class HoneyBatcherPredict(object):
             self.raw = mirror_cube(self.raw, self.pad * factor)
             self.membranes = mirror_cube(self.membranes, self.pad * factor)
 
-        self.timos_seeds_b = timos_seeds_b
+        self.seed_method = seed_method
         self.rl = self.membranes.shape[1]  # includes padding
         self.n_slices = len(self.membranes)
         self.bs = batch_size
@@ -583,6 +584,22 @@ class HoneyBatcherPredict(object):
             seeds = \
                 [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
             self.global_seeds.append(seeds)
+
+    def get_overseed_coords(self, gridsize = 20):
+        """
+        Seeds by grid
+        :return:
+        """
+        self.global_seeds = []
+       	shape = self.global_batch.shape[1:2]
+       	offset_x = (self.pad + (shape[0] - 2*self.pad) % gridsize) /2
+       	offset_y = (self.pad + (shape[1] - 2*self.pad) % gridsize) /2
+       	print "offsets ", offset_x, offset_y
+       	for b in range(self.bs):
+	       	seeds_b = [(x,y) for x,y in  product(xrange(offset_x,shape[0]-self.pad,gridsize),
+		   					xrange(offset_y,shape[1]-self.pad,gridsize))]
+	       	self.global_seeds.append(seeds_b)
+
 
     def get_seed_ids(self):
         assert (self.global_seeds is not None)  # call get seeds first
@@ -855,7 +872,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  batch_size=10,
                  global_edge_len=110, patch_len=40, padding_b=False,
                  find_errors_b=True, clip_method='clip',
-                 timos_seeds_b=True, slices=None,
+                 seed_method="timo", slices=None,
                  z_stack = False, downsample = False,
                  scale_height_factor=None, perfect_play=False,
                  add_height_b=False,
@@ -869,7 +886,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             global_edge_len=global_edge_len,
             patch_len=patch_len,
             padding_b=padding_b,
-            timos_seeds_b=timos_seeds_b,
+            seed_method=seed_method,
             z_stack = z_stack,
             downsample = downsample,
             slices=slices,
@@ -1011,7 +1028,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         Seeds by minima of dist trf of thresh of memb prob
         :return:
         """
-        if not self.timos_seeds_b:
+        if self.seed_method == "gt":
             self.global_seeds = []
             seed_ids = []
             dist_trf = np.zeros_like(self.global_label_batch)
@@ -1034,8 +1051,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                      regions[1][seed_ind]]) + self.pad
                     seeds.append([seed[0], seed[1]])
                 self.global_seeds.append(seeds)
-        else:
+        elif self.seed_method == "over":
+        	self.get_overseed_coords()
+        elif self.seed_method == "timo":
             super(HoneyBatcherPath, self).get_seed_coords()
+        else:
+        	except "no valid seeding method defined"
 
 
     def get_batches(self):
@@ -2197,7 +2218,7 @@ if __name__ == '__main__':
     #                     padding_b = False ,\
     #                     find_errors_b = False ,\
     #                     clip_method = 'clip' ,\
-    #                     timos_seeds_b = True ,\
+    #                     seed_method = True ,\
     #                     z_stack = True ,\
     #                     downsample = True ,\
     #                     scale_height_factor = 60.0 ,\

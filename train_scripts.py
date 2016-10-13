@@ -125,7 +125,7 @@ def train_script_v1(options):
            patch_len=patch_len, global_edge_len=options.global_edge_len,
            padding_b=options.padding_b,
            find_errors_b=options.fine_tune_b and not options.rs_ft,
-           clip_method=options.clip_method, timos_seeds_b=options.timos_seeds_b,
+           clip_method=options.clip_method, seed_method=options.seed_method,
            z_stack=("zstack" in options.net_arch),
            downsample = ("down" in options.net_arch),
            scale_height_factor=options.scale_height_factor,
@@ -146,7 +146,7 @@ def train_script_v1(options):
                     patch_len=patch_len, global_edge_len=options.global_edge_len,
                     padding_b=options.padding_b,
                     clip_method=options.clip_method,
-                    timos_seeds_b=options.timos_seeds_b,
+                    seed_method=options.seed_method,
                     z_stack=("zstack" in options.net_arch),
                     downsample = ("down" in options.net_arch),
                     scale_height_factor=options.scale_height_factor,
@@ -507,9 +507,8 @@ def get_options():
     # train data paths
     def_train_version = 'second_repr'       # def change me
     p.add('--train_version', default=def_train_version)
-    p.add('--no_timos_seeds_b', action='store_false', default=True,
-          dest='timos_seeds_b')
-    p.add('--timos_seeds_b', action='store_false', default=True)
+    p.add('--seed_method', type=str, default="timo", help='available metods: gt, timo, grid',
+          dest='seed_method')
 
     # valid data paths
     def_valid_version = 'first_repr'
