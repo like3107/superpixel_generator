@@ -593,7 +593,7 @@ class HoneyBatcherPredict(object):
         :return:
         """
         self.global_seeds = []
-        shape = self.global_batch.shape[1:2]
+        shape = self.global_batch.shape[1:3]
         offset_x = (self.pad + (shape[0] - 2*self.pad) % gridsize) /2
         offset_y = (self.pad + (shape[1] - 2*self.pad) % gridsize) /2
         print "offsets ", offset_x, offset_y
@@ -1022,7 +1022,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         elif self.seed_method == "timo":
             super(HoneyBatcherPath, self).get_seed_coords()
         else:
-            except "no valid seeding method defined"
+            raise Exception("no valid seeding method defined")
 
     def crop_timemap(self, center, b):
         assert(0 <= center[0]-self.pad <= self.global_el - self.pad)
@@ -1097,7 +1097,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         elif self.seed_method == "timo":
             super(HoneyBatcherPath, self).get_seed_coords()
         else:
-            except "no valid seeding method defined"
+            raise Exception("no valid seeding method defined")
 
 
     def get_batches(self):
