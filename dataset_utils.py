@@ -19,6 +19,8 @@ from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
 from skimage.morphology import label
 from itertools import product
+from sklearn.metrics import adjusted_rand_score
+
 import h5py
 # from cv2 import dilate, erode
 
@@ -587,18 +589,22 @@ class HoneyBatcherPredict(object):
                 [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
             self.global_seeds.append(seeds)
 
-    def get_overseed_coords(self, gridsize = 20):
+    def get_overseed_coords(self, gridsize = 5):
         """
         Seeds by grid
         :return:
         """
+        if self.downsample:
+            border = 4*self.pad
+        else:
+            border = self.pad
+
         self.global_seeds = []
         shape = self.global_batch.shape[1:3]
-        offset_x = (self.pad + (shape[0] - 2*self.pad) % gridsize) /2
-        offset_y = (self.pad + (shape[1] - 2*self.pad) % gridsize) /2
-        print "offsets ", offset_x, offset_y
+        offset_x = border + ((shape[0] - 2*border) % gridsize) /2
+        offset_y = border + ((shape[1] - 2*border) % gridsize) /2
         for b in range(self.bs):
-            seeds_b = [(x,y) for x,y in  product(xrange(offset_x,shape[0]-self.pad,gridsize),
+            seeds_b = [(x,y) for x,y in  product(xrange(offset_x,shape[0]-border,gridsize),
                             xrange(offset_y,shape[1]-self.pad,gridsize))]
             self.global_seeds.append(seeds_b)
 
@@ -1818,7 +1824,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         timemap = np.array(self.global_timemap[b, self.pad:-self.pad,
                                                self.pad:-self.pad])
-        timemap[timemap < 0] = 0
+        timemap[timemap < 0] =0 
         plot_images.insert(11,{"title": "Time Map ",
                                 'im': timemap})
 
@@ -2265,6 +2271,82 @@ def height_to_grad(height):
     grad[:,1,:,:] = height[:,2,:,:]-height[:,0,:,:]
     grad[:,2,:,:] = height[:,1,:,:]-height[:,3,:,:]
     return grad
+
+class HungryHoneyBatcher(HoneyBatcherPath):
+    # def __init__(self,  membranes, raw=None, raw_key=None,
+    #              membrane_key=None,  label=None, label_key=None,
+    #              height_gt=None, height_gt_key=None,
+    #              batch_size=10,
+    #              global_edge_len=110, patch_len=40, padding_b=False,
+    #              find_errors_b=True, clip_method='clip',
+    #              seed_method="timo", slices=None,
+    #              z_stack = False, downsample = False,
+    #              scale_height_factor=None, perfect_play=False,
+    #              add_height_b=False,
+    #              lowercomplete_e=0.,
+    #              max_penalty_pixel=3):
+    #     super(HungryHoneyBatcher, self).__init__(
+    #         membranes=membranes,
+    #         membrane_key=membrane_key,
+    #         label=label,
+    #         label_key=label_key,
+    #         raw=raw, raw_key=raw_key,
+    #         batch_size=batch_size,
+    #         global_edge_len=global_edge_len,
+    #         patch_len=patch_len,
+    #         padding_b=padding_b,
+    #         seed_method=seed_method,
+    #         z_stack = z_stack,
+    #         downsample = downsample,
+    #         slices=slices,
+    #         perfect_play=perfect_play,
+    #         lowercomplete_e=lowercomplete_e,
+    #         max_penalty_pixel=max_penalty_pixel)
+
+    def get_merging_gt(self, centers, ids):
+        merging_gt = np.zeros((self.bs,4,1,1))
+        merging_factor = np.zeros((self.bs,4,1,1))
+
+        #TODO: make this fast with fewer array accesses by removing batch loop
+        for b, center, Id, in zip(range(self.bs), centers, ids):
+            # check if neigbour merge is possible
+            cross_x, cross_y, cross_d = self.get_cross_coords_offset(center)
+            # self.global_claims[b,cross_x,cross_y] -
+            claimed = self.global_claims[b,cross_x,cross_y] > 0
+            neighbor_id = self.global_claims[b,cross_x,cross_y]
+            different_id = neighbor_id - Id != 0
+            merge_partner = np.logical_and(claimed, different_id)
+
+            # fast numpy check to avoid loop
+            if np.any(merge_partner):
+                gt_A = self.global_label_batch[b][self.global_claims[b,self.pad:-self.pad,self.pad:-self.pad] == Id] 
+                print self.global_label_batch[b].shape, self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad].shape
+                for i,idx,mp in zip(range(4), neighbor_id, merge_partner):
+                    if mp:
+                        gt_B = self.global_label_batch[b][self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad] == idx]
+                        gt_AB = np.concatenate((gt_A,gt_B))
+                        # union region score
+                        regions = np.ones((gt_A.shape[0]+ gt_B.shape[0]))
+                        rand_union = adjusted_rand_score(gt_AB,regions)
+                        # split region score
+                        regions[:gt_A.shape[0]] = 2
+                        rand_split = adjusted_rand_score(gt_AB,regions)
+                        print "split,union = ",rand_split,rand_union
+                        print "ids",Id,idx
+                        merging_factor[b,i,0,0] = 1
+                        if rand_union > rand_split:
+                            merging_gt[b,i,0,0] = 1
+                        else:
+                            merging_gt[b,i,0,0] = 0
+                            
+        return merging_gt, merging_factor
+
+    def get_batches(self):
+        raw_batch, gts, centers, ids = super(HungryHoneyBatcher, self).get_batches()
+        merging_gt, merging_factor = self.get_merging_gt(centers, ids)
+        return raw_batch, gts, centers, ids, merging_gt, merging_factor
+
+
 
 if __name__ == '__main__':
     # path = '/media/liory/DAF6DBA2F6DB7D67/cremi/final/CREMI-pmaps-padded/'

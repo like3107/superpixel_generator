@@ -22,7 +22,10 @@ def train_script_v1(options):
     # for each net a new folder is created. Here intermediate pred-
     # dictions and train, val... are saved
 
-    BM = du.HoneyBatcherPath
+    if(options.merge_seeds):
+        BM = du.HungryHoneyBatcher
+    else:
+        BM = du.HoneyBatcherPath
 
     save_net_path = './../data/nets/' + options.net_name + '/'
 
@@ -44,9 +47,8 @@ def train_script_v1(options):
 
     builder = nets.NetBuilder()
     network = builder.get_net(options.net_arch)
-    loss = builder.get_loss('updates_probs_v0')
+    loss = builder.get_loss('updates_v7_EAT')
     loss_fine = builder.get_loss('updates_hydra_v5')
-
     # all params entered.......................
 
     # initialize the net
@@ -66,7 +68,7 @@ def train_script_v1(options):
 
     print 'initializing network graph for net ', options.net_name
 
-    l_in, l_in_direction, l_out, l_out_direction, patch_len = network()
+    l_in, l_in_direction, l_out, l_out_direction, patch_len, l_eat = network()
 
     if options.dummy_data_b:
         raw_path, membrane_path, height_gt_path, label_path = \
@@ -76,9 +78,12 @@ def train_script_v1(options):
 
     print 'compiling theano functions'
     target_t = T.ftensor4()
-    loss_train_f, loss_valid_f, probs_f = \
-        loss(l_in, target_t, l_out, L1_weight=options.regularization)
-
+    target_eat = T.ftensor4()
+    target_eat_factor = T.ftensor4()
+    # loss_train_f, loss_valid_f, probs_f = \
+        # loss(l_in, target_t, l_out, L1_weight=options.regularization)
+    loss_train_f, loss_valid_f, probs_f, loss_merge_f, eat_f = \
+        loss(l_in, target_t, l_out, l_eat, target_eat, target_eat_factor, L1_weight=options.regularization)
     # debug_f = theano.function([l_in.input_var, l_in_direction.input_var],
     #                 [lasagne.layers.get_output(l_out, deterministic=True),
     #                 lasagne.layers.get_output(l_out_direction, deterministic=True)],
@@ -191,9 +196,14 @@ def train_script_v1(options):
 
         # predict val
         if options.val_b:
-            membrane_val, gt_val, seeds_val, ids_val = bm_val.get_batches()
-            probs_val = probs_f(membrane_val)
-            bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
+            if(options.merge_seeds):
+                membrane_val, gt_val, seeds_val, ids_val, merging_gt_val, merging_factor_val = bm_val.get_batches()
+                probs_val = probs_f(membrane_val)
+                bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
+            else:
+                membrane_val, gt_val, seeds_val, ids_val = bm_val.get_batches()
+                probs_val = probs_f(membrane_val)
+                bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
         # predict train
         if options.perfect_play:
@@ -213,10 +223,16 @@ def train_script_v1(options):
                         (iteration, bm.counter, free_voxel),
                         path=save_net_path_reset)
                 free_voxel = free_voxel_empty
+            probs = probs_f(membrane)
+            bm.update_priority_queue(probs, seeds, ids)
+        elif(options.merge_seeds):
+            membrane, gt, seeds, ids, merging_gt, merging_factor = bm.get_batches()
+            probs = probs_f(membrane)
+            bm.update_priority_queue(probs, seeds, ids)
         else:
             membrane, gt, seeds, ids = bm.get_batches()
-        probs = probs_f(membrane)
-        bm.update_priority_queue(probs, seeds, ids)
+            probs = probs_f(membrane)
+            bm.update_priority_queue(probs, seeds, ids)
 
         # debug
         if False and iteration % 100 == 0:
@@ -340,6 +356,15 @@ def train_script_v1(options):
 
         # pre-training
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
+
+            # merge loss (first because it is independent of exp replay)
+            if options.merge_seeds and np.any(merging_factor>0):
+                print "ms",membrane.shape,merging_gt.shape,merging_factor.shape
+                loss_train, loss_merging_batch = loss_merge_f(membrane,
+                                    merging_gt.astype(theano.config.floatX),
+                                    merging_factor.astype(theano.config.floatX))
+                print "merge_loss",loss_train, loss_merging_batch
+
 
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt)
@@ -528,6 +553,7 @@ def get_options():
     p.add('--clip_method', default='clip')
     p.add('--perfect_play', action='store_true')
     p.add('--padding_b', action='store_true')
+    p.add('--merge_seeds', dest='merge_seeds', action='store_true')
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)

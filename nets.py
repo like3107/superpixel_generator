@@ -242,6 +242,39 @@ class NetBuilder:
                             b=np.random.random(n_classes)*10+10.)
         return l_in, l_7, fov
 
+    def build_net_v7_EAT(self, n_classes = 4,
+                              n_channels = 4,
+                              n_filt = [20, 25, 60, 30]):
+        fov = 40    # field of view = patch length
+        filt = [7, 6, 6]
+        n_filt += [n_classes]
+        pool = [2, 2]
+
+        # 40
+        l_in = L.InputLayer((None, n_channels, fov, fov))
+        l_1 = L.batch_norm(L.Conv2DLayer(l_in, n_filt[0], filt[0]))
+
+        l_2 = L.MaxPool2DLayer(l_1, pool[0])
+        # 17
+        l_3 = L.batch_norm(L.Conv2DLayer(l_2, n_filt[1], filt[1]))
+        l_4 = L.MaxPool2DLayer(l_3, pool[1])
+        # 6
+        l_5 = L.Conv2DLayer(l_4, n_filt[2], 5, filt[2],
+                            nonlinearity=las.nonlinearities.rectify)
+        l_6 = L.Conv2DLayer(l_5, n_filt[3], 1,
+                            nonlinearity=las.nonlinearities.rectify)
+        l_7 = L.Conv2DLayer(l_6, n_filt[4], 1,
+                            nonlinearity=las.nonlinearities.rectify,
+                            b=np.random.random(n_classes)*10+10.)
+
+        l_6_eat = L.Conv2DLayer(l_5, n_filt[3], 1,
+                            nonlinearity=las.nonlinearities.rectify)
+        l_7_eat = L.Conv2DLayer(l_6_eat, n_filt[4], 1,
+                            nonlinearity=las.nonlinearities.sigmoid)
+
+        return l_in, l_7, l_7_eat, fov
+
+
     def build_ID_v0(self):
         fov = 40  # field of view = patch length
         n_channels = 2
@@ -324,73 +357,79 @@ class NetBuilder:
         l_in, l_9, fov = self.build_ID_v0()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
 
     def build_ID_v01_hydra(self):
         l_in, l_9, fov = self.build_ID_v1_multichannel()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
 
     def build_ID_v5_hydra(self):
         l_in, l_9, fov = self.build_net_v5()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
 
     def build_ID_v5_hydra_big(self):
         l_in, l_9, fov = self.build_net_v5_big()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
 
     def build_ID_v5_hydra_zstack_o(self):
         l_in, l_9, fov = self.build_net_v5_BN(n_channels=8)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
     def build_ID_v5_hydra_down(self):
         l_in, l_9, fov = self.build_net_v5_BN(n_channels=6)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
     def build_ID_v5_hydra_zstack_down(self):
         l_in, l_9, fov = self.build_net_v5_BN(n_channels=10)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
     def build_ID_v6_hydra_zstack_down_big(self):
         l_in, l_9, fov = self.build_net_v5_BN(n_channels=10,n_filt = [30, 40, 60, 30])
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
     def build_ID_v6_hydra_zstack_down(self):
         l_in, l_9, fov = self.build_net_v6_BN(n_channels=10)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
     
 
     def build_ID_v5_hydra_BN(self):
         l_in, l_9, fov = self.build_net_v5_BN()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
     def build_ID_v5_hydra_BN_grad(self):
         l_in, l_9, fov = self.build_net_v5_BN(n_classes=3)
         l_9_height = cs.GradientToHeight(l_9)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9_height, l_in_direction])
-        return l_in, l_in_direction, l_9_height, l_10, fov
+        return l_in, l_in_direction, l_9_height, l_10, fov, None
+
+    def build_ID_v7_zstack_down_EAT_BN(self):
+        l_in, l_9, l_eat, fov = self.build_net_v7_EAT(n_channels=10)
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return l_in, l_in_direction, l_9, l_10, fov, l_eat
 
     def build_ID_v0_hybrid(self):
         fov = 40  # field of view = patch length
@@ -497,6 +536,52 @@ class NetBuilder:
 
         return loss_train_f, loss_valid_f, probs_f
 
+    def loss_updates_v7_EAT(self, l_in, target, last_layer, eat_in, eat_gt, eat_factors, L1_weight=10**-5,
+                              update='adam'):
+
+        all_params = L.get_all_params(last_layer, trainable=True)
+        all_params_merge = L.get_all_params(eat_in, trainable=True)
+
+        l_out_train = L.get_output(last_layer, deterministic=False)
+        l_out_valid = L.get_output(last_layer, deterministic=True)
+        l_out_train_eat = L.get_output(eat_in, deterministic=False)
+        l_out_valid_eat = L.get_output(eat_in, deterministic=True)
+
+        L1_norm = las.regularization.regularize_network_params(
+                last_layer,
+                las.regularization.l1)
+
+        loss_individual_batch = (l_out_train - target)**2
+        loss_merging_batch = eat_factors*las.objectives.binary_crossentropy(l_out_train_eat, eat_gt)
+
+        loss_train = T.mean(loss_individual_batch)
+        loss_merge = T.mean(loss_merging_batch)
+
+        if L1_weight > 0:
+            loss_train +=  L1_weight * L1_norm
+        loss_valid = T.mean(loss_individual_batch)
+        if update == 'adam':
+            updates = las.updates.adam(loss_train, all_params)
+        if update == 'sgd':
+            updates = las.updates.sgd(loss_train, all_params, 0.0001)
+
+        if update == 'adam':
+            updates_merge = las.updates.adam(loss_merge, all_params_merge)
+        if update == 'sgd':
+            updates_merge = las.updates.sgd(loss_merge, all_params_merge, 0.0001)
+
+        loss_train_f = theano.function([l_in.input_var, target],
+                                       [loss_train, loss_individual_batch],
+                                       updates=updates)
+        loss_merge_f = theano.function([l_in.input_var, eat_gt, eat_factors],
+                                       [loss_merge, loss_merging_batch],
+                                       updates=updates_merge)
+
+        loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
+        probs_f = theano.function([l_in.input_var], l_out_valid)
+        eat_f = theano.function([l_in.input_var], l_out_valid_eat)
+
+        return loss_train_f, loss_valid_f, probs_f, loss_merge_f, eat_f
 
     def loss_updates_hydra_v0(self, l_in_data, l_in_direction, last_layer,
                               L1_weight=10**-5):
