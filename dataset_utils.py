@@ -593,14 +593,14 @@ class HoneyBatcherPredict(object):
         :return:
         """
         self.global_seeds = []
-       	shape = self.global_batch.shape[1:2]
-       	offset_x = (self.pad + (shape[0] - 2*self.pad) % gridsize) /2
-       	offset_y = (self.pad + (shape[1] - 2*self.pad) % gridsize) /2
-       	print "offsets ", offset_x, offset_y
-       	for b in range(self.bs):
-	       	seeds_b = [(x,y) for x,y in  product(xrange(offset_x,shape[0]-self.pad,gridsize),
-		   					xrange(offset_y,shape[1]-self.pad,gridsize))]
-	       	self.global_seeds.append(seeds_b)
+        shape = self.global_batch.shape[1:2]
+        offset_x = (self.pad + (shape[0] - 2*self.pad) % gridsize) /2
+        offset_y = (self.pad + (shape[1] - 2*self.pad) % gridsize) /2
+        print "offsets ", offset_x, offset_y
+        for b in range(self.bs):
+            seeds_b = [(x,y) for x,y in  product(xrange(offset_x,shape[0]-self.pad,gridsize),
+                            xrange(offset_y,shape[1]-self.pad,gridsize))]
+            self.global_seeds.append(seeds_b)
 
 
     def get_seed_ids(self):
@@ -993,7 +993,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         Seeds by minima of dist trf of thresh of memb prob
         :return:
         """
-        if not self.timos_seeds_b:
+        if self.seed_method == "gt":
             self.global_seeds = []
             seed_ids = []
             dist_trf = np.zeros_like(self.global_label_batch)
@@ -1017,8 +1017,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                      # regions[1][seed_ind]]) + self.pad
                     seeds.append([seed[0], seed[1]])
                 self.global_seeds.append(seeds)
-        else:
+        elif self.seed_method == "over":
+            self.get_overseed_coords()
+        elif self.seed_method == "timo":
             super(HoneyBatcherPath, self).get_seed_coords()
+        else:
+            except "no valid seeding method defined"
 
     def crop_timemap(self, center, b):
         assert(0 <= center[0]-self.pad <= self.global_el - self.pad)
@@ -1089,11 +1093,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     seeds.append([seed[0], seed[1]])
                 self.global_seeds.append(seeds)
         elif self.seed_method == "over":
-        	self.get_overseed_coords()
+            self.get_overseed_coords()
         elif self.seed_method == "timo":
             super(HoneyBatcherPath, self).get_seed_coords()
         else:
-        	except "no valid seeding method defined"
+            except "no valid seeding method defined"
 
 
     def get_batches(self):
