@@ -1,6 +1,6 @@
 import matplotlib
-# matplotlib.use('Agg')
-matplotlib.use('Qt4Agg')
+matplotlib.use('Agg')
+# matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
 import theano
@@ -388,6 +388,7 @@ def train_script_v1(options):
 
             print 'starting Finetuning...'
             bm.find_global_error_paths()
+            # check whether there are any batches with errors
             if bm.count_new_path_errors() > 0:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()

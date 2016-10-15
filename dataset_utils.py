@@ -711,9 +711,7 @@ class HoneyBatcherPredict(object):
         # set global_batch and global_label_batch
         self.prepare_global_batch(start=start, allowed_slices=allowed_slices)
         self.get_seed_coords()
-        print 'seeds done'
         self.get_seed_ids()
-        print 'ids doine'
         self.initialize_priority_queue()
 
     def get_centers_from_queue(self):
@@ -1161,7 +1159,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                current_position[1]-self.pad]
             yield current_position, current_direction
 
-    def find_global_error_paths(self):
+    def locate_global_error_path_intersections(self):
         for b in range(self.bs):
             plot_images = []
 
@@ -1222,14 +1220,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                           name="path_test_"+str(b)+".png")
             plot_images.append([])
             plot_images.append([])
-            count = 0
             wrong_path_ends = np.transpose(np.where(path_fin_map)) + self.pad
             for center_x, center_y in wrong_path_ends:
-                print "path for ", center_x, center_y
+                # print "path for ", center_x, center_y
                 def error_index(b, id1, id2)    :
                     return b, min(id1, id2), max(id1, id2)
 
+                # check around intruder
                 small_pred = np.inf
+                touch_time_old = np.inf
                 new_error = {}
                 for x, y, direction in self.walk_cross_coords([center_x,
                                                                center_y]):
@@ -1237,14 +1236,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     assert (center_x - self.pad >= 0)
                     assert (y - self.pad >= 0)
                     assert (center_y - self.pad >= 0)
-                    # print 'x', x, 'y', y, 'centerx', center_x, 'cy', center_y
-                    # print 'claim proj', claim_projection.shape
-                    # print 'global_prediction_map', self.global_prediction_map.shape
-                    # print 'global_claims', self.global_claims.shape
-                    # print 'boundary', boundary.shape
-                    # print 'not_found', not_found.shape
-                    # print 'path_fin_map', path_fin_map.shape
 
+                    # only penalize on on lowest prediction
                     if claim_projection[x, y] != \
                             claim_projection[center_x, center_y]:
                         reverse_direction = (direction + 2) % 4
@@ -1253,9 +1246,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                        center_x - self.pad,
                                                        center_y - self.pad,
                                                        reverse_direction]
-                        if prediction != np.inf:
+                        if prediction <= small_pred:
                             small_pred = prediction
                             new_error = {"batch": b,
+                                 # get time from center it was predicted from
                                  "touch_time": self.global_timemap[b, x, y],
                                  "large_pos": [center_x, center_y],
                                  "large_direction": direction,
@@ -1273,31 +1267,39 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
                 self.global_errormap[b, 2, x-self.pad,y-self.pad] = -1
                 if new_error != {}:
-                    print new_error
+                    # print new_error
                     e_index = error_index(b, new_error["small_gtid"],
                                           new_error["large_gtid"])
-                    self.global_error_dict[e_index] = new_error
-                    self.find_type_I_error()
-                    self.find_source_of_II_error()
+                    # only one error per ID pair (the earliest one)
+                    save_error = False
+                    if not e_index in self.global_error_dict:
+                        save_error = True
+                    else:
+                        if self.global_error_dict[e_index]["touch_time"] > \
+                                new_error["touch_time"]:
+                            save_error = True
+                    if save_error:
+                        self.global_error_dict[e_index] = new_error
+                        plot_images[-2] = \
+                            {"title": "Path Map",
+                             'scatter': np.array(
+                                 [np.array(e["large_pos"]) - self.pad
+                                     for e in self.global_error_dict.values()
+                                     if e["batch"] == b] +
+                                 [np.array(e["small_pos"]) - self.pad
+                                     for e in self.global_error_dict.values()
+                                     if e["batch"] == b]),
+                             'im': self.global_errormap[b, 2, :, :],
+                             'interpolation': 'none'}
 
-                    plot_images[-2] = {"title": "Path Map",
-                            'scatter': np.array(
-                                [np.array(e["large_pos"]) - self.pad for e in
-                                 self.global_error_dict.values() if
-                                 e["batch"] == b]+ [np.array(e["small_pos"]) -
-                                                    self.pad for e in
-                                 self.global_error_dict.values() if
-                                 e["batch"] == b]),
-                            'im': self.global_errormap[b, 2, :, :],
-                            'interpolation': 'none'}
-
-                    plot_images[-1] = {"title": "not found",
-                                        'im': not_found,
-                                        'interpolation': 'none'}
-
-                    # u.save_images(plot_images, path="./../data/debug/",
-                    #               name="path_test_"+str(b)+"_"+str(count)+".png")
-                    count += 1
+                        plot_images[-1] = {"title": "not found",
+                                           'im': not_found,
+                                           'interpolation': 'none'}
+                        # tmp debug
+                        print 'waring savign debug plot'
+                        u.save_images(plot_images, path="./../data/debug/",
+                                      name="path_test_"+str(b)+"_"+str(e_index[1])+
+                                           str(e_index[2])+".png")
                 else:
                     print "no match found for path end"
                     not_found[center_x-self.pad, center_y-self.pad] = 1
@@ -1310,18 +1312,35 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                        x-self.pad,
                                                        y-self.pad,
                                                        reverse_direction]
-                    # raise Exception("no match found for path end")
-                print 'ho'
+                    raise Exception("no match found for path end")
 
-    # 2nd crossing from own gt ID into other ID
-    def find_type_I_error(self, plateau_backtrace=True):
+    def find_global_error_paths(self):
+
+        print 'before', self.global_error_dict
+
+        self.locate_global_error_path_intersections()
+        print
+        print 'after', self.global_error_dict
+        print
+        # now errors have been found so start and end of paths shall be found
+        self.find_type_I_error()
+        print
+        print 'after find type I', self.global_error_dict
+        print
+        self.find_source_of_II_error()
+
+        print self.global_error_dict
+
+    # crossing from own gt ID into other ID
+    def find_type_I_error(self):
         for error_I in self.global_error_dict.values():
             if "e1_pos" not in error_I:
                 start_position = error_I["large_pos"]
                 batch = error_I["batch"]
                 # keep track of output direction
                 current_direction = error_I["large_direction"]
-                prev_in_other_region = self.global_errormap[batch, 1,
+                prev_in_other_region = \
+                    self.global_errormap[batch, 1,
                                          start_position[0] - self.pad,
                                          start_position[1] - self.pad] 
 
@@ -1334,13 +1353,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                          pos[1] - self.pad] = True
                     # debug
                     # remember type I error on path
-                    in_other_region = self.global_errormap[batch, 1, pos[0]-self.pad,
-                                            pos[1]-self.pad]
+                    in_other_region = \
+                        self.global_errormap[batch, 1,
+                                             pos[0]-self.pad,
+                                             pos[1]-self.pad]
                     #  detect transition from "others" region to "me" region
                     if prev_in_other_region and not in_other_region:
                         original_error = np.array(pos)
-                        # print 'found crossing. type II linked to type I. Error #',\
-                        #     self.counter
+                        print 'found crossing. type II linked to type I. Error #',\
+                            self.counter
                         error_I["e1_pos"] = original_error
                         error_I["e1_time"] = self.global_timemap[batch,
                                                                  pos[0],
@@ -1353,18 +1374,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     e1_length += 1
 
                 e1_length = error_I["e1_length"]
-                if plateau_backtrace:
-                    new_pos, new_d = self.find_end_of_plateau(error_I["e1_pos"],
-                                                              error_I["e1_direction"],
-                                                              batch)
-                    error_I["e1_pos"] = new_pos
-                    error_I["e1_time"] = self.global_timemap[batch,
-                                                             new_pos[0],
-                                                             new_pos[1]]
-                    error_I["e1_direction"] = new_d
-                    error_I["e1_length"] = e1_length
-                    e1_length += 1
-                    assert(new_d >= 0)
                 self.counter += 1
 
     def find_end_of_plateau(self, start_position, start_direction, batch):
@@ -1471,11 +1480,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def check_error(self, error):
         return not 'used' in error
-        return not 'used' in error and error['e1_length'] > 5
+        # return not 'used' in error and error['e1_length'] > 5
 
 
     def count_new_path_errors(self):
-        return len([v for v in self.global_error_dict.values() if self.check_error(v)])
+        return len([v for v in self.global_error_dict.values()
+                    if self.check_error(v)])
 
     def reconstruct_path_error_inputs(self):
         error_I_timelist = []
