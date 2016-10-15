@@ -6,8 +6,7 @@ from lasagne import layers as L
 import custom_layer as cs
 
 
-class NetBuilder():
-
+class NetBuilder:
     def __init__(self):
         self.net_name = None
         self.build_methods = \
@@ -355,6 +354,12 @@ class NetBuilder():
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov
 
+    def build_ID_v5_hydra_down(self):
+        l_in, l_9, fov = self.build_net_v5_BN(n_channels=6)
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return l_in, l_in_direction, l_9, l_10, fov
+
     def build_ID_v5_hydra_zstack_down(self):
         l_in, l_9, fov = self.build_net_v5_BN(n_channels=10)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
@@ -542,7 +547,7 @@ class NetBuilder():
                                                          las.regularization.l1)
 
         # typeII - typeI + m
-        individual_batch = T.max(l_out_train[bs/2:] - l_out_train[:bs/2] + margin,0)
+        individual_batch = T.max(l_out_train[:bs/2] - l_out_train[bs/2:] + margin,0)
         loss_train = T.mean(individual_batch)
         if L1_weight > 0:
             loss_train += L1_weight * L1_norm

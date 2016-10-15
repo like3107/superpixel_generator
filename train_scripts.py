@@ -65,7 +65,6 @@ def train_script_v1(options):
     c.use('gpu0')
 
     print 'initializing network graph for net ', options.net_name
-    target_t = T.ftensor4()
 
     l_in, l_in_direction, l_out, l_out_direction, patch_len = network()
 
@@ -75,8 +74,8 @@ def train_script_v1(options):
         raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
             du.generate_dummy_data(options.batch_size, options.global_edge_len)
 
-
     print 'compiling theano functions'
+    target_t = T.ftensor4()
     loss_train_f, loss_valid_f, probs_f = \
         loss(l_in, target_t, l_out, L1_weight=options.regularization)
 
@@ -133,9 +132,7 @@ def train_script_v1(options):
            add_height_b=options.add_height_penalty,
            lowercomplete_e=options.lowercomplete_e,
            max_penalty_pixel=options.max_penalty_pixel)
-    print 'init'
     bm.init_batch(allowed_slices=sample_indices)
-    print 'dnoen'
 
     if options.val_b:
         bm_val = BM(membrane_path_val, label=label_path_val,
@@ -158,11 +155,13 @@ def train_script_v1(options):
         options.global_edge_len = bm.global_el
 
     if options.load_net_b:
-        np.random.seed(len(options.net_name))     # change seed so different images for retrain
+        np.random.seed(np.random.seed(int(time.time())))
+        # change seed so different images for retrain
         print "loading network parameters from ", options.load_net_path
         u.load_network(options.load_net_path, l_out)
 
     # everything is initialized now train and predict every once in a while....
+    print 'training'
     converged = False       # placeholder, this is not yet implemented
     iteration = -1
     losses = [[], [], []]
@@ -171,7 +170,6 @@ def train_script_v1(options):
     ft_iteration = 0
     free_voxel_empty = (options.global_edge_len - patch_len)**2
     free_voxel = free_voxel_empty
-    print 'training'
     while not converged and (iteration < options.max_iter):
         iteration += 1
         free_voxel -= 1
@@ -222,7 +220,8 @@ def train_script_v1(options):
 
         # debug
         if False and iteration % 100 == 0:
-            with h5py.File(debug_path+"/batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
+            with h5py.File(debug_path + "/batch_%08i_counter_%i"
+                    % (iteration, bm.counter), 'w') as out_h5:
                 out_h5.create_dataset("membrane",data=membrane ,compression="gzip")
                 out_h5.create_dataset("gt",data=gt ,compression="gzip")
                 out_h5.create_dataset("seeds",data=seeds ,compression="gzip")
@@ -242,7 +241,8 @@ def train_script_v1(options):
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
                 save_net_path_pre = save_net_path_ft
-                print "ft errors size ", bm.count_new_path_errors(), len(Memento_ft), Memento_ft.count_new(), \
+                print "ft errors size ", bm.count_new_path_errors(), \
+                    len(Memento_ft), Memento_ft.count_new(), \
                     len(bm.global_error_dict)
 
                 Memento_ft.add_to_memory(
@@ -304,7 +304,8 @@ def train_script_v1(options):
                 # print "probs",probs_fine
                 # print "max",np.maximum(probs_fine[bs/2:] - probs_fine[:bs/2] + options.margin,0)
 
-                ft_loss_train, individual_loss_fine = loss_train_fine_f(batch_ft, batch_dir_ft)
+                ft_loss_train, individual_loss_fine = \
+                    loss_train_fine_f(batch_ft, batch_dir_ft)
 
                 # print "ft_loss_train",ft_loss_train
                 # print "individual_loss_fine",individual_loss_fine
@@ -315,7 +316,8 @@ def train_script_v1(options):
                 # Memento_ft.update_loss(individual_loss_fine, mem_choice_ft)
                 # Memento_ft.clear_memory()
 
-                with h5py.File(debug_path+"/ft_batch_%08i_counter_%i"%(iteration, bm.counter), 'w') as out_h5:
+                with h5py.File(debug_path+"/ft_batch_%08i_counter_%i" %
+                        (iteration, bm.counter), 'w') as out_h5:
                     out_h5.create_dataset("batch_ft",data=batch_ft, compression="gzip")
                     out_h5.create_dataset("batch_dir_ft",data=batch_dir_ft, compression="gzip")
                     out_h5.create_dataset("probs_fine",data=probs_fine, compression="gzip")
@@ -384,8 +386,8 @@ def train_script_v1(options):
                 (iteration, bm.counter, free_voxel),
                 path=save_net_path_reset)
 
+            print 'starting Finetuning...'
             bm.find_global_error_paths()
-            print 'Finetuning...'
             if bm.count_new_path_errors() > 0:
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
@@ -430,7 +432,7 @@ def train_script_v1(options):
                     print "doing quick eval"
                     bm_val.save_quick_eval(
                     "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
-                    (iteration, bm.counter, free_voxel),debug_path)
+                    (iteration, bm.counter, free_voxel), debug_path)
                 else:
                     print "skipping quick eval"
                 bm_val.init_batch(allowed_slices=val_sample_indices)
@@ -575,7 +577,6 @@ if __name__ == '__main__':
 
     if options.batch_size_ft == 0:
         options.fine_tune_b = False
-
 
     u.print_options_for_net(options)
     train_script_v1(options)
