@@ -595,7 +595,7 @@ class HoneyBatcherPredict(object):
         :return:
         """
         if self.downsample:
-            border = 4*self.pad
+            border = self.pad
         else:
             border = self.pad
 
@@ -605,7 +605,7 @@ class HoneyBatcherPredict(object):
         offset_y = border + ((shape[1] - 2*border) % gridsize) /2
         for b in range(self.bs):
             seeds_b = [(x,y) for x,y in  product(xrange(offset_x,shape[0]-border,gridsize),
-                            xrange(offset_y,shape[1]-self.pad,gridsize))]
+                            xrange(offset_y,shape[1]-border,gridsize))]
             self.global_seeds.append(seeds_b)
 
 
