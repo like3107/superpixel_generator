@@ -197,9 +197,10 @@ def train_script_v1(options):
         # predict val
         if options.val_b:
             if(options.merge_seeds):
-                membrane_val, gt_val, seeds_val, ids_val, merging_gt_val, merging_factor_val = bm_val.get_batches()
+                membrane_val, gt_val, seeds_val, ids_val, merging_gt_val, merging_factor_val, merging_ids_val = bm_val.get_batches()
                 probs_val = probs_f(membrane_val)
                 bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
+                print eat_f()
             else:
                 membrane_val, gt_val, seeds_val, ids_val = bm_val.get_batches()
                 probs_val = probs_f(membrane_val)
@@ -226,9 +227,12 @@ def train_script_v1(options):
             probs = probs_f(membrane)
             bm.update_priority_queue(probs, seeds, ids)
         elif(options.merge_seeds):
-            membrane, gt, seeds, ids, merging_gt, merging_factor = bm.get_batches()
+            membrane, gt, seeds, ids, merging_gt, merging_factor, merging_ids = bm.get_batches()
             probs = probs_f(membrane)
             bm.update_priority_queue(probs, seeds, ids)
+            # check inf there are neighbours that could be merged
+            if np.any(merging_factor>0):
+                bm.update_merge(eat_f(membrane), merging_factor, merging_ids, ids)
         else:
             membrane, gt, seeds, ids = bm.get_batches()
             probs = probs_f(membrane)

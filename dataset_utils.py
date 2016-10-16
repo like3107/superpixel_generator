@@ -734,9 +734,7 @@ class HoneyBatcherPredict(object):
         # set global_batch and global_label_batch
         self.prepare_global_batch(start=start, allowed_slices=allowed_slices)
         self.get_seed_coords()
-        print 'seeds done'
         self.get_seed_ids()
-        print 'ids doine'
         self.initialize_priority_queue()
 
     def get_centers_from_queue(self):
@@ -2272,50 +2270,31 @@ def height_to_grad(height):
     grad[:,2,:,:] = height[:,1,:,:]-height[:,3,:,:]
     return grad
 
+class MergeDict(dict):
+    def __missing__(self, key):
+        return key
+
 class HungryHoneyBatcher(HoneyBatcherPath):
-    # def __init__(self,  membranes, raw=None, raw_key=None,
-    #              membrane_key=None,  label=None, label_key=None,
-    #              height_gt=None, height_gt_key=None,
-    #              batch_size=10,
-    #              global_edge_len=110, patch_len=40, padding_b=False,
-    #              find_errors_b=True, clip_method='clip',
-    #              seed_method="timo", slices=None,
-    #              z_stack = False, downsample = False,
-    #              scale_height_factor=None, perfect_play=False,
-    #              add_height_b=False,
-    #              lowercomplete_e=0.,
-    #              max_penalty_pixel=3):
-    #     super(HungryHoneyBatcher, self).__init__(
-    #         membranes=membranes,
-    #         membrane_key=membrane_key,
-    #         label=label,
-    #         label_key=label_key,
-    #         raw=raw, raw_key=raw_key,
-    #         batch_size=batch_size,
-    #         global_edge_len=global_edge_len,
-    #         patch_len=patch_len,
-    #         padding_b=padding_b,
-    #         seed_method=seed_method,
-    #         z_stack = z_stack,
-    #         downsample = downsample,
-    #         slices=slices,
-    #         perfect_play=perfect_play,
-    #         lowercomplete_e=lowercomplete_e,
-    #         max_penalty_pixel=max_penalty_pixel)
+
+    def init_batch(self, **kwargs):
+        super(HungryHoneyBatcher, self).init_batch(**kwargs)
+        self.merge_dict = [MergeDict() for b in range(self.bs)]
 
     def get_merging_gt(self, centers, ids):
         merging_gt = np.zeros((self.bs,4,1,1))
         merging_factor = np.zeros((self.bs,4,1,1))
+        merging_ids = np.zeros((self.bs,4,1,1))
 
         #TODO: make this fast with fewer array accesses by removing batch loop
         for b, center, Id, in zip(range(self.bs), centers, ids):
             # check if neigbour merge is possible
-            cross_x, cross_y, cross_d = self.get_cross_coords_offset(center)
+            cross_x, cross_y, cross_d = self.get_cross_coords(center)
             # self.global_claims[b,cross_x,cross_y] -
             claimed = self.global_claims[b,cross_x,cross_y] > 0
             neighbor_id = self.global_claims[b,cross_x,cross_y]
             different_id = neighbor_id - Id != 0
             merge_partner = np.logical_and(claimed, different_id)
+            # print "c,d",claimed,different_id,self.global_claims[b,cross_x,cross_y]
 
             # fast numpy check to avoid loop
             if np.any(merge_partner):
@@ -2331,22 +2310,43 @@ class HungryHoneyBatcher(HoneyBatcherPath):
                         # split region score
                         regions[:gt_A.shape[0]] = 2
                         rand_split = adjusted_rand_score(gt_AB,regions)
-                        print "split,union = ",rand_split,rand_union
-                        print "ids",Id,idx
+                        # print "split,union = ",rand_split,rand_union
+                        # print "ids",Id,idx
                         merging_factor[b,i,0,0] = 1
+                        merging_ids[b,i,0,0] = idx
                         if rand_union > rand_split:
                             merging_gt[b,i,0,0] = 1
                         else:
                             merging_gt[b,i,0,0] = 0
                             
-        return merging_gt, merging_factor
+        return merging_gt, merging_factor, merging_ids
 
     def get_batches(self):
         raw_batch, gts, centers, ids = super(HungryHoneyBatcher, self).get_batches()
-        merging_gt, merging_factor = self.get_merging_gt(centers, ids)
-        return raw_batch, gts, centers, ids, merging_gt, merging_factor
+        merging_gt, merging_factor, merging_ids = self.get_merging_gt(centers, ids)
+        return raw_batch, gts, centers, ids, merging_gt, merging_factor, merging_ids
+
+    def update_merge(self, merge_probs, merging_factor, merging_ids, ids):
+        print np.where(merging_factor != 0)
+        print np.transpose(np.where(merging_factor != 0))
+        for b, direction, _, _ in np.transpose(np.where(merging_factor != 0)):
+            # greedy merge if p > 0.5
+            if merge_probs[b,direction,0,0] >= 0.5:
+                print "merging ",ids[b], "and", merging_ids[b,direction,0,0]
+                self.merge_regions(b, ids[b],merging_ids[b,direction,0,0])
 
 
+    def merge_regions(self, batch, id1, id2):
+        claims = self.global_claims[batch]
+        claims[claims == id2] = id1
+        self.merge_dict[batch][id2] = id1
+
+    def get_centers_from_queue(self):
+        centers, ids, heights = \
+            super(HungryHoneyBatcher, self).get_centers_from_queue()
+        # translate ids if merged
+        translated_ids = [self.merge_dict[b][ids[b]] for b in range(self.bs)]
+        return centers, translated_ids, heights
 
 if __name__ == '__main__':
     # path = '/media/liory/DAF6DBA2F6DB7D67/cremi/final/CREMI-pmaps-padded/'
