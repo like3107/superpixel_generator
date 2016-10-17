@@ -20,6 +20,7 @@ from skimage.feature import peak_local_max
 from skimage.morphology import label
 from itertools import product
 from sklearn.metrics import adjusted_rand_score
+from nifty import ground_truth
 
 import h5py
 # from cv2 import dilate, erode
@@ -499,8 +500,8 @@ class HoneyBatcherPredict(object):
         self.error_indicator_pass = np.zeros((batch_size))
         self.global_time = 0
 
-        self.timo_min_len = 15
-        self.timo_sigma = 1.5
+        self.timo_min_len = 5
+        self.timo_sigma = 0.3
         # debug
         self.max_batch = 0
         self.counter = 0
@@ -589,7 +590,7 @@ class HoneyBatcherPredict(object):
                 [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
             self.global_seeds.append(seeds)
 
-    def get_overseed_coords(self, gridsize = 5):
+    def get_overseed_coords(self, gridsize = 20):
         """
         Seeds by grid
         :return:
@@ -2279,6 +2280,10 @@ class HungryHoneyBatcher(HoneyBatcherPath):
     def init_batch(self, **kwargs):
         super(HungryHoneyBatcher, self).init_batch(**kwargs)
         self.merge_dict = [MergeDict() for b in range(self.bs)]
+        self.merg_count_neg = 0
+        self.merg_count_pos = 0
+
+
 
     def get_merging_gt(self, centers, ids):
         merging_gt = np.zeros((self.bs,4,1,1))
@@ -2299,25 +2304,36 @@ class HungryHoneyBatcher(HoneyBatcherPath):
             # fast numpy check to avoid loop
             if np.any(merge_partner):
                 gt_A = self.global_label_batch[b][self.global_claims[b,self.pad:-self.pad,self.pad:-self.pad] == Id] 
-                print self.global_label_batch[b].shape, self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad].shape
+                # print self.global_label_batch[b].shape, self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad].shape
                 for i,idx,mp in zip(range(4), neighbor_id, merge_partner):
                     if mp:
                         gt_B = self.global_label_batch[b][self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad] == idx]
                         gt_AB = np.concatenate((gt_A,gt_B))
                         # union region score
                         regions = np.ones((gt_A.shape[0]+ gt_B.shape[0]))
-                        rand_union = adjusted_rand_score(gt_AB,regions)
+                        # rand_union = adjusted_rand_score(gt_AB,regions)
+                        VOI_union = ground_truth.variationOfInformation(
+                                                gt_AB, regions, False)[0]
                         # split region score
                         regions[:gt_A.shape[0]] = 2
-                        rand_split = adjusted_rand_score(gt_AB,regions)
-                        # print "split,union = ",rand_split,rand_union
+                        # rand_split = adjusted_rand_score(gt_AB,regions)
+                        VOI_split = ground_truth.variationOfInformation(
+                                                gt_AB, regions, False)[0]
+                        # print "AB ",gt_AB,regions
+                        # print "A ",gt_A
+                        # print "B ",gt_B
+                        # print "split,union = ",VOI_split,VOI_union
                         # print "ids",Id,idx
                         merging_factor[b,i,0,0] = 1
                         merging_ids[b,i,0,0] = idx
-                        if rand_union > rand_split:
+                        # combare variation of information (lower is better)
+                        if VOI_split > VOI_union:
                             merging_gt[b,i,0,0] = 1
+                            self.merg_count_pos += 1
                         else:
                             merging_gt[b,i,0,0] = 0
+                            self.merg_count_neg += 1
+                        # print 'pos,neg',self.merg_count_neg,self.merg_count_pos
                             
         return merging_gt, merging_factor, merging_ids
 
@@ -2327,12 +2343,13 @@ class HungryHoneyBatcher(HoneyBatcherPath):
         return raw_batch, gts, centers, ids, merging_gt, merging_factor, merging_ids
 
     def update_merge(self, merge_probs, merging_factor, merging_ids, ids):
-        print np.where(merging_factor != 0)
-        print np.transpose(np.where(merging_factor != 0))
+        # print np.where(merging_factor != 0)
+        # print np.transpose(np.where(merging_factor != 0))
         for b, direction, _, _ in np.transpose(np.where(merging_factor != 0)):
             # greedy merge if p > 0.5
+            # print merge_probs[b,direction,0,0]
             if merge_probs[b,direction,0,0] >= 0.5:
-                print "merging ",ids[b], "and", merging_ids[b,direction,0,0]
+                # print "merging ",ids[b], "and", merging_ids[b,direction,0,0]
                 self.merge_regions(b, ids[b],merging_ids[b,direction,0,0])
 
 

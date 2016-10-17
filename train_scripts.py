@@ -363,11 +363,11 @@ def train_script_v1(options):
 
             # merge loss (first because it is independent of exp replay)
             if options.merge_seeds and np.any(merging_factor>0):
-                print "ms",membrane.shape,merging_gt.shape,merging_factor.shape
+                # print "ms",membrane.shape,merging_gt.shape,merging_factor.shape
                 loss_train, loss_merging_batch = loss_merge_f(membrane,
                                     merging_gt.astype(theano.config.floatX),
                                     merging_factor.astype(theano.config.floatX))
-                print "merge_loss",loss_train, loss_merging_batch
+                # print "merge_loss",loss_train, loss_merging_batch
 
 
             if options.exp_bs > 0:
