@@ -590,7 +590,7 @@ class HoneyBatcherPredict(object):
                 [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
             self.global_seeds.append(seeds)
 
-    def get_overseed_coords(self, gridsize = 20):
+    def get_overseed_coords(self, gridsize = 12):
         """
         Seeds by grid
         :return:
@@ -1823,7 +1823,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         timemap = np.array(self.global_timemap[b, self.pad:-self.pad,
                                                self.pad:-self.pad])
-        timemap[timemap < 0] =0 
+        timemap[timemap < 0] = 0 
         plot_images.insert(11,{"title": "Time Map ",
                                 'im': timemap})
 
@@ -2010,12 +2010,13 @@ def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
     for b in range(n_z):
         # horizontal_lines = \
         #     sorted(
-        #         np.random.choice(edge_len,
+        #         min_distance*np.random.choice(edge_len/min_distance,
         #                          replace=False,
-        #                          size=int(edge_len * av_line_dens)))
-        horizontal_lines = np.array([2])
+        #                          size=int(edge_len/min_distance * av_line_dens)))
+        horizontal_lines = np.array([25,55,75])
         membrane_gt[b, horizontal_lines, :] = 1.
-        raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
+        # raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
+        raw[b] = membrane_gt[b].copy()
         last = 0
         i = 0
         for hl in horizontal_lines:
@@ -2034,7 +2035,6 @@ def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
     # plt.show()
     assert (np.all(gt != 0))
     return raw, raw, dist_trf, gt
-
 
 def generate_dummy_data2(batch_size, edge_len, patch_len, save_path=None):
     raw = np.zeros((batch_size, edge_len, edge_len))
@@ -2322,18 +2322,25 @@ class HungryHoneyBatcher(HoneyBatcherPath):
                         # print "AB ",gt_AB,regions
                         # print "A ",gt_A
                         # print "B ",gt_B
-                        # print "split,union = ",VOI_split,VOI_union
                         # print "ids",Id,idx
                         merging_factor[b,i,0,0] = 1
                         merging_ids[b,i,0,0] = idx
                         # combare variation of information (lower is better)
-                        if VOI_split > VOI_union:
+                        # if VOI_split > VOI_union:
+
+                        # check if majority of GT pixels agree
+                        most_A = np.argmax(np.bincount(gt_A.astype(np.int)))
+                        most_B = np.argmax(np.bincount(gt_B.astype(np.int)))
+                        if most_B == most_A:
                             merging_gt[b,i,0,0] = 1
                             self.merg_count_pos += 1
+                            print "A ",gt_A
+                            print "B ",gt_B
+                            print "split,union = ",VOI_split,VOI_union
                         else:
                             merging_gt[b,i,0,0] = 0
                             self.merg_count_neg += 1
-                        # print 'pos,neg',self.merg_count_neg,self.merg_count_pos
+                        print 'pos,neg',self.merg_count_pos,self.merg_count_neg
                             
         return merging_gt, merging_factor, merging_ids
 
@@ -2347,10 +2354,10 @@ class HungryHoneyBatcher(HoneyBatcherPath):
         # print np.transpose(np.where(merging_factor != 0))
         for b, direction, _, _ in np.transpose(np.where(merging_factor != 0)):
             # greedy merge if p > 0.5
-            # print merge_probs[b,direction,0,0]
-            if merge_probs[b,direction,0,0] >= 0.5:
-                # print "merging ",ids[b], "and", merging_ids[b,direction,0,0]
-                self.merge_regions(b, ids[b],merging_ids[b,direction,0,0])
+            print "merge_probs",merge_probs[b,direction,0,0],merging_factor[b,direction,0,0]
+            # if merge_probs[b,direction,0,0] >= 0.7:
+            #     print "merging ",ids[b], "and", merging_ids[b,direction,0,0]
+            #     self.merge_regions(b, ids[b],merging_ids[b,direction,0,0])
 
 
     def merge_regions(self, batch, id1, id2):
@@ -2415,8 +2422,8 @@ if __name__ == '__main__':
     #     bm.draw_debug_image('seed_%f_%i.png' % (sigma, ml), path='./data/nets/debug/images/')
     #
     #
-    path = '/media/liory/DAF6DBA2F6DB7D67/cremi/data/labeled/'
-    generate_quick_eval_big_FOV_z_slices(path, suffix='_first')
+    # path = '/media/liory/DAF6DBA2F6DB7D67/cremi/data/labeled/'
+    # generate_quick_eval_big_FOV_z_slices(path, suffix='_first')
     #
     # # generate_dummy_data(20, 300, 40, save_path='')
     #
@@ -2430,7 +2437,7 @@ if __name__ == '__main__':
     #
     # # loading from BM
     #
-    # # segmentation_to_membrane('./data/volumes/label_a.h5',"./data/volumes/height_a.h5")
+    segmentation_to_membrane('../data/volumes/label_honeycomb_2.h5',"../data/volumes/height_honeycomb_2.h5")
     # # segmentation_to_membrane('./data/volumes/label_b.h5',"./data/volumes/height_b.h5")
     #
     # # bm = BatchManV0(raw_path, label_path, batch_size=10, patch_len=60,

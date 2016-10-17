@@ -425,6 +425,12 @@ class NetBuilder:
         l_10 = cs.BatchChannelSlicer([l_9_height, l_in_direction])
         return l_in, l_in_direction, l_9_height, l_10, fov, None
 
+    def build_ID_v7_down_EAT_BN(self):
+        l_in, l_9, l_eat, fov = self.build_net_v7_EAT(n_channels=6)
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return l_in, l_in_direction, l_9, l_10, fov, l_eat
+
     def build_ID_v7_zstack_down_EAT_BN(self):
         l_in, l_9, l_eat, fov = self.build_net_v7_EAT(n_channels=10)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
@@ -541,6 +547,9 @@ class NetBuilder:
 
         all_params = L.get_all_params(last_layer, trainable=True)
         all_params_merge = L.get_all_params(eat_in, trainable=True)
+        print all_params_merge
+        [all_params_merge.remove(p) for p in all_params if p in all_params_merge]
+        print all_params_merge
 
         l_out_train = L.get_output(last_layer, deterministic=False)
         l_out_valid = L.get_output(last_layer, deterministic=True)
@@ -552,10 +561,10 @@ class NetBuilder:
                 las.regularization.l1)
 
         loss_individual_batch = (l_out_train - target)**2
-        loss_merging_batch = eat_factors*las.objectives.binary_crossentropy(l_out_train_eat, eat_gt)
+        loss_merging_batch = eat_factors*((l_out_train_eat - eat_gt)**2)
 
         loss_train = T.mean(loss_individual_batch)
-        loss_merge = T.mean(loss_merging_batch)
+        loss_merge = T.sum(loss_merging_batch)/T.sum(eat_factors)
 
         if L1_weight > 0:
             loss_train +=  L1_weight * L1_norm

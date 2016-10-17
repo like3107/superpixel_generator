@@ -14,6 +14,7 @@ import experience_replay as exp
 import h5py
 import sys
 import configargparse
+import time
 
 
 def train_script_v1(options):
@@ -358,17 +359,28 @@ def train_script_v1(options):
                         bm_val.init_batch(allowed_slices=val_sample_indices)
                     free_voxel = free_voxel_empty
 
+        # merge loss (first because it is independent of exp replay)
+        if options.merge_seeds and np.any(merging_factor>0):
+            # print "ms",membrane.shape,merging_gt.shape,merging_factor.shape
+            loss_train, loss_merging_batch = loss_merge_f(membrane,
+                                merging_gt.astype(theano.config.floatX),
+                                merging_factor.astype(theano.config.floatX))
+
+            # import lasagne as las
+
+            # l_out_train_eat = eat_f(membrane)
+            # print "mf",merging_factor
+            # print "lout ",l_out_train_eat
+            # print "gt ",merging_gt
+            # print "obj", las.objectives.squared_error(l_out_train_eat, merging_gt)
+            # print "fac ",merging_factor*las.objectives.squared_error(l_out_train_eat, merging_gt)
+            # loss_merging_batch = merging_factor*las.objectives.squared_error(l_out_train_eat, merging_gt)
+
+            # print "merge loss ideal ", (T.sum(loss_merging_batch)/T.sum(merging_factor)).eval()
+            print "merge_loss",loss_train
+
         # pre-training
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
-
-            # merge loss (first because it is independent of exp replay)
-            if options.merge_seeds and np.any(merging_factor>0):
-                # print "ms",membrane.shape,merging_gt.shape,merging_factor.shape
-                loss_train, loss_merging_batch = loss_merge_f(membrane,
-                                    merging_gt.astype(theano.config.floatX),
-                                    merging_factor.astype(theano.config.floatX))
-                # print "merge_loss",loss_train, loss_merging_batch
-
 
             if options.exp_bs > 0:
                 Memento.add_to_memory(membrane, gt)
