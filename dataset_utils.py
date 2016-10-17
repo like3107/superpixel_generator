@@ -766,6 +766,7 @@ class HoneyBatcherPredict(object):
         if self.downsample:
             out[last_index:last_index + 2, :, :] = self.crop_downsample(center, b)
             last_index += 2
+        return out
 
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
@@ -775,7 +776,8 @@ class HoneyBatcherPredict(object):
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
             assert (self.global_claims[b, center[0], center[1]] == 0)
             self.global_claims[b, center[0], center[1]] = Id
-            self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
+            raw_batch[b, :, :, :] = \
+                self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
             # check whether already pulled
             self.global_heightmap_batch[b,
                                         center[0] - self.pad,
@@ -947,9 +949,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         if self.z_stack:
             ind_b = (ind_b - 1) / 3
         for b in range(self.bs):
-
             self.global_height_gt_batch[b, :, :] = \
-                self.height_gt[ind_b[b],
+                self.height_gt[int(ind_b[b]),
                                ind_x[b]:ind_x[b] + self.global_el - self.pl,
                                ind_y[b]:ind_y[b] + self.global_el - self.pl]
             self.global_label_batch[b, :, :] = \
@@ -994,8 +995,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                         self.global_label_batch[b, :, :] == Id)
                     seed_ind = np.argmax(dist_trf[b][regions])
                     seed = np.array([regions[0][seed_ind],
-                                     np.random.randint(0, self.global_el - self.pl)]) + self.pad
-                                     # regions[1][seed_ind]]) + self.pad
+                                     # np.random.randint(0, self.global_el - self.pl)]) + self.pad
+                                     regions[1][seed_ind]]) + self.pad
                     seeds.append([seed[0], seed[1]])
                 self.global_seeds.append(seeds)
         else:
@@ -1165,9 +1166,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
             # project claim id to ground truth id by lookup
             gtmap = np.array([0]+self.global_id2gt[b].values())
-            print gtmap
-            print gtmap.shape
-            print self.global_claims[b].astype(int).shape
             claim_projection=gtmap[self.global_claims[b].astype(int)]
             claim_projection[self.pad-1,:]=claim_projection[self.pad,:]
             claim_projection[-self.pad,:]=claim_projection[-self.pad-1,:]
@@ -1280,26 +1278,26 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             save_error = True
                     if save_error:
                         self.global_error_dict[e_index] = new_error
-                        plot_images[-2] = \
-                            {"title": "Path Map",
-                             'scatter': np.array(
-                                 [np.array(e["large_pos"]) - self.pad
-                                     for e in self.global_error_dict.values()
-                                     if e["batch"] == b] +
-                                 [np.array(e["small_pos"]) - self.pad
-                                     for e in self.global_error_dict.values()
-                                     if e["batch"] == b]),
-                             'im': self.global_errormap[b, 2, :, :],
-                             'interpolation': 'none'}
-
-                        plot_images[-1] = {"title": "not found",
-                                           'im': not_found,
-                                           'interpolation': 'none'}
-                        # tmp debug
-                        print 'waring savign debug plot'
-                        u.save_images(plot_images, path="./../data/debug/",
-                                      name="path_test_"+str(b)+"_"+str(e_index[1])+
-                                           str(e_index[2])+".png")
+                        # plot_images[-2] = \
+                        #     {"title": "Path Map",
+                        #      'scatter': np.array(
+                        #          [np.array(e["large_pos"]) - self.pad
+                        #              for e in self.global_error_dict.values()
+                        #              if e["batch"] == b] +
+                        #          [np.array(e["small_pos"]) - self.pad
+                        #              for e in self.global_error_dict.values()
+                        #              if e["batch"] == b]),
+                        #      'im': self.global_errormap[b, 2, :, :],
+                        #      'interpolation': 'none'}
+                        #
+                        # plot_images[-1] = {"title": "not found",
+                        #                    'im': not_found,
+                        #                    'interpolation': 'none'}
+                        # # tmp debug
+                        # print 'waring savign debug plot'
+                        # u.save_images(plot_images, path="./../data/debug/",
+                        #               name="path_test_"+str(b)+"_"+str(e_index[1])+
+                        #                    str(e_index[2])+".png")
                 else:
                     print "no match found for path end"
                     not_found[center_x-self.pad, center_y-self.pad] = 1
@@ -1315,21 +1313,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     raise Exception("no match found for path end")
 
     def find_global_error_paths(self):
-
-        print 'before', self.global_error_dict
-
         self.locate_global_error_path_intersections()
-        print
-        print 'after', self.global_error_dict
-        print
         # now errors have been found so start and end of paths shall be found
         self.find_type_I_error()
-        print
-        print 'after find type I', self.global_error_dict
-        print
         self.find_source_of_II_error()
-
-        print self.global_error_dict
 
     # crossing from own gt ID into other ID
     def find_type_I_error(self):
@@ -1360,8 +1347,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     #  detect transition from "others" region to "me" region
                     if prev_in_other_region and not in_other_region:
                         original_error = np.array(pos)
-                        print 'found crossing. type II linked to type I. Error #',\
-                            self.counter
+                        # print 'found crossing. type II linked to type I. Error #',\
+                        #     self.counter
                         error_I["e1_pos"] = original_error
                         error_I["e1_time"] = self.global_timemap[batch,
                                                                  pos[0],
@@ -1378,19 +1365,23 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def find_end_of_plateau(self, start_position, start_direction, batch):
         current_height = self.global_heightmap_batch[batch,
-                                                         start_position[0]-self.pad,
-                                                start_position[1]-self.pad]
+                                                     start_position[0]-self.pad,
+                                                     start_position[1]-self.pad]
+        current_height -= self.lowercomplete_e
         current_direction = start_direction
         for pos, d in self.get_path_to_root(start_position, batch):
-            # check if the slope is not zero
+            # check if the slope is smaller than  zero
             if self.global_heightmap_batch[batch, pos[0]-self.pad, \
-                                            pos[1]-self.pad] \
+                                           pos[1]-self.pad] \
                                     < current_height:
                 return pos,current_direction
             if d >= 0:
                 # not at the end of the path
+                current_height -= self.lowercomplete_e
                 current_direction = d
+
         return pos, start_direction
+
 
     def find_source_of_II_error(self):
         for error in self.global_error_dict.values():
@@ -1520,6 +1511,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                          error_II_pos_list,
                                                          error_II_id_list,
                                                          error_batch_list)
+
         return reconst_e1, reconst_e2, np.array(error_I_direction), np.array(
             error_II_direction)
 
@@ -1963,7 +1955,8 @@ def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
         #                          size=int(edge_len * av_line_dens)))
         horizontal_lines = np.array([2])
         membrane_gt[b, horizontal_lines, :] = 1.
-        raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
+        raw[b, horizontal_lines, :] = 1.
+        # raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
         last = 0
         i = 0
         for hl in horizontal_lines:

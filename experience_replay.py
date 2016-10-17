@@ -174,11 +174,13 @@ class BatcherBatcherBatcher:
         priority /= np.sum(priority)
         return priority
 
+
 def stack_batch(b1, b2):
-    return np.stack((b1,b2)).swapaxes(0,1)
+    return np.stack((b1, b2)).swapaxes(0, 1)
+
 
 def flatten_stack(batch):
-    return np.concatenate((batch[:,0],batch[:,1]),axis=0)
+    return np.concatenate((batch[:, 0], batch[:, 1]), axis=0)
     
 
 class BatchMemento:
