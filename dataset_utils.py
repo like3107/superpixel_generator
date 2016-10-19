@@ -590,7 +590,7 @@ class HoneyBatcherPredict(object):
                 [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
             self.global_seeds.append(seeds)
 
-    def get_overseed_coords(self, gridsize = 12):
+    def get_overseed_coords(self, gridsize = 7):
         """
         Seeds by grid
         :return:
@@ -1110,10 +1110,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         gts = np.zeros((self.bs, 4, 1, 1), dtype='float32')
         for b in range(self.bs):
             if self.add_height_b:
-                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
-            else:
                 gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b,
                                                             ids[b])
+            else:
+                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
         assert (not np.any(gts < 0))
         assert (np.any(np.isfinite(raw_batch)))
         assert (not np.any(raw_batch < 0))
@@ -2013,7 +2013,7 @@ def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
         #         min_distance*np.random.choice(edge_len/min_distance,
         #                          replace=False,
         #                          size=int(edge_len/min_distance * av_line_dens)))
-        horizontal_lines = np.array([25,55,75])
+        horizontal_lines = np.array([10])
         membrane_gt[b, horizontal_lines, :] = 1.
         # raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
         raw[b] = membrane_gt[b].copy()
@@ -2275,6 +2275,16 @@ class MergeDict(dict):
     def __missing__(self, key):
         return key
 
+    def get_merge_id(self, idx):
+        t = idx
+        while self[t] != t:
+            t = self[t]
+        return t
+
+    def merge(self, id1, id2):
+        self[max(id1, id2)] = min(id1, id2)
+        return min(id1, id2), max(id1, id2)
+
 class HungryHoneyBatcher(HoneyBatcherPath):
 
     def init_batch(self, **kwargs):
@@ -2334,13 +2344,9 @@ class HungryHoneyBatcher(HoneyBatcherPath):
                         if most_B == most_A:
                             merging_gt[b,i,0,0] = 1
                             self.merg_count_pos += 1
-                            print "A ",gt_A
-                            print "B ",gt_B
-                            print "split,union = ",VOI_split,VOI_union
                         else:
                             merging_gt[b,i,0,0] = 0
                             self.merg_count_neg += 1
-                        print 'pos,neg',self.merg_count_pos,self.merg_count_neg
                             
         return merging_gt, merging_factor, merging_ids
 
@@ -2354,22 +2360,23 @@ class HungryHoneyBatcher(HoneyBatcherPath):
         # print np.transpose(np.where(merging_factor != 0))
         for b, direction, _, _ in np.transpose(np.where(merging_factor != 0)):
             # greedy merge if p > 0.5
-            print "merge_probs",merge_probs[b,direction,0,0],merging_factor[b,direction,0,0]
-            # if merge_probs[b,direction,0,0] >= 0.7:
-            #     print "merging ",ids[b], "and", merging_ids[b,direction,0,0]
-            #     self.merge_regions(b, ids[b],merging_ids[b,direction,0,0])
+            # print "merge_probs",merge_probs[b,direction,0,0],merging_factor[b,direction,0,0]
+            if merge_probs[b,direction,0,0] >= 0.7:
+                print "merging ",ids[b], "and", merging_ids[b,direction,0,0]
+                self.merge_regions(b, ids[b],merging_ids[b,direction,0,0])
 
 
     def merge_regions(self, batch, id1, id2):
+        merge_id, old_id = self.merge_dict[batch].merge(id1, id2)
+
         claims = self.global_claims[batch]
-        claims[claims == id2] = id1
-        self.merge_dict[batch][id2] = id1
+        claims[claims == old_id] = merge_id
 
     def get_centers_from_queue(self):
         centers, ids, heights = \
             super(HungryHoneyBatcher, self).get_centers_from_queue()
         # translate ids if merged
-        translated_ids = [self.merge_dict[b][ids[b]] for b in range(self.bs)]
+        translated_ids = [self.merge_dict[b].get_merge_id(ids[b]) for b in range(self.bs)]
         return centers, translated_ids, heights
 
 if __name__ == '__main__':

@@ -213,8 +213,8 @@ class NetBuilder:
         l_6 = L.Conv2DLayer(l_5, n_filt[3], 1,
                             nonlinearity=las.nonlinearities.rectify)
         l_7 = L.Conv2DLayer(l_6, n_filt[4], 1,
-                            nonlinearity=las.nonlinearities.rectify,
-                            b=np.random.random(n_classes)*10+10.)
+                            nonlinearity=las.nonlinearities.rectify)
+                            # b=np.random.random(n_classes)*10+10.)
         return l_in, l_7, fov
 
     def build_net_v6_BN(self, n_classes = 4,
