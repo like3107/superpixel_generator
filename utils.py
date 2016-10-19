@@ -190,7 +190,64 @@ def get_stack_indices(name,network):
 # def get_allowed_indices_overlap():
 #     if
 
+def get_line(start, end):
+    """Bresenham's Line Algorithm
+    Produces a list of tuples from start and end
 
+     points1 = get_line((0, 0), (3, 4))
+     points2 = get_line((3, 4), (0, 0))
+     assert(set(points1) == set(points2))
+     print points1
+    [(0, 0), (1, 1), (1, 2), (2, 3), (3, 4)]
+     print points2
+    [(3, 4), (2, 3), (1, 2), (1, 1), (0, 0)]
+    """
+    # Setup initial conditions
+    x1, y1 = start
+    x2, y2 = end
+    dx = x2 - x1
+    dy = y2 - y1
+
+    # Determine how steep the line is
+    is_steep = abs(dy) > abs(dx)
+
+    # Rotate line
+    if is_steep:
+        x1, y1 = y1, x1
+        x2, y2 = y2, x2
+
+    # Swap start and end points if necessary and store swap state
+    swapped = False
+    if x1 > x2:
+        x1, x2 = x2, x1
+        y1, y2 = y2, y1
+        swapped = True
+
+    # Recalculate differentials
+    dx = x2 - x1
+    dy = y2 - y1
+
+    # Calculate error
+    error = int(dx / 2.0)
+    ystep = 1 if y1 < y2 else -1
+
+    # Iterate over bounding box generating points between start and end
+    y = y1
+    x_points = []
+    y_points = []
+    for x in range(x1, x2 + 1):
+        coord = (y, x) if is_steep else (x, y)
+        x_points.append(coord[0])
+        y_points.append(coord[1])
+        error -= abs(dy)
+        if error < 0:
+            y += ystep
+            error += dx
+
+    # Reverse the list if the coordinates were swapped
+    # if swapped:
+        # points.reverse()
+    return np.array(x_points), np.array(y_points)
 
 
 def get_n_channels(network):
@@ -229,6 +286,52 @@ def create_network_folder_structure(save_net_path,
     os.system('cp -rf ./../data/config/*.conf ' + save_net_path + code_save_folder)
 
 
+def get_seed_coords(global_label_batch, rand_x_coord_seed=False, pl=40,
+                    ignore_0=False):
+    """
+    Seeds by minima of dist trf of thresh of memb prob
+    :return:
+    """
+    bs = global_label_batch.shape[0]
+    global_el = global_label_batch.shape[1]
+    global_seeds = []
+    pad = pl / 2
+    seed_ids = []
+    dist_trf = np.zeros_like(global_label_batch)
+    for b in range(bs):
+        seed_ids.append(np.unique(
+            global_label_batch[b, :, :]).astype(int))
+
+        _, dist_trf[b, :, :] = \
+            du.segmenation_to_membrane_core(
+                global_label_batch[b, :, :])
+
+    for b, ids in zip(range(bs),
+                      seed_ids):  # iterates over batches
+        seeds = []
+        for Id in ids:  # ids within each slice
+            if Id == 0 and ignore_0:
+                continue
+            regions = np.where(
+                global_label_batch[b, :, :] == Id)
+            seed_ind = np.argmax(dist_trf[b][regions])
+            if rand_x_coord_seed:
+                seed = \
+                    np.array([regions[0][seed_ind],
+                              np.random.randint(0,
+                                                global_el - pl)])
+
+            else:
+                seed = \
+                    np.array([regions[0][seed_ind],
+                              regions[1][seed_ind]]) + pad
+
+            seeds.append([seed[0], seed[1]])
+        global_seeds.append(seeds)
+
+    return global_seeds
+
+
 def load_network(load_path, l_last):
     h5_keys = []
     all_params = las.layers.get_all_params(l_last)
@@ -236,7 +339,7 @@ def load_network(load_path, l_last):
     for param in all_params:
         i += 1
         h5_keys.append(str(param) + str(i))
-
+    print 'load', load_path, 'keys', h5_keys
     all_param_values = du.load_h5(load_path, h5_keys)
     las.layers.set_all_param_values(l_last, all_param_values)
 

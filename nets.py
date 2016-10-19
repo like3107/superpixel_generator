@@ -357,7 +357,7 @@ class NetBuilder:
         l_in, l_9, fov = self.build_ID_v0()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
-        return l_in, l_in_direction, l_9, l_10, fov, None
+        return l_in, l_in_direction, l_9, l_10, fov
 
 
     def build_ID_v01_hydra(self):
