@@ -21,7 +21,7 @@ from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
 from skimage.morphology import label, watershed
 from itertools import product
-from sklearn.metrics import adjusted_rand_score
+# from sklearn.metrics import adjusted_rand_score
 import h5py
 # from cv2 import dilate, erode
 
