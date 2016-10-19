@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 # matplotlib.use('Qt4Agg')
 import os
 from theano import tensor as T
@@ -71,9 +71,9 @@ def train_script_v1(options):
 
     if options.dummy_data_b:
         raw_path, membrane_path, height_gt_path, label_path = \
-            du.generate_dummy_data(options.batch_size, options.global_edge_len)
+            du.generate_dummy_data2(options.batch_size, options.global_edge_len)
         raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
-            du.generate_dummy_data(options.batch_size, options.global_edge_len)
+            du.generate_dummy_data2(options.batch_size, options.global_edge_len)
 
     print 'compiling theano functions'
     target_t = T.ftensor4()
@@ -113,9 +113,9 @@ def train_script_v1(options):
                           L1_weight=options.regularization, margin=options.margin)
         Memento_ft = exp.BatchMemento()
 
-    print raw_path
-    print label_path
-    print height_gt_path
+    # print raw_path
+    # print label_path
+    # print height_gt_path
 
     print 'Loading data and Priority queue init'
     bm = BM(membrane_path, label=label_path,
@@ -132,7 +132,8 @@ def train_script_v1(options):
            perfect_play=options.perfect_play,
            add_height_b=options.add_height_penalty,
            lowercomplete_e=options.lowercomplete_e,
-           max_penalty_pixel=options.max_penalty_pixel)
+           max_penalty_pixel=options.max_penalty_pixel,
+           rand_x_coord_seed=False)
     bm.init_batch(allowed_slices=sample_indices)
 
     if options.val_b:
@@ -149,7 +150,8 @@ def train_script_v1(options):
                     downsample = ("down" in options.net_arch),
                     scale_height_factor=options.scale_height_factor,
                     lowercomplete_e=options.lowercomplete_e,
-                    max_penalty_pixel=options.max_penalty_pixel)
+                    max_penalty_pixel=options.max_penalty_pixel,
+                    rand_x_coord_seed=False)
         bm_val.init_batch(allowed_slices=val_sample_indices)
 
     if options.padding_b:
@@ -271,13 +273,16 @@ def train_script_v1(options):
                 (iteration, bm.counter, free_voxel),
                 path=save_net_path_reset)
 
-            print 'starting Finetuning...'
-            bm.find_global_error_paths()
+            if options.fine_tune_b:
+                bm.find_global_error_paths()
             # check whether there are any batches with errors
-            if bm.count_new_path_errors() > 0:
+            if bm.count_new_path_errors() > 0 and options.fine_tune_b \
+                    and iteration > options.pre_train_iter:
+                print 'starting Finetuning...'
                 error_b_type1, error_b_type2, dir1, dir2 = \
                     bm.reconstruct_path_error_inputs()
-
+                # bm.draw_error_paths('error_paths_it_%i' %iteration)
+                # bm.draw_error_reconst('error_rec_it_%i' %iteration)
                 batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
                 batch_dir_ft = exp.stack_batch(dir1, dir2)
                 
@@ -466,6 +471,7 @@ if __name__ == '__main__':
 
     options = get_options()
     print options
+    print os.system('pwd')
     # remove unnecessary parameter combinations
     if options.exp_bs == 0:
         options.exp_save = False
