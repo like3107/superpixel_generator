@@ -113,7 +113,7 @@ def train_script_v1(options):
                             weight_last=options.exp_wlast)
 
     if options.exp_load != "None":
-        np.random.seed(len(options.net_name))
+        # np.random.seed(len(options.net_name))
         print "loading Memento from ", options.exp_load
         Memento.load(options.exp_load)
 

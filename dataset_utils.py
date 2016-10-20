@@ -1206,16 +1206,16 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         return height, _, center_x, center_y, Id, direction, error_indicator, \
                     time_put
 
-    def get_path_to_root(self, start_position, batch):
+    def update_position(self, pos, direction):
+        """
+        update position by following the minimal spanning tree backwards
+        for this reason: subtract direction for direction offset
+        """
+        offsets = self.coordinate_offset[int(direction)]
+        new_pos = [pos[0] - offsets[0], pos[1] - offsets[1]]
+        return new_pos
 
-        def update_position(pos, direction):
-            """ 
-            update position by following the minimal spanning tree backwards
-            for this reason: subtract direction for direction offset
-            """
-            offsets = self.coordinate_offset[int(direction)]
-            new_pos = [pos[0] - offsets[0], pos[1] - offsets[1]]
-            return new_pos
+    def get_path_to_root(self, start_position, batch):
 
         current_position = start_position
         current_direction = \
@@ -1224,8 +1224,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                            current_position[1]-self.pad]
         yield start_position, current_direction
         while current_direction != -1:
-            current_position = update_position(current_position,
-                                               current_direction)
+            current_position = self.update_position(current_position,
+                                                    current_direction)
             current_direction = \
                 self.global_directionmap_batch[batch,
                                                current_position[0]-self.pad,
@@ -1234,7 +1234,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def locate_global_error_path_intersections(self):
         for b in range(self.bs):
-            plot_images = []
+            # plot_images = []
 
             # project claim id to ground truth id by lookup
             gtmap = np.array([0]+self.global_id2gt[b].values())
@@ -1244,22 +1244,22 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             claim_projection[:,self.pad-1]=claim_projection[:,self.pad]
             claim_projection[:,-self.pad]=claim_projection[:,-self.pad-1]
             not_found = np.zeros_like(claim_projection)
-
-            plot_images.append({"title": "claim",
-                                'cmap': "rand",
-                                'im': self.global_claims[b,
-                                                         self.pad:-self.pad,
-                                                         self.pad:-self.pad]})
-            plot_images.append({"title": "gt",
-                                'cmap': "rand",
-                                'im': self.global_label_batch[b]})
-            plot_images.append({"title": "mix",
-                                'cmap': "rand",
-                                'im': claim_projection[self.pad:-self.pad,
-                                                       self.pad:-self.pad]})
-            plot_images.append({"title": "overflow",
-                                    'cmap': "grey",
-                                    'im': self.global_errormap[b, 1]})
+            #
+            # plot_images.append({"title": "claim",
+            #                     'cmap': "rand",
+            #                     'im': self.global_claims[b,
+            #                                              self.pad:-self.pad,
+            #                                              self.pad:-self.pad]})
+            # plot_images.append({"title": "gt",
+            #                     'cmap': "rand",
+            #                     'im': self.global_label_batch[b]})
+            # plot_images.append({"title": "mix",
+            #                     'cmap': "rand",
+            #                     'im': claim_projection[self.pad:-self.pad,
+            #                                            self.pad:-self.pad]})
+            # plot_images.append({"title": "overflow",
+            #                         'cmap': "grey",
+            #                         'im': self.global_errormap[b, 1]})
 
             # find where path crosses region
             gx = convolve(claim_projection + 1, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -1271,34 +1271,64 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                            self.global_errormap[b, 1])
 
 
-            plot_images.append({"title": "path_fin_0",
-                        'cmap': "grey",
-                        'im': path_fin_map})
+            # plot_images.append({"title": "path_fin_0",
+            #             'cmap': "grey",
+            #             'im': path_fin_map})
             np.logical_and(path_fin_map,
                            (self.global_claims[b,
                                                self.pad:-self.pad,
                                                self.pad:-self.pad] > 0),
                            out=path_fin_map)
-            plot_images.append({"title": "path_fin_1",
-                                    'cmap': "grey",
-                                    'im': path_fin_map})
-            plot_images.append({"title": "boundary",
-                                'cmap': "grey",
-                                'im': boundary[self.pad:-self.pad,
-                                               self.pad:-self.pad]})
+            # plot_images.append({"title": "path_fin_1",
+            #                         'cmap': "grey",
+            #                         'im': path_fin_map})
+            # plot_images.append({"title": "boundary",
+            #                     'cmap': "grey",
+            #                     'im': boundary[self.pad:-self.pad,
+            #                                    self.pad:-self.pad]})
             # u.save_images(plot_images, path="./../data/debug/",
             #               name="path_test_"+str(b)+".png")
-            plot_images.append([])
-            plot_images.append([])
+            # plot_images.append([])
+            # plot_images.append([])
             wrong_path_ends = np.transpose(np.where(path_fin_map)) + self.pad
             for center_x, center_y in wrong_path_ends:
                 # print "path for ", center_x, center_y
                 def error_index(b, id1, id2)    :
                     return b, min(id1, id2), max(id1, id2)
 
-                # check around intruder
+                def get_error_dict(b, x, y, center_x, center_y,
+                                   reverse_direction, slow_intruder,
+                                   touch_x, touch_y):
+                    new_error = \
+                            {"batch": b,
+                            # get time from center it was predicted from
+                            "touch_time": self.global_timemap[b,
+                                                              touch_x, touch_y],
+                            "large_pos": [center_x, center_y],
+                            "large_direction": direction,
+                            "large_id": self.global_claims[b,
+                                                           center_x,
+                                                           center_y],
+                            "large_gtid": claim_projection[center_x,
+                                                           center_y],
+                            "small_pos": [x, y],
+                            "small_direction": reverse_direction,
+                            "small_gtid": claim_projection[x, y],
+                            "small_id": self.global_claims[b, x, y],
+                            "slow_intruder": slow_intruder}
+                    assert (new_error["large_gtid"] != new_error["small_gtid"])
+                    assert (new_error["large_id"] != new_error["small_id"])
+                    return new_error
+
+                # check around intruder, claim pred = large pred = intruder
+                claim_height = self.global_heightmap_batch[b,
+                                                         center_x - self.pad,
+                                                         center_y - self.pad]
+                large_time = self.global_timemap[b, center_x, center_y]
                 small_pred = np.inf
+                small_height_old = np.inf
                 touch_time_old = np.inf
+                fast_intruder_found = False
                 new_error = {}
                 for x, y, direction in self.walk_cross_coords([center_x,
                                                                center_y]):
@@ -1316,26 +1346,35 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                        center_x - self.pad,
                                                        center_y - self.pad,
                                                        reverse_direction]
-                        if prediction <= small_pred:
+                        small_time = self.global_timemap[b, x, y]
+                        if prediction < claim_height:
+                            raise Exception('this violates PQ structure')
+                        # intruder runs into resident (fast intruder)
+                        elif prediction < small_pred and \
+                                small_time < large_time:
+                            fast_intruder_found = True      # prioritized
                             small_pred = prediction
-                            new_error = {"batch": b,
-                                 # get time from center it was predicted from
-                                 "touch_time": self.global_timemap[b, x, y],
-                                 "large_pos": [center_x, center_y],
-                                 "large_direction": direction,
-                                 "large_id": self.global_claims[b,
-                                                                center_x,
-                                                                center_y],
-                                 "large_gtid": claim_projection[center_x,
-                                                                center_y],
-                                 "small_pos": [x, y],
-                                 "small_direction": reverse_direction,
-                                 "small_gtid": claim_projection[x, y],
-                                 "small_id": self.global_claims[b,x, y]}
-                            assert(new_error["large_gtid"] != new_error["small_gtid"])
-                            assert(new_error["large_id"] != new_error["small_id"])
-
-                self.global_errormap[b, 2, x-self.pad,y-self.pad] = -1
+                            new_error = get_error_dict(b, x, y, center_x,
+                                                      center_y,
+                                                      reverse_direction,
+                                                      False,
+                                                      center_x, center_y)
+                        # slow intruder
+                        elif not fast_intruder_found:   # prioritized
+                            small_height = \
+                                self.global_heightmap_batch[b,
+                                                            x - self.pad,
+                                                            y - self.pad]
+                            if small_height >= claim_height and \
+                                    small_height <= small_height_old:
+                                small_height_old = small_height
+                                assert (large_time < small_time)
+                                new_error = get_error_dict(b, x, y, center_x,
+                                                           center_y,
+                                                           reverse_direction,
+                                                           True,
+                                                           x, y)
+                # self.global_errormap[b, 2, x-self.pad,y-self.pad] = -1
                 if new_error != {}:
                     # print new_error
                     e_index = error_index(b, new_error["small_gtid"],
@@ -1461,15 +1500,26 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 batch = error["batch"]
                 start_position = error["small_pos"]
                 start_direction = error["small_direction"]
+                if error["slow_intruder"]:
+                    start_direction = \
+                        self.global_directionmap_batch[
+                            batch,
+                            start_position[0] - self.pad,
+                            start_position[1] - self.pad]
+                    start_position = self.update_position(start_position,
+                                                          start_direction)
 
-                error["e2_pos"], error["e2_direction"] = \
-                                self.find_end_of_plateau(start_position,
-                                start_direction,
-                                batch)
-                assert(error["e2_direction"] >= 0)
+                    error["e2_pos"], error["e2_direction"] = \
+                                    self.find_end_of_plateau(start_position,
+                                    start_direction,
+                                    batch)
+                else:
+                    error["e2_pos"], error["e2_direction"] = \
+                        start_position,  start_direction
+                assert (error["e2_direction"] >= 0)
                 error["e2_time"] = self.global_timemap[batch,
-                                               error["e2_pos"][0],
-                                               error["e2_pos"][1]]
+                                                       error["e2_pos"][0],
+                                                       error["e2_pos"][1]]
 
     def check_type_II_errors(self, center_x, center_y, Id, b):
         def error_index(b, id1, id2):
@@ -2029,7 +2079,7 @@ def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
         #         min_distance*np.random.choice(edge_len/min_distance,
         #                          replace=False,
         #                          size=int(edge_len/min_distance * av_line_dens)))
-        horizontal_lines = np.array([10])
+        horizontal_lines = np.array([5])
         membrane_gt[b, horizontal_lines, :] = 1.
         # raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
         raw[b] = membrane_gt[b].copy()
@@ -2106,8 +2156,8 @@ def generate_dummy_data3(batch_size, edge_len, patch_len=40, save_path=None,
     dist_trf = np.zeros_like(raw)
 
     # get membrane gt
-    boundary = random_lines2(n_lines=5, bs=batch_size, edge_len=edge_len)
-    boundary[:, 25, :] = 1
+    boundary = random_lines2(n_lines=3, bs=batch_size, edge_len=edge_len)
+    boundary[:, 5, :] = 1
     invers_memb = np.ones_like(boundary)
     invers_memb[boundary == 1] = 0
 

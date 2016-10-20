@@ -641,7 +641,7 @@ class NetBuilder:
                                                          las.regularization.l1)
 
         # typeII - typeI + m
-        individual_batch = T.max(l_out_train[:bs/2] - l_out_train[bs/2:] + margin,0)
+        individual_batch = (l_out_train[bs/2:] - l_out_train[:bs/2] + margin)
         loss_train = T.mean(individual_batch)
         if L1_weight > 0:
             loss_train += L1_weight * L1_norm
