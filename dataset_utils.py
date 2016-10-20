@@ -576,6 +576,28 @@ class HoneyBatcherPredict(object):
         if inherit_code:
             return ind_b, ind_x, ind_y
 
+    def get_num_free_voxel(self):
+        return np.sum(self.global_claims[0] == 0)
+        return (self.global_edge_len - self.pl)**2
+
+    def reduce_to_1d(self):
+
+        # reduce to horizontal line in 
+        h = self.global_claims.shape[2]/2
+
+        # reduce unclaimed region to single strip
+        self.global_claims[:,:,:h] = -1
+        self.global_claims[:,:,h+1:] = -1
+
+        xcoord1 = np.sum(self.global_claims[:,:,h]==-1)/2
+        xcoord2 = self.global_claims.shape[1] - xcoord1 -1
+
+        self.global_seeds = []
+        for b in range(self.bs):
+            seeds_b = [(x,y) for x,y in [(xcoord1,h),(xcoord2,h)]]
+            print seeds_b
+            self.global_seeds.append(seeds_b)
+
     def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
         """
         Seeds by minima of dist trf of thresh of memb prob
@@ -735,6 +757,7 @@ class HoneyBatcherPredict(object):
         # set global_batch and global_label_batch
         self.prepare_global_batch(start=start, allowed_slices=allowed_slices)
         self.get_seed_coords()
+        self.reduce_to_1d()
         self.get_seed_ids()
         self.initialize_priority_queue()
 
@@ -1237,7 +1260,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             # plot_images = []
 
             # project claim id to ground truth id by lookup
-            gtmap = np.array([0]+self.global_id2gt[b].values())
+            gtmap = np.array([0]+self.global_id2gt[b].values()+[0])
             claim_projection=gtmap[self.global_claims[b].astype(int)]
             claim_projection[self.pad-1,:]=claim_projection[self.pad,:]
             claim_projection[-self.pad,:]=claim_projection[-self.pad-1,:]
@@ -1261,6 +1284,13 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             #                         'cmap': "grey",
             #                         'im': self.global_errormap[b, 1]})
 
+
+            # add border for 1d case
+            # h = self.global_claims.shape[2]/2
+            # claim_projection[:,h+1]=claim_projection[:,h]
+            # claim_projection[:,h-1]=claim_projection[:,h]
+
+
             # find where path crosses region
             gx = convolve(claim_projection + 1, np.array([-1., 0., 1.]).reshape(1, 3))
             gy = convolve(claim_projection + 1, np.array([-1., 0., 1.]).reshape(3, 1))
@@ -1270,6 +1300,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                     self.pad:-self.pad],
                                            self.global_errormap[b, 1])
 
+            plot_images.append({"title": "gx",
+                        'cmap': "grey",
+                        'im': gx})
+            plot_images.append({"title": "gy",
+                        'cmap': "grey",
+                        'im': gy})
 
             # plot_images.append({"title": "path_fin_0",
             #             'cmap': "grey",

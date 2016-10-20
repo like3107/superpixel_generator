@@ -182,7 +182,7 @@ def train_script_v1(options):
     fine_tune_losses = [[], []]
     iterations = []
     ft_iteration = 0
-    free_voxel_empty = (options.global_edge_len - patch_len)**2
+    free_voxel_empty = bm.get_num_free_voxel()
     free_voxel = free_voxel_empty
     while not converged and (iteration < options.max_iter):
         iteration += 1
@@ -361,6 +361,7 @@ def train_script_v1(options):
                                         ['ft loss no reg no dropout', 'ft loss'])
 
                 if options.reset_after_fine_tune:
+                    print "reset after ft"
                     bm.init_batch(allowed_slices=sample_indices)
                     if options.val_b:
                         bm_val.init_batch(allowed_slices=val_sample_indices)
@@ -437,6 +438,8 @@ def train_script_v1(options):
             if options.fine_tune_b:
                 bm.find_global_error_paths()
             # check whether there are any batches with errors
+            print bm.count_new_path_errors()
+
             if bm.count_new_path_errors() > 0 and options.fine_tune_b \
                     and iteration > options.pre_train_iter:
                 print 'starting Finetuning...'
@@ -469,6 +472,11 @@ def train_script_v1(options):
 
                 save_net_path_pre = save_net_path_ft
 
+                bm.draw_error_paths("train_path_error_iter_%08i_counter_%i" %
+                                        (iteration, bm.counter),
+                                        path=save_net_path_ft)
+
+
                 # Memento_ft.get_batch(options.batch_size_ft + options.exp_ft_bs)
                 # if options.augment_ft:
                 #     batch_ft_t1, dir_t1 = du.augment_batch(batch_ft[:,0],
@@ -497,6 +505,7 @@ def train_script_v1(options):
                 else:
                     print "skipping quick eval"
                 bm_val.init_batch(allowed_slices=val_sample_indices)
+            print "reset 2"
             bm.init_batch(allowed_slices=sample_indices)
             free_voxel = free_voxel_empty
 
