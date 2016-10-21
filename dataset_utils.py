@@ -24,420 +24,37 @@ from itertools import product
 # from sklearn.metrics import adjusted_rand_score
 import h5py
 # from cv2 import dilate, erode
-
-
-def cut_reprs(path):
-    label_path = path + 'label_first_repr_big_zstack_cut.h5'
-    memb_path = path + 'membranes_first_repr_big_zstack.h5'
-    raw_path = path + 'raw_first_repr_big_zstack.h5'
-
-    label = load_h5(label_path)[0][:, :300, :300].astype(np.uint64)
-    memb = load_h5(memb_path)[0][:, :300, :300]
-    raw = load_h5(raw_path)[0][:, :300, :300]
-
-    save_h5(path + 'label_first_repr_zstack_cut.h5', 'data', data=label, overwrite='w')
-    # save_h5(path + 'membranes_first_repr_zstack.h5', 'data', data=memb)
-    # save_h5(path + 'raw_first_repr_zstack.h5', 'data', data=raw)
-
-
-def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
-    if not exists(path):
-        error = 'path: %s does not exist, check' % path
-        raise Exception(error)
-    f = h.File(path, 'r')
-    if group is not None:
-        g = f[group]
-        if group2 is not None:
-            g = g[group2]
-    else:   # no groups in file structure
-        g = f
-    if h5_key is None:     # no h5 key specified
-        output = list()
-        for key in g.keys():
-            output.append(np.array(g[key], dtype='float32'))
-    elif isinstance(h5_key, basestring):   # string
-        output = [np.array(g[h5_key], dtype='float32')]
-    elif isinstance(h5_key, list):          # list
-        output = list()
-        for key in h5_key:
-            output.append(np.array(g[key], dtype='float32'))
-    else:
-        raise Exception('h5 key type is not supported')
-    if slices is not None:
-        output = [output[0][slices]]
-    f.close()
-    return output
-
-
-def save_h5(path, h5_key, data, overwrite='w-'):
-    f = h.File(path, overwrite)
-    if isinstance(h5_key, str):
-        f.create_dataset(h5_key, data=data)
-    if isinstance(h5_key, list):
-        for key, values in zip(h5_key, data):
-            f.create_dataset(key, data=values)
-    f.close()
-
-
-def mirror_cube(array, pad_length):
-    assert (len(array.shape) == 3)
-    mirrored_array = np.pad(array, ((0, 0), (pad_length, pad_length),
-                                    (pad_length, pad_length)), mode='reflect')
-    return mirrored_array
-
-
-def make_array_cumulative(array):
-    ids = np.unique(array)
-    cumulative_array = np.zeros_like(array)
-    for i in range(len(ids)):
-        print '\r %f %%' % (100. * i / len(ids)),
-        cumulative_array[array == ids[i]] = i
-    return cumulative_array
-
-
-def prpare_seg_path_wrapper(path, names):
-    for name in names:
-        segmentation = load_h5(path + 'seg_%s.h5' % name)[0]
-        segmentation = prepare_data_mc(segmentation)
-        save_h5(path + 'seg_%s_MC.h5' % name, 'data',
-                data=segmentation.astype(np.uint32), overwrite='w')
-
-
-def prepare_data_mc(segmentation):
-    """
-    input 2D segmentation in (x,y,z) returns 2D in (z, x, y) and non repeating
-    ids
-    :param segmentation:
-    :return:
-    """
-    max_id = 0
-    for slice in segmentation:
-        slice += max_id
-        max_id = np.max(slice) + 1
-    segmentation = np.swapaxes(segmentation, 0, 2).astype(np.uint64)
-    segmentation = segmentation[:, 75:-75, :]
-    print 'seg fi', segmentation.shape
-    # exit()
-    return segmentation
-
-
-def prepare_aligned_test_data(path):
-    print 'preparing test data for prediction'
-    for version in ['A+', 'C+']:
-        print 'version', version
-        memb_probs_path = path + '/sample%s_cantorFinal_pmaps_corrected.h5' % version
-        raw_path = path + '/sample%s_raw_corrected.h5' % version
-
-        memb_probs = load_h5(memb_probs_path)[0]
-        raw = load_h5(raw_path)[0]
-        print 'before: memb, raw', memb_probs.shape, raw.shape
-        memb_probs = memb_probs.swapaxes(0, 2)
-        raw = raw.swapaxes(0, 2)
-        if version == 'A+':
-            raw = np.pad(raw, ((0, 0), (38, 37), (0, 0)), 'reflect')
-            memb_probs = np.pad(memb_probs, ((0, 0), (38, 37), (0, 0)), 'reflect')
-        if version == 'B+':
-            raw = np.pad(raw, ((0, 0), (75, 75), (0, 0)), 'reflect')
-            memb_probs = np.pad(memb_probs, ((0, 0), (75, 75), (0, 0)), 'reflect')
-        print 'after: memb, raw', memb_probs.shape, raw.shape
-
-        save_h5(path + '/membranes_test_%s.h5' % version, 'data', data=memb_probs,
-                overwrite='w')
-        save_h5(path + '/raw_test_%s.h5' % version, 'data', data=raw,
-                overwrite='w')
-
-
-def cut_consti_data(vol_path, names=['raw', 'label', 'membranes', 'height'],
-                    h5_key=None, label=False):
-    def cut_consti_single(vol_path, name, h5_key=None,
-                        label=False):
-        all_data = np.empty((125*3, 1250, 1250), dtype=np.float32)
-        for suffix, start in zip(['a', 'b', 'c'], range(0, 3*125, 125)):
-            print 's', suffix, start, name
-            all_data[start:start+125, :, :] = \
-                    load_h5(vol_path + name + '_' + suffix + '.h5',
-                            h5_key=h5_key)[0]
-        first = range(0, 50) + range(125, 125+50) + range(2*125, 2*125+50)
-        print 'first', first
-        second = range(50, 125) + range(125+50, 2*125) + range(2*125+50, 3*125)
-        print 'second', second
-        if label:
-            all_data = all_data.astype(np.uint64)
-        save_h5(vol_path + name + '_first.h5', 'data', data=all_data[first, :, :],
-                overwrite='w')
-        save_h5(vol_path + name + '_second.h5', 'data', data=all_data[second, :, :],
-                overwrite='w')
-
-    for name in names:
-        label_b = False
-        h5_key = None
-        if name == 'label':
-            label_b = True
-        if name == 'height':
-            h5_key = 'height'
-        print 'aneme', name
-        cut_consti_single(vol_path, name, h5_key=h5_key,
-                          label=label_b)
-
-
-def generate_quick_eval(vol_path, names=['raw', 'label', 'membranes', 'height'],
-                        h5_keys=[None,None, None, None],
-                        label=False, suffix='_second',
-                        n_slices=64, edg_len=300, n_slices_load=3 * 75,
-                        inp_el=1250):
-
-    represent_data = np.empty((4, n_slices, edg_len, edg_len))
-
-    all_data = np.empty((4, n_slices_load, inp_el, inp_el))
-
-    for i, (key, name) in enumerate(zip(h5_keys, names)):
-        all_data[i, :, :, :] = load_h5(vol_path + name + suffix + '.h5',
-                           h5_key=key)[0]
-
-    slices = np.random.permutation(n_slices_load)[:n_slices]
-    starts_x = np.random.randint(0, inp_el - edg_len, size=n_slices)
-    starts_y = np.random.randint(0, inp_el - edg_len, size=n_slices)
-
-    for i, (start_x, start_y, slice) in enumerate(zip(starts_x, starts_y, slices)):
-        print 'i', i, slice, start_x, start_y
-        represent_data[:, i, :, :] \
-            = all_data[:, slice,
-                       start_x:start_x+edg_len,
-                       start_y:start_y+edg_len]
-
-    for data, name in zip(represent_data, names):
-        if name == 'label':
-            data = data.astype(np.uint64)
-        save_h5(vol_path + name + suffix + '_repr.h5', 'data',
-                data=data, overwrite='w')
-
-    print represent_data.shape
-
-
-def generate_quick_eval_big_FOV_z_slices(
-                        vol_path,
-                        names=['raw', 'label','membranes', 'height'],
-                        h5_keys=[None,None, None, None],
-                        label=False, suffix='_first',
-                        n_slices=16, edg_len=300, n_slices_load=3 * 50,
-                        inp_el=1250, mode='valid', load=True, stack=True):
-    print 'mode', mode, 'stack', stack, 'suffix', suffix
-    if stack:
-        factor = 3
-    else:
-        factor = 1
-    represent_data = np.empty((4, factor * n_slices, edg_len, edg_len))
-
-    all_data = np.empty((4, n_slices_load, inp_el, inp_el))
-
-    for i, (key, name) in enumerate(zip(h5_keys, names)):
-        all_data[i, :, :, :] = load_h5(vol_path + name + suffix + '.h5',
-                           h5_key=key)[0]
-    if not load:
-        if mode == 'valid':
-            z_inds = range(40, 50) + range(90, 100) + range(140, 150)
-        elif mode == 'test':
-            z_inds = range(0, 40) + range(50, 90) + range(100, 140)
-        else:
-            mode = 'second'
-            assert (n_slices_load == 3 * 75)
-            z_inds = range(n_slices_load)
-
-        slices = sorted(np.random.choice(z_inds, size=n_slices,
-                                         replace=False))
-        starts_x = np.random.randint(0, inp_el - edg_len, size=n_slices)
-        starts_y = np.random.randint(0, inp_el - edg_len, size=n_slices)
-    else:
-        slices, starts_x, starts_y = \
-            load_h5(path + 'indices_%s.h5' % mode)[0].astype(int)
-
-    if stack:
-        save_inds_x = range(1, n_slices_load * 3, 3)
-    else:
-        save_inds_x = range(0, n_slices_load)
-    for i, start_x, start_y, slice in zip(save_inds_x,
-                                          starts_x, starts_y, slices):
-        print 'i', i, slice, start_x, start_y
-
-        represent_data[:, i, :, :] \
-            = all_data[:, slice,
-                       start_x:start_x+edg_len,
-                       start_y:start_y+edg_len]
-        if suffix == '_first':
-            if slice == 0 or slice == 50 or slice == 100:
-                below = slice
-            else:
-                below = slice - 1
-            if slice == 49 or slice == 99 or slice == 149:
-                above = slice
-            else:
-                above = slice + 1
-        if suffix == '_second':
-            if slice == 0 or slice == 75 or slice == 150:
-                below = slice
-            else:
-                below = slice - 1
-            if slice == 74 or slice == 149 or slice == 224:
-                above = slice
-            else:
-                above = slice + 1
-
-        if stack:
-            inds_save = range(i-1, i+2)
-            inds_load = [below, slice, above]
-        else:
-            inds_save = [i]
-            inds_load = [slice]
-        represent_data[:, inds_save, :, :] \
-            = all_data[:, inds_load,
-                       start_x:start_x+edg_len,
-                       start_y:start_y+edg_len]
-
-    # save data
-    if not load:
-        save_h5(path + 'indices_%s.h5' % mode, h5_key='zxy',
-            data=[slices, starts_x, starts_y], overwrite='w')
-    for data, name in zip(represent_data, names):
-        if name == 'label':
-            if stack:
-                data = data.astype(np.uint64)[1::3]
-            else:
-                data = data.astype(np.uint64)
-        if stack:
-            stack_name = '_zstack'
-        else:
-            stack_name = ''
-        save_h5(vol_path + name + '_%s' % mode + '_repr%s.h5' % stack_name, 'data',
-                data=data, overwrite='w')
-
-    print represent_data.shape
-
-def segmentation_to_membrane(input_path,output_path):
-    """
-    compute a binary mask that indicates the boundary of two touching labels
-    input_path: path to h5 label file
-    output_path: path to output h5 file (will be created) 
-    Uses threshold of edge filter maps
-    """
-    with h5py.File(input_path, 'r') as label_h5:
-        with h5py.File(output_path, 'w') as height_h5:
-            boundary_stack = np.empty_like(label_h5['data']).astype(np.float32)
-            height_stack = np.empty_like(label_h5['data']).astype(np.float32)
-            for i in range(height_stack.shape[0]):
-                im = np.float32(label_h5['data'][i])
-                boundary_stack[i], height_stack[i] = \
-                    segmenation_to_membrane_core(im)
-            height_h5.create_dataset("boundary",data=boundary_stack, dtype=np.float32)
-            height_h5.create_dataset("height",data=height_stack, dtype=np.float32)
-
-
-def segmenation_to_membrane_core(label_image):
-    gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
-    gy = convolve(label_image, np.array([-1., 0., 1.]).reshape(3, 1))
-    boundary= np.float32((gx ** 2 + gy ** 2) > 0)
-    height = distance_transform_edt(boundary == 0)
-    return boundary, height
-
-
-def create_holes(batch, fov):
-    x, y = np.mgrid[0:fov:1, 0:fov:1]
-    for b in range(batch.shape[0]):
-        if np.random.random() > 0.5:
-            if np.random.random() > 0.9:
-                batch[b, 0, :, :] = 0
-                batch[b, 8, fov / 4:-fov / 4, fov / 4:-fov / 4] = 0
-            else:
-                pos = np.dstack((x, y))
-                rand_mat = np.diag(np.random.rand(2)) * 800
-                rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
-                                               rand_mat)
-                gauss = rv.pdf(pos).astype(np.float32)
-                gauss /= np.max(gauss)
-                gauss = 1. - gauss
-                gauss_d = gauss[::2, ::2]
-                batch[b, 0, :, :] *= gauss
-                batch[b, 8, fov/4:-fov/4, fov/4:-fov/4] *= gauss_d
-
-        if np.random.random() > 0.5:
-            if np.random.random() > 0.9:
-                batch[b, 6, :, :] = 0
-            else:
-                pos = np.dstack((x, y))
-                rand_mat = np.diag(np.random.random(2)) * 800
-
-                rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
-                                               rand_mat)
-                gauss = rv.pdf(pos).astype(np.float32)
-                gauss /= np.max(gauss)
-                gauss = 1. - gauss
-                batch[b, 6, :, :] *= gauss
-        if np.random.random() > 0.5:
-            if np.random.random() > 0.9:
-                batch[b, 7, :, :] = 0
-            else:
-                pos = np.dstack((x, y))
-                rand_mat = np.diag(np.random.random(2)) * 800
-                rv = stats.multivariate_normal(np.random.randint(0, 40, 2),
-                                               rand_mat)
-
-                gauss = rv.pdf(pos).astype(np.float32)
-                gauss /= np.max(gauss)
-                gauss = 1. - gauss
-                batch[b, 7, :, :] *= gauss
-    return batch
-
-
-def create_holes2(image, edge_len, n_holes=10):
-    x, y = np.mgrid[0:edge_len:1, 0:edge_len:1]
-    pos = np.dstack((x, y))
-    for h in range(n_holes):
-        rand_mat = np.diag(np.random.rand(2)) * edge_len * 2
-        rv = stats.multivariate_normal(np.random.randint(0, edge_len, 2),
-                                       rand_mat)
-        gauss = rv.pdf(pos).astype(np.float32)
-        gauss /= np.max(gauss)
-        gauss = 1. - gauss
-        image[:, :] *= gauss
-    return image
+import data_provider
 
 
 class HoneyBatcherPredict(object):
-    def __init__(self, membranes, raw=None, raw_key=None,
-                 membrane_key=None,  batch_size=10,
-                 global_edge_len=110, patch_len=40, padding_b=False,
-                 z_stack = False, downsample = False, slices=None,
-                 seed_method="timo", perfect_play=False,
-                 lowercomplete_e=0., max_penalty_pixel=3):
-
+    def __init__(self, options):
         """
         batch loader. Use either for predict. For valId and train use:
         get batches function.
 
-        :param raw:
-        :param batch_size:
-        :param global_edge_len:
-        :param patch_len:
-        :param padding_b:
+        :param options:
         """
-        self.slices = slices
-        if isinstance(membranes, str):
-            self.membranes = load_h5(membranes, h5_key=membrane_key,
+        self.slices = None
+        print options.membrane_path
+        if "membrane_path" in options and isinstance(options.membrane_path, str):
+            self.membranes = data_provider.load_h5(options.membrane_path, h5_key=None,
                                      slices=self.slices)[0]
         else:
-            self.membranes = membranes
+            self.membranes = options.membrane_path
             if slices is not None:
                 self.membranes = self.membranes[self.slices, :, :]
-        if isinstance(raw, str):
-            self.raw = load_h5(raw, h5_key=raw_key, slices=self.slices)[0]
+        if isinstance(options.raw_path, str):
+            self.raw = data_provider.load_h5(options.raw_path, h5_key=None, slices=self.slices)[0]
             self.raw /= 256. - 0.5
         else:
-            self.raw = raw
+            self.raw = options.raw_path
             if self.slices is not None:
                 self.raw = self.raw[self.slices, :, :]
 
         # either pad raw or crop labels -> labels are always shifted by self.pad
-        self.padding_b = padding_b
-        self.pad = patch_len / 2
+        self.padding_b = options.padding_b
+        self.pad = options.patch_len / 2
         if self.padding_b:
             factor = 1
             if downsample:
@@ -445,13 +62,13 @@ class HoneyBatcherPredict(object):
             self.raw = mirror_cube(self.raw, self.pad * factor)
             self.membranes = mirror_cube(self.membranes, self.pad * factor)
 
-        self.seed_method = seed_method
+        self.seed_method = options.seed_method
         self.rl = self.membranes.shape[1]  # includes padding
         self.n_slices = len(self.membranes)
-        self.bs = batch_size
-        self.global_el = global_edge_len  # length of field, global_batch
+        self.bs = options.batch_size
+        self.global_el = options.global_edge_len  # length of field, global_batch
         # includes padding)
-        self.pl = patch_len
+        self.pl = options.patch_len
         if self.padding_b:
             self.global_el += self.pl
 
@@ -459,45 +76,49 @@ class HoneyBatcherPredict(object):
                             self.global_el - self.pl,
                             self.global_el - self.pl)
 
-        print "patch_len, global_edge_len, self.rl", patch_len, \
-            global_edge_len, self.rl
-        print global_edge_len, patch_len
+        print "patch_len, global_edge_len, self.rl", options.patch_len, \
+            options.global_edge_len, self.rl
+        print options.global_edge_len, options.patch_len
         # assert (patch_len <= global_edge_len)
-        assert (global_edge_len <= self.rl)
+        assert (options.global_edge_len <= self.rl)
 
         if self.rl - self.global_el < 0:
             raise Exception('try setting padding to True')
 
         # private
         self.n_channels = 4
-        self.perfect_play = perfect_play
-        self.z_stack = z_stack
+        self.perfect_play = options.perfect_play
+        self.z_stack = options.z_stack
         if self.z_stack:
             # add 4 channels, (2 membrane, 2 raw)
             self.n_channels += 4
             
-        self.downsample = downsample
+        self.downsample = options.downsample
         if self.downsample:
             print self.rl , self.global_el , self.pl
             assert (self.rl - self.global_el - self.pl >= 0)
             self.n_channels += 2
 
-        self.lowercomplete_e = lowercomplete_e 
-        self.max_penalty_pixel = max_penalty_pixel
+        self.lowercomplete_e = options.lowercomplete_e 
+        self.max_penalty_pixel = options.max_penalty_pixel
+
 
         self.global_batch = None  # includes padding, nn input
+        # move to data loader
         self.global_raw = None
-        self.global_claims = None  # includes padding, tri-map, inp
-        self.global_heightmap_batch = None      # no padding
         self.global_down = None
         self.global_batch_bottom_top = None
         self.global_raw_bottom_top = None
+
+
+        self.global_claims = None  # includes padding, tri-map, inp
+        self.global_heightmap_batch = None      # no padding
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
         self.priority_queue = None
         self.coordinate_offset = np.array([[-1,0],[0,-1],[1,0],[0,1]],dtype=np.int)
         self.direction_array = np.arange(4)
-        self.error_indicator_pass = np.zeros((batch_size))
+        self.error_indicator_pass = np.zeros((self.bs))
         self.global_time = 0
 
         self.timo_min_len = 5
@@ -506,6 +127,7 @@ class HoneyBatcherPredict(object):
         self.max_batch = 0
         self.counter = 0
 
+        # move to data loader
     def prepare_global_batch(self, start=0, inherit_code=False,
                              allowed_slices=None):
         print 'prerpare global batch'
@@ -575,7 +197,7 @@ class HoneyBatcherPredict(object):
 
         if inherit_code:
             return ind_b, ind_x, ind_y
-
+        # move to data loader
     def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
         """
         Seeds by minima of dist trf of thresh of memb prob
@@ -589,7 +211,7 @@ class HoneyBatcherPredict(object):
             seeds = \
                 [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
             self.global_seeds.append(seeds)
-
+        # move to data loader
     def get_overseed_coords(self, gridsize = 7):
         """
         Seeds by grid
@@ -651,13 +273,13 @@ class HoneyBatcherPredict(object):
         coords = self.coordinate_offset + center - self.pad
         np.clip(coords, 0, self.global_el - self.pl - 1, out=coords)
         return coords[:,0], coords[:,1], self.direction_array
-
+        # crop input
     def crop_membrane(self, seed, b):
         membrane = self.global_batch[b,
                                      seed[0] - self.pad:seed[0] + self.pad,
                                      seed[1] - self.pad:seed[1] + self.pad]
         return membrane
-
+        # crop input
     def crop_downsample(self, seed, b):
         # print 'downsample', seed, 'b', b, self.global_down.shape
         down_coord = np.array(seed, dtype=int) / 2 + self.pad / 2
@@ -667,19 +289,19 @@ class HoneyBatcherPredict(object):
                           down_coord[0] - self.pad:down_coord[0] + self.pad,
                           down_coord[1] - self.pad:down_coord[1] + self.pad]
         return downsampled
-
+        # crop input
     def crop_raw(self, seed, b):
         raw = self.global_raw[b,
               seed[0] - self.pad:seed[0] + self.pad,
               seed[1] - self.pad:seed[1] + self.pad]
         return raw
-
+        # crop input
     def crop_raw_bottom_top(self, seed, b):
         raw = self.global_raw_bottom_top[b, :2,
               seed[0] - self.pad:seed[0] + self.pad,
               seed[1] - self.pad:seed[1] + self.pad]
         return raw
-
+        # crop input
     def crop_membrane_bottom_top(self, seed, b):
         membrane = self.global_batch_bottom_top[b, :2,
                                      seed[0] - self.pad:seed[0] + self.pad,
@@ -733,7 +355,9 @@ class HoneyBatcherPredict(object):
         self.global_heightmap_batch = np.empty(self.label_shape)
         self.global_heightmap_batch.fill(np.inf)
         # set global_batch and global_label_batch
+        # get from data loader
         self.prepare_global_batch(start=start, allowed_slices=allowed_slices)
+        # get from data loader
         self.get_seed_coords()
         self.get_seed_ids()
         self.initialize_priority_queue()
@@ -774,6 +398,7 @@ class HoneyBatcherPredict(object):
 
     def get_network_input(self, center, b, Id, out):
 
+        # crop self.inputdata and self.inputdata_down
         out[0, :, :] = self.crop_membrane(center, b)
         out[1, :, :] = self.crop_raw(center, b)
         out[2:4, :, :] = self.crop_mask_claimed(center, b, Id)
@@ -794,7 +419,7 @@ class HoneyBatcherPredict(object):
 
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
-
+        # TODO: use input batch
         raw_batch = np.zeros((self.bs, self.n_channels, self.pl, self.pl),
                              dtype='float32')
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
@@ -849,6 +474,7 @@ class HoneyBatcherPredict(object):
                          path='./../data/debug/images/',
                          save=True, b=0, inherite_code=False):
         plot_images = []
+        # TODO: loop over input
         plot_images.append({"title": "Raw Input",
                             'im': self.global_raw[b, self.pad:-self.pad,
                                   self.pad:-self.pad],
@@ -878,67 +504,40 @@ class HoneyBatcherPredict(object):
 
 
 class HoneyBatcherPath(HoneyBatcherPredict):
-    def __init__(self,  membranes, raw=None, raw_key=None,
-                 membrane_key=None,  label=None, label_key=None,
-                 height_gt=None, height_gt_key=None,
-                 batch_size=10,
-                 global_edge_len=110, patch_len=40, padding_b=False,
-                 find_errors_b=True, clip_method='clip',
-                 seed_method="timo", slices=None,
-                 z_stack = False, downsample = False,
-                 scale_height_factor=None, perfect_play=False,
-                 add_height_b=False,
-                 lowercomplete_e=0.,
-                 max_penalty_pixel=3,
-                 rand_x_coord_seed=False):
-        super(HoneyBatcherPath, self).__init__(
-            membranes=membranes,
-            membrane_key=membrane_key,
-            raw=raw, raw_key=raw_key,
-            batch_size=batch_size,
-            global_edge_len=global_edge_len,
-            patch_len=patch_len,
-            padding_b=padding_b,
-            seed_method=seed_method,
-            z_stack = z_stack,
-            downsample = downsample,
-            slices=slices,
-            perfect_play=perfect_play,
-            lowercomplete_e=lowercomplete_e,
-            max_penalty_pixel=max_penalty_pixel)
+    def __init__(self,  options):
+        super(HoneyBatcherPath, self).__init__(options)
 
-        if isinstance(label, str):
-            self.labels = load_h5(label, h5_key=label_key,
+        if isinstance(options.label_path, str):
+            self.labels = data_provider.load_h5(options.label_path, h5_key=None,
                                   slices=self.slices)[0]
         else:
-            self.labels = label
+            self.labels = options.label
             if self.slices is not None:
                 self.labels = self.labels[self.slices]
 
-        if isinstance(height_gt, str):
-            self.height_gt = load_h5(height_gt, h5_key=height_gt_key,
+        if "height_gt_path" in options:
+            self.height_gt = data_provider.load_h5(options.height_gt_path, h5_key=None,
                                      slices=self.slices)[0]
         else:
-            self.height_gt = height_gt
+            self.height_gt = options.height_gt
             if self.slices is not None:
                 self.height_gt = self.height_gt[self.slices]
 
         if self.height_gt is not None:
-
-            if clip_method=='clip':
-                np.clip(self.height_gt, 0, patch_len / 2, out=self.height_gt)
-            elif isinstance(clip_method, basestring) and \
-                                len(clip_method) > 3 and \
-                                clip_method[:3] == 'exp':
-                dist = float(clip_method[3:])
+            if options.clip_method=='clip':
+                np.clip(self.height_gt, 0, options.patch_len / 2, out=self.height_gt)
+            elif isinstance(options.clip_method, basestring) and \
+                                len(options.clip_method) > 3 and \
+                                options.clip_method[:3] == 'exp':
+                dist = float(options.clip_method[3:])
                 self.height_gt = \
                     np.exp(np.square(self.height_gt) / (-2) / dist ** 2)
             maximum = np.max(self.height_gt)
             self.height_gt *= -1.
             self.height_gt += maximum
-            if scale_height_factor is not None:
-                self.height_gt *= scale_height_factor
-                self.scaling = scale_height_factor
+            if options.scale_height_factor is not None:
+                self.height_gt *= options.scale_height_factor
+                self.scaling = options.scale_height_factor
             else:
                 self.scaling = 1.
 
@@ -950,8 +549,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                             self.pad:-self.pad]
 
         # private
-        self.rand_x_coord_seed = rand_x_coord_seed
-        self.add_height_b = add_height_b
+        self.add_height_b = False
         self.global_directionmap_batch = None  # no padding
         self.global_label_batch = None  # no padding
         self.global_height_gt_batch = None  # no padding
@@ -959,7 +557,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.global_errormap = None  # no padding
         self.global_error_dict = None
         self.crossing_errors = None
-        self.find_errors_b = find_errors_b
+        self.find_errors_b = options.fine_tune_b and not options.rs_ft
         self.error_indicator_pass = None
 
     def prepare_global_batch(self,
@@ -995,48 +593,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                     seed[0] - self.pad,
                                                     seed[1] - self.pad]
             self.global_id2gt.append(id2gt)
-
-    def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
-        """
-        Seeds by minima of dist trf of thresh of memb prob
-        :return:
-        """
-        if self.seed_method == "gt":
-            self.global_seeds = []
-            seed_ids = []
-            dist_trf = np.zeros_like(self.global_label_batch)
-            for b in range(self.bs):
-                seed_ids.append(np.unique(
-                    self.global_label_batch[b, :, :]).astype(int))
-
-                _, dist_trf[b, :, :] = \
-                    segmenation_to_membrane_core(
-                        self.global_label_batch[b, :, :])
-
-            for b, ids in zip(range(self.bs),
-                              seed_ids):  # iterates over batches
-                seeds = []
-                for Id in ids:  # ids within each slice
-                    regions = np.where(
-                        self.global_label_batch[b, :, :] == Id)
-                    seed_ind = np.argmax(dist_trf[b][regions])
-                    if self.rand_x_coord_seed:
-                        seed = \
-                            np.array([regions[0][seed_ind],
-                                      np.random.randint(0,
-                                                        self.global_el - self.pl)])\
-                            + self.pad
-                    else:
-                        seed = \
-                            np.array([regions[0][seed_ind],
-                                      regions[1][seed_ind]]) + self.pad
-
-                    seeds.append([seed[0], seed[1]])
-                self.global_seeds.append(seeds)
-        elif self.seed_method == "over":
-            self.get_overseed_coords()
-        elif self.seed_method == "timo":
-            super(HoneyBatcherPath, self).get_seed_coords()
 
     def crop_timemap(self, center, b):
         assert(0 <= center[0]-self.pad <= self.global_el - self.pad)
@@ -1199,6 +755,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.error_indicator_pass[b] = self.scaling * (self.pad + 1)
 
         # check for errors in neighbor regions, type II
+        # TODO: remove find_errors_b
         if self.find_errors_b:
             self.check_type_II_errors(center_x, center_y, Id, b)
         # print 'b', b, 'height', height, 'centerxy', center_x, center_y, 'Id', Id, \
@@ -2041,27 +1598,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
 
-
-class DummyBM:
-    def __init__(self, batch_size, patch_len, n_channels):
-        self.bs = batch_size
-        self.pl = patch_len
-        self.n_ch = n_channels
-        self.gt = None
-
-    def init_batch(self):
-        self.batch = \
-            np.random.random(size=(self.bs, self.n_ch,
-                                    self.pl, self.pl)).astype('float32')
-        self.gt = np.zeros((self.bs, 4, 1, 1)).astype('float32')
-        self.batch[:self.bs/2, 0, :, 0] = 1.
-        self.gt[:self.bs/2, 0, 0, 0] = 1.
-
-    def get_bach(self):
-        self.init_batch()
-        return self.batch, self.gt
-
-
+# TODO: move to data loader
 def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
                         n_z=64,
                         padding_b=False,
@@ -2102,6 +1639,7 @@ def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
     assert (np.all(gt != 0))
     return raw, raw, dist_trf, gt
 
+# TODO: move to data loader
 def generate_dummy_data2(batch_size, edge_len, patch_len, save_path=None):
     raw = np.zeros((batch_size, edge_len, edge_len))
     dist_trf = np.zeros_like(raw)
@@ -2148,6 +1686,7 @@ def generate_dummy_data2(batch_size, edge_len, patch_len, save_path=None):
 
     return raw, membrane_prob, dist_trf, gt
 
+# TODO: move to data loader
 def generate_dummy_data3(batch_size, edge_len, patch_len=40, save_path=None,
                          nz=64):
     batch_size = nz
@@ -2451,7 +1990,6 @@ class HungryHoneyBatcher(HoneyBatcherPath):
         self.merge_dict = [MergeDict() for b in range(self.bs)]
         self.merg_count_neg = 0
         self.merg_count_pos = 0
-
 
 
     def get_merging_gt(self, centers, ids):

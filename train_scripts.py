@@ -14,6 +14,7 @@ import experience_replay as exp
 import h5py
 import sys
 import configargparse
+from copy import copy
 import time
 
 
@@ -29,16 +30,6 @@ def train_script_v1(options):
         BM = du.HoneyBatcherPath
 
     save_net_path = './../data/nets/' + options.net_name + '/'
-
-    raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
-    membrane_path ='./../data/volumes/membranes_%s.h5' % options.train_version
-    label_path ='./../data/volumes/label_%s.h5' % options.train_version
-    height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version
-
-    raw_path_val ='./../data/volumes/raw_%s.h5' % options.valid_version
-    membrane_path_val ='./../data/volumes/membranes_%s.h5' % options.valid_version
-    label_path_val ='./../data/volumes/label_%s.h5' % options.valid_version
-    height_gt_path_val ='./../data/volumes/height_%s.h5' % options.valid_version
 
     debug_path = save_net_path + "/batches"
     if not os.path.exists(debug_path):
@@ -72,13 +63,7 @@ def train_script_v1(options):
 
     print 'initializing network graph for net ', options.net_name
 
-    l_in, l_in_direction, l_out, l_out_direction, patch_len, l_eat = network()
-
-    if options.dummy_data_b:
-        raw_path, membrane_path, height_gt_path, label_path = \
-            du.generate_dummy_data(options.batch_size, options.global_edge_len)
-        raw_path_val, membrane_path_val, height_gt_path_val, label_path_val = \
-            du.generate_dummy_data(options.batch_size, options.global_edge_len)
+    l_in, l_in_direction, l_out, l_out_direction, options.patch_len, l_eat = network()
 
     print 'compiling theano functions'
     target_t = T.ftensor4()
@@ -102,10 +87,31 @@ def train_script_v1(options):
     val_sample_indices = u.get_stack_indices(options.valid_version,
                                              options.net_arch)
 
+    # manage options
+    options.z_stack=("zstack" in options.net_arch)
+    options.downsample = ("down" in options.net_arch)
+
+    options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
+    options.membrane_path ='./../data/volumes/membranes_%s.h5' % options.train_version
+    options.label_path ='./../data/volumes/label_%s.h5' % options.train_version
+    options.height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version
+
+    options_val = copy(options)
+    options_val.raw_path ='./../data/volumes/raw_%s.h5' % options.valid_version
+    options_val.membrane_path ='./../data/volumes/membranes_%s.h5' % options.valid_version
+    options_val.label_path ='./../data/volumes/label_%s.h5' % options.valid_version
+    options_val.height_gt_path ='./../data/volumes/height_%s.h5' % options.valid_version
+
+    if options.dummy_data_b:
+        options.raw_path, options.membrane_path, options.height_gt_path, options.label_path = \
+            du.generate_dummy_data(options.batch_size, options.global_edge_len)
+        options_val.raw_path, options_val.membrane_path, options_val.height_gt_path, options_val.label_path = \
+            du.generate_dummy_data(options.batch_size, options.global_edge_len)
+
     Memento = exp.BatcherBatcherBatcher(
                             scale_height_factor=options.scale_height_factor, 
                             max_mem_size=options.exp_mem_size,
-                            pl=patch_len,
+                            pl=options.patch_len,
                             warmstart=options.exp_warmstart,
                             n_channels=n_channels,
                             accept_rate=options.exp_acceptance_rate,
@@ -124,45 +130,30 @@ def train_script_v1(options):
                           L1_weight=options.regularization, margin=options.margin)
         Memento_ft = exp.BatchMemento()
 
-    # print raw_path
-    # print label_path
-    # print height_gt_path
-
     print 'Loading data and Priority queue init'
-    bm = BM(membrane_path, label=label_path,
-           height_gt=height_gt_path,
-           raw=raw_path,
-           batch_size=options.batch_size,
-           patch_len=patch_len, global_edge_len=options.global_edge_len,
-           padding_b=options.padding_b,
-           find_errors_b=options.fine_tune_b and not options.rs_ft,
-           clip_method=options.clip_method, seed_method=options.seed_method,
-           z_stack=("zstack" in options.net_arch),
-           downsample = ("down" in options.net_arch),
-           scale_height_factor=options.scale_height_factor,
-           perfect_play=options.perfect_play,
-           add_height_b=options.add_height_penalty,
-           lowercomplete_e=options.lowercomplete_e,
-           max_penalty_pixel=options.max_penalty_pixel,
-           rand_x_coord_seed=False)
+    bm = BM(options)
     bm.init_batch(allowed_slices=sample_indices)
 
     if options.val_b:
-        bm_val = BM(membrane_path_val, label=label_path_val,
-                    height_gt=height_gt_path_val,
-                    raw=raw_path_val,
-                    batch_size=options.batch_size,
-                    find_errors_b=options.fine_tune_b and not options.rs_ft,
-                    patch_len=patch_len, global_edge_len=options.global_edge_len,
-                    padding_b=options.padding_b,
-                    clip_method=options.clip_method,
-                    seed_method=options.seed_method,
-                    z_stack=("zstack" in options.net_arch),
-                    downsample = ("down" in options.net_arch),
-                    scale_height_factor=options.scale_height_factor,
-                    lowercomplete_e=options.lowercomplete_e,
-                    max_penalty_pixel=options.max_penalty_pixel,
-                    rand_x_coord_seed=False)
+        bm_val = BM(options_val)
+
+
+# membrane_path_val, label=label_path_val,
+#                     height_gt=height_gt_path_val,
+#                     raw=raw_path_val,
+#                     batch_size=options.batch_size,
+#                     find_errors_b=options.fine_tune_b and not options.rs_ft,
+#                     patch_len=patch_len, global_edge_len=options.global_edge_len,
+#                     padding_b=options.padding_b,
+#                     clip_method=options.clip_method,
+#                     seed_method=options.seed_method,
+#                     z_stack=("zstack" in options.net_arch),
+#                     downsample = ("down" in options.net_arch),
+#                     scale_height_factor=options.scale_height_factor,
+#                     lowercomplete_e=options.lowercomplete_e,
+#                     max_penalty_pixel=options.max_penalty_pixel,
+#                     rand_x_coord_seed=False
+
         bm_val.init_batch(allowed_slices=val_sample_indices)
 
     if options.padding_b:
@@ -182,7 +173,7 @@ def train_script_v1(options):
     fine_tune_losses = [[], []]
     iterations = []
     ft_iteration = 0
-    free_voxel_empty = (options.global_edge_len - patch_len)**2
+    free_voxel_empty = (options.global_edge_len - options.patch_len)**2
     free_voxel = free_voxel_empty
     while not converged and (iteration < options.max_iter):
         iteration += 1
@@ -397,7 +388,7 @@ def train_script_v1(options):
                                                      options.exp_bs)
 
             if options.create_holes:
-                membrane = du.create_holes(membrane, patch_len)
+                membrane = du.create_holes(membrane, options.patch_len)
 
             if options.augment_pretraining:
                 a_membrane, a_gt = du.augment_batch(membrane, gt=gt)

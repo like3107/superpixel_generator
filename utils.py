@@ -6,6 +6,7 @@ import dataset_utils as du
 import os
 import sys
 import h5py
+import data_provider as dp
 
 np.random.seed(1234)
 fixed_rand = np.random.rand(256, 3)
@@ -156,7 +157,7 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
         h5_keys.append('n_filter')
         h5_values.append(n_filter)
 
-    du.save_h5(save_path + net_name, h5_keys, h5_values, overwrite='w')
+    dp.save_h5(save_path + net_name, h5_keys, h5_values, overwrite='w')
     save_options(save_path + net_name, add)
 
 
@@ -340,7 +341,7 @@ def load_network(load_path, l_last):
         i += 1
         h5_keys.append(str(param) + str(i))
     print 'load', load_path, 'keys', h5_keys
-    all_param_values = du.load_h5(load_path, h5_keys)
+    all_param_values = dp.load_h5(load_path, h5_keys)
     las.layers.set_all_param_values(l_last, all_param_values)
 
 
