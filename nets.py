@@ -437,6 +437,12 @@ class NetBuilder:
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, l_eat
 
+    def build_ID_v8_EAT_BN(self):
+        l_in, l_9, l_eat, fov = self.build_net_v7_EAT(n_channels=1)
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return l_in, l_in_direction, l_9, l_10, fov, l_eat
+
     def build_ID_v0_hybrid(self):
         fov = 40  # field of view = patch length
         n_channels = 2

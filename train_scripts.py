@@ -65,6 +65,8 @@ def train_script_v1(options):
 
     l_in, l_in_direction, l_out, l_out_direction, options.patch_len, l_eat = network()
 
+    options.network_channels = l_in.shape[1]
+
     print 'compiling theano functions'
     target_t = T.ftensor4()
     target_eat = T.ftensor4()
@@ -88,9 +90,6 @@ def train_script_v1(options):
                                              options.net_arch)
 
     # manage options
-    options.z_stack=("zstack" in options.net_arch)
-    options.downsample = ("down" in options.net_arch)
-
     options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
     options.membrane_path ='./../data/volumes/membranes_%s.h5' % options.train_version
     options.label_path ='./../data/volumes/label_%s.h5' % options.train_version
@@ -136,28 +135,7 @@ def train_script_v1(options):
 
     if options.val_b:
         bm_val = BM(options_val)
-
-
-# membrane_path_val, label=label_path_val,
-#                     height_gt=height_gt_path_val,
-#                     raw=raw_path_val,
-#                     batch_size=options.batch_size,
-#                     find_errors_b=options.fine_tune_b and not options.rs_ft,
-#                     patch_len=patch_len, global_edge_len=options.global_edge_len,
-#                     padding_b=options.padding_b,
-#                     clip_method=options.clip_method,
-#                     seed_method=options.seed_method,
-#                     z_stack=("zstack" in options.net_arch),
-#                     downsample = ("down" in options.net_arch),
-#                     scale_height_factor=options.scale_height_factor,
-#                     lowercomplete_e=options.lowercomplete_e,
-#                     max_penalty_pixel=options.max_penalty_pixel,
-#                     rand_x_coord_seed=False
-
         bm_val.init_batch(allowed_slices=val_sample_indices)
-
-    if options.padding_b:
-        options.global_edge_len = bm.global_el
 
     if options.load_net_b:
         np.random.seed(np.random.seed(int(time.time())))
@@ -173,7 +151,7 @@ def train_script_v1(options):
     fine_tune_losses = [[], []]
     iterations = []
     ft_iteration = 0
-    free_voxel_empty = (options.global_edge_len - options.patch_len)**2
+    free_voxel_empty = bm.get_num_free_voxel()
     free_voxel = free_voxel_empty
     while not converged and (iteration < options.max_iter):
         iteration += 1
@@ -206,26 +184,7 @@ def train_script_v1(options):
                 bm_val.update_priority_queue(probs_val, seeds_val, ids_val)
 
         # predict train
-        if options.perfect_play:
-            try:
-                membrane, gt, seeds, ids = bm.get_batches()
-            except:
-                print "Warning: queue empty... resetting bm"
-                bm.init_batch(allowed_slices=sample_indices)
-                bm.draw_debug_image(
-                    "reset_train_iteration_%08i_counter_%i_freevoxel_%i" %
-                    (iteration, bm.counter, free_voxel),
-                    path=save_net_path_reset)
-                if options.val_b:
-                    bm_val.init_batch(allowed_slices=val_sample_indices)
-                    bm_val.draw_debug_image(
-                        "reset_val_iteration_%08i_counter_%i_freevoxel_%i" %
-                        (iteration, bm.counter, free_voxel),
-                        path=save_net_path_reset)
-                free_voxel = free_voxel_empty
-            probs = probs_f(membrane)
-            bm.update_priority_queue(probs, seeds, ids)
-        elif(options.merge_seeds or options.train_merge):
+        if(options.merge_seeds or options.train_merge):
             membrane, gt, seeds, ids, merging_gt, merging_factor, merging_ids = bm.get_batches()
             probs = probs_f(membrane)
             bm.update_priority_queue(probs, seeds, ids)
@@ -558,11 +517,13 @@ def get_options():
     p.add('--load_net', dest='load_net_b', action='store_true')
     p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
 
+
     # train data paths
     def_train_version = 'second_repr'       # def change me
     p.add('--train_version', default=def_train_version)
     p.add('--seed_method', type=str, default="timo", help='available metods: gt, timo, grid',
           dest='seed_method')
+    p.add('--input_data_path',type=str, default="../data/volumes/raw_honeycomb.h5")
 
     # valid data paths
     def_valid_version = 'first_repr'
@@ -576,7 +537,6 @@ def get_options():
     p.add('--global_edge_len', default=300, type=int)
     p.add('--fast_reset', action='store_true')
     p.add('--clip_method', default='clip')
-    p.add('--perfect_play', action='store_true')
     p.add('--padding_b', action='store_true')
     p.add('--merge_seeds', dest='merge_seeds', action='store_true')
     p.add('--train_merge', dest='train_merge', action='store_true')
