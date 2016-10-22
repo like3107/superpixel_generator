@@ -205,9 +205,15 @@ class HoneyBatcherPredict(object):
             seed_ids.append(np.unique(
                 self.global_label_batch[b, :, :]).astype(int))
 
-            _, dist_trf[b, :, :] = \
-                segmenation_to_membrane_core(
-                    self.global_label_batch[b, :, :])
+            # add border to labels
+            padded_label = data_provider.pad_cube(
+                                    self.global_label_batch[b, :, :],
+                                    1,
+                                    value=seed_ids[-1]+1)
+
+            dist_trf[b, :, :] = \
+                data_provider.segmenation_to_membrane_core(
+                    padded_label)[1][1:-1,1:-1]
 
         for b, ids in zip(range(self.bs),
                           seed_ids):  # iterates over batches
