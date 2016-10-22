@@ -583,7 +583,6 @@ def get_options():
 if __name__ == '__main__':
 
     options = get_options()
-    print options
     print os.system('pwd')
     # remove unnecessary parameter combinations
     if options.exp_bs == 0:

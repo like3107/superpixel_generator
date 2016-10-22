@@ -309,7 +309,7 @@ class NetBuilder:
         l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, W=gen_identity_filter([1,3,7,5]),
                             nonlinearity=las.nonlinearities.elu)
         l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
-                            nonlinearity=las.nonlinearities.elu,
+                            nonlinearity=las.nonlinearities.rectify,
                             W=gen_identity_filter([0, 1, 2, 3]))
         return l_in, l_9, fov
 
@@ -348,7 +348,7 @@ class NetBuilder:
         l_8 = L.Conv2DLayer(l_merge, n_filt[3], 1, W=gen_identity_filter([1,3,7,5]),
                             nonlinearity=las.nonlinearities.elu)
         l_9 = L.Conv2DLayer(l_8, n_filt[4], 1,
-                            nonlinearity=las.nonlinearities.elu,
+                            nonlinearity=las.nonlinearities.rectify,
                             W=gen_identity_filter([0, 1, 2, 3]))
         return l_in, l_9, fov
 
@@ -438,7 +438,7 @@ class NetBuilder:
         return l_in, l_in_direction, l_9, l_10, fov, l_eat
 
     def build_ID_v8_EAT_BN(self):
-        l_in, l_9, l_eat, fov = self.build_net_v7_EAT(n_channels=1)
+        l_in, l_9, l_eat, fov = self.build_net_v7_EAT(n_channels=3)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, l_eat

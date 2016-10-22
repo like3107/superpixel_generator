@@ -161,7 +161,6 @@ class HoneyBatcherPredict(object):
         self.global_heightmap_batch.fill(np.inf)
 
         self.prepare_global_batch()
-        print self.global_input_batch
         self.get_seed_coords()
         self.get_seed_ids()
         self.initialize_priority_queue()
@@ -257,7 +256,9 @@ class HoneyBatcherPredict(object):
                 time_put
 
     def get_network_input(self, center, b, Id, out):
-        out[:] = self.crop_input(center, b)
+        out[0:2] = self.crop_mask_claimed(center, b, Id)
+        out[2:] = self.crop_input(center, b)
+
 
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
@@ -942,8 +943,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.get_network_input(center, b, Id, raw_batch[i, :, :, :])
 
         mask = self.crop_time_mask(centers, timepoint, batches)
+        raw_batch[:, 1, :, :][mask] = 0
         raw_batch[:, 2, :, :][mask] = 0
-        raw_batch[:, 3, :, :][mask] = 0
 
         return raw_batch
 

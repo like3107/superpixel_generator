@@ -39,7 +39,6 @@ class DataProvider(object):
         print "options.network_channels",options.network_channels
         print "self.full_input.shape",self.full_input.shape
 
-        assert(self.full_input.shape[1] == options.network_channels) 
         self.rl_x = self.full_input.shape[2]
         self.rl_y = self.full_input.shape[3]
 
@@ -80,7 +79,6 @@ class DataProvider(object):
         return data_shape
 
     def prepare_input_batch(self, input):
-        print 'prerpare global batch'
         # initialize two global batches = region where CNNs compete
         # against each other
         # get indices for global batches in raw/ label cubes
