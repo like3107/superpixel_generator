@@ -5,6 +5,19 @@ from os import makedirs
 from os.path import exists
 import cairo
 import math
+from scipy import ndimage
+from scipy import stats
+from scipy.ndimage import convolve, gaussian_filter
+from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
+from skimage.feature import peak_local_max
+from skimage.morphology import label, watershed
+
+def segmenation_to_membrane_core(label_image):
+    gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
+    gy = convolve(label_image, np.array([-1., 0., 1.]).reshape(3, 1))
+    boundary= np.float32((gx ** 2 + gy ** 2) > 0)
+    height = distance_transform_edt(boundary == 0)
+    return boundary, height
 
 class DataProvider(object):
     def __init__(self, options):
@@ -181,12 +194,22 @@ class PolygonDataProvider(DataProvider):
             out.create_dataset("label",data=self.label.astype(np.float32)) 
 
     def make_dataset(self, data):
-        self.label = data[:,:,1] 
+
+        self.full_input = data[np.newaxis, np.newaxis,:,:,0].astype(np.float32)
+        self.full_input /= 256.
+
+        self.label = data[np.newaxis, :,:,1] 
         mask = self.label < 128
         self.label[mask] = 100
         self.label[~mask] = 200
-        self.full_input = data[:,:,0].astype(np.float32)
-        self.full_input /= 256.
+        self.height_gt = np.empty_like(self.label)
+        _, self.height_gt[0] = segmenation_to_membrane_core(self.label[0])
+        
+        # with h.File("shape3.h5","w") as out:
+        #     out.create_dataset("test",data=data) 
+        #     out.create_dataset("data",data=self.full_input.astype(np.float32)) 
+        #     out.create_dataset("label",data=self.label.astype(np.float32)) 
+        #     out.create_dataset("height",data=self.height_gt.astype(np.float32)) 
 
     def draw_polygon(self):
         data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
@@ -210,7 +233,8 @@ class PolygonDataProvider(DataProvider):
         cr.stroke();
 
         self.make_dataset(data)
-        return data[np.newaxis, np.newaxis,:,:,0] 
+        return data[np.newaxis, np.newaxis,:,:,0]
+
 
     def load_data(self, options):
         self.full_input = self.draw_polygon()
@@ -437,7 +461,6 @@ if __name__ == '__main__':
 
 
 # Utility functions
-
 def cut_reprs(path):
     label_path = path + 'label_first_repr_big_zstack_cut.h5'
     memb_path = path + 'membranes_first_repr_big_zstack.h5'
@@ -744,14 +767,6 @@ def segmentation_to_membrane(input_path,output_path):
                     segmenation_to_membrane_core(im)
             height_h5.create_dataset("boundary",data=boundary_stack, dtype=np.float32)
             height_h5.create_dataset("height",data=height_stack, dtype=np.float32)
-
-
-def segmenation_to_membrane_core(label_image):
-    gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
-    gy = convolve(label_image, np.array([-1., 0., 1.]).reshape(3, 1))
-    boundary= np.float32((gx ** 2 + gy ** 2) > 0)
-    height = distance_transform_edt(boundary == 0)
-    return boundary, height
 
 
 def create_holes(batch, fov):
