@@ -41,7 +41,7 @@ class HoneyBatcherPredict(object):
         self.pad = options.patch_len / 2
         self.seed_method = options.seed_method
         self.bs = options.batch_size
-        self.batch_data_provider = data_provider.DataProvider(options)
+        self.batch_data_provider = data_provider.PolygonDataProvider(options)
 
         self.batch_shape = self.batch_data_provider.get_batch_shape()
         self.image_shape = self.batch_data_provider.get_image_shape()

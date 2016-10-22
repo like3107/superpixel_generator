@@ -19,6 +19,14 @@ def segmenation_to_membrane_core(label_image):
     height = distance_transform_edt(boundary == 0)
     return boundary, height
 
+def generate_gt_height(label_image, max_height):
+    _, height = segmenation_to_membrane_core(label_image)
+    np.clip(height, 0, max_height, out=height)
+    maximum = np.max(height)
+    height *= -1.
+    height += maximum 
+    return height
+
 class DataProvider(object):
     def __init__(self, options):
         self.options = options
@@ -161,12 +169,13 @@ class CremiDataProvider(DataProvider):
 
 class PolygonDataProvider(DataProvider):
     def __init__(self, options):
-        self.size = 500
+        self.size = 100
+        self.linewidth = 3
         super(PolygonDataProvider, self).__init__(options)
         print self.size
 
     def get_dashes(self):
-        return [10.0, 30.0, 10.0, 10.0]
+        return np.random.randint(5, 15, size=4)
 
     def draw_circle(self):
         data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
@@ -175,7 +184,7 @@ class PolygonDataProvider(DataProvider):
         cr = cairo.Context(surface)
         cr.set_source_rgb(1.0, 0, 0)
         cr.paint()
-        cr.set_line_width (50.0);
+        cr.set_line_width (self.linewidth)
         cr.set_dash(self.get_dashes()); 
         cr.arc(self.size/2, self.size/2, self.size/4, 0, 1.2*math.pi) 
         cr.close_path()
@@ -188,10 +197,10 @@ class PolygonDataProvider(DataProvider):
 
         self.make_dataset(data)
 
-        with h.File("shape.h5","w") as out:
-            out.create_dataset("test",data=data) 
-            out.create_dataset("data",data=self.full_input.astype(np.float32)) 
-            out.create_dataset("label",data=self.label.astype(np.float32)) 
+        # with h.File("shape.h5","w") as out:
+        #     out.create_dataset("test",data=data) 
+        #     out.create_dataset("data",data=self.full_input.astype(np.float32)) 
+        #     out.create_dataset("label",data=self.label.astype(np.float32)) 
 
     def make_dataset(self, data):
 
@@ -203,8 +212,9 @@ class PolygonDataProvider(DataProvider):
         self.label[mask] = 100
         self.label[~mask] = 200
         self.height_gt = np.empty_like(self.label)
-        _, self.height_gt[0] = segmenation_to_membrane_core(self.label[0])
-        
+        self.height_gt[0] = generate_gt_height(self.label[0],
+                                               self.options.patch_len / 2)
+
         # with h.File("shape3.h5","w") as out:
         #     out.create_dataset("test",data=data) 
         #     out.create_dataset("data",data=self.full_input.astype(np.float32)) 
@@ -218,7 +228,7 @@ class PolygonDataProvider(DataProvider):
         cr = cairo.Context(surface)
         cr.set_source_rgb(1.0, 0, 0)
         cr.paint()
-
+        cr.set_line_width (self.linewidth)
         cr.set_dash(self.get_dashes()); 
         xm, ym = self.size, self.size
         cr.move_to (xm/2., ym/10.)
@@ -233,17 +243,16 @@ class PolygonDataProvider(DataProvider):
         cr.stroke();
 
         self.make_dataset(data)
-        return data[np.newaxis, np.newaxis,:,:,0]
 
 
     def load_data(self, options):
-        self.full_input = self.draw_polygon()
+        self.draw_polygon()
 
 if __name__ == '__main__':
     class opt():
         def __init__(self):
             self.batch_size = 1
-            self.patch_len = 20
+            self.patch_len = 40
             self.network_channels = 1
             self.global_edge_len = 0
             self.padding_b=False
@@ -524,6 +533,17 @@ def mirror_cube(array, pad_length):
 
     mirrored_array = np.pad(array, pad_info, mode='reflect')
     return mirrored_array
+
+def pad_cube(array, pad_length, value=0):
+
+    pad_info = tuple((array.ndim-2)*[(0,0)]+\
+                [(pad_length, pad_length),
+                (pad_length, pad_length)])
+    padded_array = np.pad(array,
+                            pad_info,
+                            mode='constant',
+                            constant_values=value)
+    return padded_array
 
 
 def make_array_cumulative(array):
