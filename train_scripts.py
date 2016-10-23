@@ -7,7 +7,6 @@ import theano
 import utils as u
 import nets
 import dataset_utils as du
-print du.__file__
 import numpy as np
 from theano.sandbox import cuda as c
 import experience_replay as exp
@@ -153,6 +152,14 @@ def train_script_v1(options):
     ft_iteration = 0
     free_voxel_empty = bm.get_num_free_voxel()
     free_voxel = free_voxel_empty
+
+    num_batch = free_voxel_empty / 10
+    bigbatch = np.zeros((num_batch,options.network_channels,options.patch_len,options.patch_len),dtype=np.float32)
+    biggt = np.zeros((num_batch,4,1,1),dtype=np.float32)
+    bigcounter = 0
+    loss_train = 0
+    loss_train_no_reg = 0
+
     while not converged and (iteration < options.max_iter):
         iteration += 1
         free_voxel -= 1
@@ -197,7 +204,8 @@ def train_script_v1(options):
             bm.update_priority_queue(probs, seeds, ids)
 
         # debug
-        if False and iteration % 100 == 0:
+        if False  and iteration % 100 == 0:
+            print "serializing to ",debug_path
             with h5py.File(debug_path + "/batch_%08i_counter_%i"
                     % (iteration, bm.counter), 'w') as out_h5:
                 out_h5.create_dataset("membrane",data=membrane ,compression="gzip")
@@ -338,30 +346,36 @@ def train_script_v1(options):
 
         # pre-training
         if iteration % 10 == 0 and iteration < options.pre_train_iter:
-
-            if options.exp_bs > 0:
-                Memento.add_to_memory(membrane, gt)
-                # start using exp replay only after #options.exp_warmstart iterations
-                if iteration >= options.exp_warmstart:
-                    membrane, gt, mem_choice = Memento.get_batch(options.batch_size +
-                                                     options.exp_bs)
-
-            if options.create_holes:
-                membrane = du.create_holes(membrane, options.patch_len)
-
-            if options.augment_pretraining:
-                a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
-                loss_train, individual_loss = loss_train_f(a_membrane, a_gt)
-                individual_loss = du.average_ouput(individual_loss)
+            if (options.reset_pretraining):
+                biggt[bigcounter] = gt
+                bigbatch[bigcounter] = membrane
+                bigcounter += 1
             else:
-                loss_train, individual_loss = loss_train_f(membrane, gt)
+                if options.exp_bs > 0:
+                    Memento.add_to_memory(membrane, gt)
+                    # start using exp replay only after #options.exp_warmstart iterations
+                    if iteration >= options.exp_warmstart:
+                        membrane, gt, mem_choice = Memento.get_batch(options.batch_size +
+                                                         options.exp_bs)
 
-            # for old memento (ft)
-            if options.exp_bs > 0 and options.exp_warmstart < iteration:
-                Memento.update_loss(individual_loss, mem_choice)
-                # tmp use if memento blows up the ram :)
-                # if iteration % 1000 == 0 and options.exp_bs > 0:
-                #     Memento.forget()
+                if options.create_holes:
+                    membrane = du.create_holes(membrane, options.patch_len)
+
+                if options.augment_pretraining:
+                    a_membrane, a_gt = du.augment_batch(membrane, gt=gt)
+                    loss_train, individual_loss, _ = loss_train_f(a_membrane, a_gt)
+                    individual_loss = du.average_ouput(individual_loss)
+                    "augment loss",loss_train
+                else:
+                    loss_train, individual_loss, _ = loss_train_f(membrane, gt)
+                    print "pretrain loss",loss_train
+
+                # for old memento (ft)
+                if options.exp_bs > 0 and options.exp_warmstart < iteration:
+                    Memento.update_loss(individual_loss, mem_choice)
+                    # tmp use if memento blows up the ram :)
+                    # if iteration % 1000 == 0 and options.exp_bs > 0:
+                    #     Memento.forget()
 
         # reset bms and ft
         if free_voxel == 0 \
@@ -384,55 +398,72 @@ def train_script_v1(options):
                 (iteration, bm.counter, free_voxel),
                 path=save_net_path_reset)
 
-            if options.fine_tune_b:
+            if options.fine_tune_b and iteration < optiosn.pre_train_iter:
                 bm.find_global_error_paths()
-            # check whether there are any batches with errors
-            if bm.count_new_path_errors() > 0 and options.fine_tune_b \
-                    and iteration > options.pre_train_iter:
-                print 'starting Finetuning...'
-                error_b_type1, error_b_type2, dir1, dir2 = \
-                    bm.reconstruct_path_error_inputs()
-                # bm.draw_error_paths('error_paths_it_%i' %iteration)
-                # bm.draw_error_reconst('error_rec_it_%i' %iteration)
-                batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
-                batch_dir_ft = exp.stack_batch(dir1, dir2)
+                # check whether there are any batches with errors
+                if bm.count_new_path_errors() > 0 and options.fine_tune_b \
+                        and iteration > options.pre_train_iter:
+                    print 'starting Finetuning...'
+                    error_b_type1, error_b_type2, dir1, dir2 = \
+                        bm.reconstruct_path_error_inputs()
+                    # bm.draw_error_paths('error_paths_it_%i' %iteration)
+                    # bm.draw_error_reconst('error_rec_it_%i' %iteration)
+                    batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
+                    batch_dir_ft = exp.stack_batch(dir1, dir2)
 
-                batch_ft = exp.flatten_stack(batch_ft).astype(theano.config.floatX)
-                batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
+                    batch_ft = exp.flatten_stack(batch_ft).astype(theano.config.floatX)
+                    batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
 
-                p_ft = probs_fine_f(batch_ft, batch_dir_ft)
-                bs = batch_ft.shape[0]
+                    p_ft = probs_fine_f(batch_ft, batch_dir_ft)
+                    bs = batch_ft.shape[0]
 
-                ft_loss_train, individual_loss_fine = \
-                            loss_train_fine_f(batch_ft, batch_dir_ft)
-                print 'ft loss', ft_loss_train
+                    ft_loss_train, individual_loss_fine = \
+                                loss_train_fine_f(batch_ft, batch_dir_ft)
+                    print 'ft loss', ft_loss_train
 
-                if not options.val_b:
-                    fine_tune_losses[0].append(1)
-                fine_tune_losses[1].append(ft_loss_train)
-                ft_iteration += 1
-                u.plot_train_val_errors(fine_tune_losses,
-                                                range(ft_iteration),
-                                                save_net_path + 'ft_training.png',
-                                                ['ft loss no reg no dropout',
-                                                 'ft loss'])
+                    if not options.val_b:
+                        fine_tune_losses[0].append(1)
+                    fine_tune_losses[1].append(ft_loss_train)
+                    ft_iteration += 1
+                    u.plot_train_val_errors(fine_tune_losses,
+                                                    range(ft_iteration),
+                                                    save_net_path + 'ft_training.png',
+                                                    ['ft loss no reg no dropout',
+                                                     'ft loss'])
 
-                save_net_path_pre = save_net_path_ft
+                    save_net_path_pre = save_net_path_ft
 
-                # Memento_ft.get_batch(options.batch_size_ft + options.exp_ft_bs)
-                # if options.augment_ft:
-                #     batch_ft_t1, dir_t1 = du.augment_batch(batch_ft[:,0],
-                #                                            direction=dir_ft[:,0])
-                #     batch_ft_t2, dir_t2 = du.augment_batch(batch_ft[:,1],
-                #                                            direction=dir_ft[:,1])
-                #     batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
-                #     batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
-                # else:
-                    # batch_ft = exp.flatten_stack(batch_ft).astype(theano.config.floatX)
-                    # batch_dir_ft = exp.flatten_stack(dir_ft).astype(np.int32)
-                if options.val_b:
-                    ft_loss_train_noreg = loss_valid_fine_f(batch_ft, dir_ft)
-                # probs_fine = probs_fine_f(batch_ft, batch_dir_ft)
+                    # Memento_ft.get_batch(options.batch_size_ft + options.exp_ft_bs)
+                    # if options.augment_ft:
+                    #     batch_ft_t1, dir_t1 = du.augment_batch(batch_ft[:,0],
+                    #                                            direction=dir_ft[:,0])
+                    #     batch_ft_t2, dir_t2 = du.augment_batch(batch_ft[:,1],
+                    #                                            direction=dir_ft[:,1])
+                    #     batch_ft = np.concatenate((batch_ft_t1, batch_ft_t2), axis=0)
+                    #     batch_dir_ft = np.concatenate((dir_t1, dir_t2), axis=0)
+                    # else:
+                        # batch_ft = exp.flatten_stack(batch_ft).astype(theano.config.floatX)
+                        # batch_dir_ft = exp.flatten_stack(dir_ft).astype(np.int32)
+                    if options.val_b:
+                        ft_loss_train_noreg = loss_valid_fine_f(batch_ft, dir_ft)
+                    # probs_fine = probs_fine_f(batch_ft, batch_dir_ft)
+            elif (options.reset_pretraining):
+                bm.serialize_to_h5("reset_"+str(iteration)+".h5",path=debug_path)
+
+                loss_train, individual_loss, pred = loss_train_f(bigbatch, biggt)
+                with h5py.File(debug_path + "/bigbatch_%08i"% iteration, 'w') as out_h5:
+                    out_h5.create_dataset("bigbatch",data=bigbatch ,compression="gzip")
+                    out_h5.create_dataset("biggt",data=biggt ,compression="gzip")
+                    out_h5.create_dataset("pred",data=probs_f(bigbatch) ,compression="gzip")
+                    out_h5.create_dataset("pred_loss",data=pred ,compression="gzip")
+                print "gt max,min",np.max(biggt),np.min(biggt)
+                print "pred max,min",np.max(pred),np.min(pred)
+                print "bigloss(", bigcounter,"/",num_batch,") ", loss_train
+                print "loss_train",loss_train,"reen",np.mean((pred - biggt)**2)
+                loss_train_no_reg = loss_valid_f(bigbatch, biggt)
+                bigbatch.fill(0)
+                biggt.fill(0)
+                bigcounter = 0
 
             if options.val_b:
                 bm_val.draw_debug_image(
@@ -453,10 +484,10 @@ def train_script_v1(options):
         # monitor training and plot loss
         if iteration % 1000 == 0 and (iteration < options.pre_train_iter or not
                 options.fine_tune_b):
-            if options.augment_pretraining:
-                loss_train_no_reg = float(loss_valid_f(a_membrane, a_gt))
-            else:
-                loss_train_no_reg = float(loss_valid_f(membrane, gt))
+            # if options.augment_pretraining:
+            #     loss_train_no_reg = float(loss_valid_f(a_membrane, a_gt))
+            # else:
+            #     loss_train_no_reg = float(loss_valid_f(membrane, gt))
             if options.val_b:
                 loss_valid = float(loss_valid_f(membrane_val, gt_val))
             else:
@@ -558,6 +589,7 @@ def get_options():
     p.add('--reset_after_fine_tune', action='store_true')
     p.add('--no-ft', dest='fine_tune_b', action='store_false')
     p.add('--reset-ft', dest='rs_ft', action='store_true')
+    p.add('--reset_pretraining', dest='reset_pretraining', action='store_true')
     p.add('--margin', default=0.5, type=float)
     p.add('--no-aug-ft', dest='augment_ft', action='store_false')
     # experience replay

@@ -365,10 +365,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         if self.height_gt is not None:
             if options.clip_method=='clip':
                 np.clip(self.height_gt, 0, options.patch_len / 2, out=self.height_gt)
-            elif isinstance(options.clip_method, basestring) and \
-                                len(options.clip_method) > 3 and \
-                                options.clip_method[:3] == 'exp':
-                dist = float(options.clip_method[3:])
+            elif options.clip_method=='exp':
+                dist = options.patch_len / 2
                 self.height_gt = \
                     np.exp(np.square(self.height_gt) / (-2) / dist ** 2)
             maximum = np.max(self.height_gt)
@@ -591,7 +589,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def locate_global_error_path_intersections(self):
         for b in range(self.bs):
-            # plot_images = []
+            plot_images = []
 
             # project claim id to ground truth id by lookup
             gtmap = np.array([0]+self.global_id2gt[b].values())
@@ -601,22 +599,22 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             claim_projection[:,self.pad-1]=claim_projection[:,self.pad]
             claim_projection[:,-self.pad]=claim_projection[:,-self.pad-1]
             not_found = np.zeros_like(claim_projection)
-            #
-            # plot_images.append({"title": "claim",
-            #                     'cmap': "rand",
-            #                     'im': self.global_claims[b,
-            #                                              self.pad:-self.pad,
-            #                                              self.pad:-self.pad]})
-            # plot_images.append({"title": "gt",
-            #                     'cmap': "rand",
-            #                     'im': self.global_label_batch[b]})
-            # plot_images.append({"title": "mix",
-            #                     'cmap': "rand",
-            #                     'im': claim_projection[self.pad:-self.pad,
-            #                                            self.pad:-self.pad]})
-            # plot_images.append({"title": "overflow",
-            #                         'cmap': "grey",
-            #                         'im': self.global_errormap[b, 1]})
+            
+            plot_images.append({"title": "claim",
+                                'cmap': "rand",
+                                'im': self.global_claims[b,
+                                                         self.pad:-self.pad,
+                                                         self.pad:-self.pad]})
+            plot_images.append({"title": "gt",
+                                'cmap': "rand",
+                                'im': self.global_label_batch[b]})
+            plot_images.append({"title": "mix",
+                                'cmap': "rand",
+                                'im': claim_projection[self.pad:-self.pad,
+                                                       self.pad:-self.pad]})
+            plot_images.append({"title": "overflow",
+                                    'cmap': "grey",
+                                    'im': self.global_errormap[b, 1]})
 
             # find where path crosses region
             gx = convolve(claim_projection + 1, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -628,23 +626,23 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                            self.global_errormap[b, 1])
 
 
-            # plot_images.append({"title": "path_fin_0",
-            #             'cmap': "grey",
-            #             'im': path_fin_map})
+            plot_images.append({"title": "path_fin_0",
+                        'cmap': "grey",
+                        'im': path_fin_map})
             np.logical_and(path_fin_map,
                            (self.global_claims[b,
                                                self.pad:-self.pad,
                                                self.pad:-self.pad] > 0),
                            out=path_fin_map)
-            # plot_images.append({"title": "path_fin_1",
-            #                         'cmap': "grey",
-            #                         'im': path_fin_map})
-            # plot_images.append({"title": "boundary",
-            #                     'cmap': "grey",
-            #                     'im': boundary[self.pad:-self.pad,
-            #                                    self.pad:-self.pad]})
-            # u.save_images(plot_images, path="./../data/debug/",
-            #               name="path_test_"+str(b)+".png")
+            plot_images.append({"title": "path_fin_1",
+                                    'cmap': "grey",
+                                    'im': path_fin_map})
+            plot_images.append({"title": "boundary",
+                                'cmap': "grey",
+                                'im': boundary[self.pad:-self.pad,
+                                               self.pad:-self.pad]})
+            u.save_images(plot_images, path="./../data/debug/",
+                          name="path_test_"+str(b)+".png")
             # plot_images.append([])
             # plot_images.append([])
             wrong_path_ends = np.transpose(np.where(path_fin_map)) + self.pad

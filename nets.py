@@ -265,7 +265,7 @@ class NetBuilder:
                             nonlinearity=las.nonlinearities.rectify)
         l_7 = L.Conv2DLayer(l_6, n_filt[4], 1,
                             nonlinearity=las.nonlinearities.rectify,
-                            b=np.random.random(n_classes)*10+10.)
+                            b=np.random.random(n_classes)*10)
 
         l_6_eat = L.Conv2DLayer(l_5, n_filt[3], 1,
                             nonlinearity=las.nonlinearities.rectify)
@@ -540,7 +540,7 @@ class NetBuilder:
         if update == 'sgd':
             updates = las.updates.sgd(loss_train, all_params, 0.0001)
         loss_train_f = theano.function([l_in.input_var, target],
-                                       [loss_train, loss_individual_batch],
+                                       [loss_train, loss_individual_batch, l_out_train],
                                        updates=updates)
 
         loss_valid_f = theano.function([l_in.input_var, target], loss_valid)

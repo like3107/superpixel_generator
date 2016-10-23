@@ -17,14 +17,19 @@ def segmenation_to_membrane_core(label_image):
     gy = convolve(label_image, np.array([-1., 0., 1.]).reshape(3, 1))
     boundary= np.float32((gx ** 2 + gy ** 2) > 0)
     height = distance_transform_edt(boundary == 0)
-    return boundary, height
+    return boundary, height.astype(np.float32)
 
-def generate_gt_height(label_image, max_height):
+def generate_gt_height(label_image, max_height, clip_method='clip'):
     _, height = segmenation_to_membrane_core(label_image)
-    np.clip(height, 0, max_height, out=height)
-    maximum = np.max(height)
-    height *= -1.
-    height += maximum 
+    if clip_method=='clip':
+        np.clip(height, 0, max_height, out=height)
+        maximum = np.max(height)
+        height *= -1.
+        height += maximum 
+    elif clip_method=='exp':
+        np.square(height, out=height)
+        height /= (-2 * (max_height/10) ** 2)
+        np.exp(height, out=height)
     return height
 
 class DataProvider(object):
@@ -183,7 +188,7 @@ class PolygonDataProvider(DataProvider):
         cr.set_source_rgb(1.0, 0, 0)
         cr.paint()
         cr.set_line_width (self.linewidth)
-        cr.set_dash(self.get_dashes()); 
+        # cr.set_dash(self.get_dashes()); 
         cr.arc(self.size/2, self.size/2, self.size/4, 0, 1.2*math.pi) 
         cr.close_path()
         cr.set_source_rgb (0, 1., 0);
@@ -200,24 +205,29 @@ class PolygonDataProvider(DataProvider):
         #     out.create_dataset("data",data=self.full_input.astype(np.float32)) 
         #     out.create_dataset("label",data=self.label.astype(np.float32)) 
 
-    def make_dataset(self, data):
+    def make_dataset(self, data, labels = [0., 1.]):
 
         self.full_input = data[np.newaxis, np.newaxis,:,:,0].astype(np.float32)
         self.full_input /= 256.
 
-        self.label = data[np.newaxis, :,:,1] 
-        mask = self.label < 128
-        self.label[mask] = 100
-        self.label[~mask] = 200
-        self.height_gt = np.empty_like(self.label)
-        self.height_gt[0] = generate_gt_height(self.label[0],
-                                               self.options.patch_len / 2)
+        self.label = np.zeros_like(data[np.newaxis, :,:,1],dtype=np.float32)
+        thresholds = [(l1+l0)/2 for (l0,l1) in zip(sorted(labels),sorted(labels[1:]))]
 
-        # with h.File("shape3.h5","w") as out:
-        #     out.create_dataset("test",data=data) 
-        #     out.create_dataset("data",data=self.full_input.astype(np.float32)) 
-        #     out.create_dataset("label",data=self.label.astype(np.float32)) 
-        #     out.create_dataset("height",data=self.height_gt.astype(np.float32)) 
+        mask = self.label >= thresholds[0]
+        self.label[mask] = 0
+
+        print thresholds
+        for i, l in enumerate(thresholds):
+            mask = data[np.newaxis, :,:,1] > l*256
+            print "u", np.unique(data[np.newaxis, :,:,1][mask])
+            self.label[mask] = i+1
+            print np.sum(mask)
+
+        self.height_gt = np.empty_like(self.label, dtype=np.float32)
+        self.height_gt[0] = generate_gt_height(self.label[0],
+                                   self.options.patch_len / 2,
+                                   clip_method=self.options.clip_method)
+
 
     def draw_polygon(self):
         data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
@@ -227,7 +237,7 @@ class PolygonDataProvider(DataProvider):
         cr.set_source_rgb(1.0, 0, 0)
         cr.paint()
         cr.set_line_width (self.linewidth)
-        cr.set_dash(self.get_dashes()); 
+        # cr.set_dash(self.get_dashes()); 
         xm, ym = self.size, self.size
         cr.move_to (xm/2., ym/10.)
         cr.line_to(xm/1.3,ym/1.3) 
@@ -242,9 +252,47 @@ class PolygonDataProvider(DataProvider):
 
         self.make_dataset(data)
 
+    def draw_passage(self, passage_size=0.1):
+        data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
+        surface = cairo.ImageSurface.create_for_data(
+                    data, cairo.FORMAT_ARGB32, self.size, self.size)
+        cr = cairo.Context(surface)
+        cr.set_source_rgb(1.0, 0, 0)
+        cr.paint()
+        cr.set_line_width (self.linewidth)
+        # cr.set_dash(self.get_dashes()); 
+        xm, ym = self.size, self.size
+        cr.move_to (0, 0)
+        cr.line_to(0.2*xm,(1-passage_size) * ym/2) 
+        cr.line_to((1.-0.2)*xm,(1-passage_size) * ym/2) 
+        cr.line_to(1.*xm,0.)
+        cr.set_source_rgb (0, 1., 0);
+        cr.fill_preserve();
+        cr.set_operator(cairo.OPERATOR_ADD)
+        cr.set_source_rgb(0., 0., 1.0)
+        cr.stroke();
+
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.new_sub_path() 
+        cr.move_to (1.*xm, 1.*ym)
+        cr.line_to((1-0.2)*xm,(1+passage_size) * ym/2)
+        cr.line_to((0.2)*xm,(1+passage_size) * ym/2) 
+        cr.line_to(0,1*ym) 
+        cr.set_source_rgb (0, 0.6, 0);
+        cr.fill_preserve();
+        cr.set_operator(cairo.OPERATOR_ADD)
+        cr.set_source_rgb(0., 0., 1.0)
+        cr.stroke();
+
+        data[:,:,2] = 0
+        data[:,:,0] = 0
+
+        surface.write_to_png ("example.png") 
+
+        self.make_dataset(data, labels = [0.0, 0.3, 0.6, 1.] )
 
     def load_data(self, options):
-        self.draw_polygon()
+        self.draw_passage()
 
 if __name__ == '__main__':
     class opt():
