@@ -167,7 +167,7 @@ class CremiDataProvider(DataProvider):
                                     h5_key=None,
                                     slices=self.slices)[0]
         raw /= 256. - 0.5
-        self.full_input = np.dstack((raw, membrane))
+        self.full_input = np.dstack((raw, membrane), axis=1)
         self.height_gt = load_h5(self.options.height_gt_path,
                                     h5_key=None,
                                     slices=self.slices)[0]

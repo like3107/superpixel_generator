@@ -683,13 +683,12 @@ class NetBuilder:
 
         loss_valid_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
                                        loss_valid)
-        probs_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
-                                  l_out_valid)
+        probs_f = theano.function([l_in.input_var], l_out_valid)
 
         return loss_train_f, loss_valid_f, probs_f
 
 
-    def loss_updates_hydra_v5(self, l_in_data, l_in_direction, last_layer,
+    def loss_updates_hydra_v5(self, l_in_data, l_in_direction, last_layer, l_out_cross,
                               L1_weight=10**-5, margin=0):
 
         all_params = L.get_all_params(last_layer, trainable=True)
@@ -698,6 +697,7 @@ class NetBuilder:
 
         l_out_train = L.get_output(last_layer, deterministic=False)
         l_out_valid = L.get_output(last_layer, deterministic=True)
+        l_out_prediciton = L.get_output(l_out_cross, deterministic=True)
 
         L1_norm = \
             las.regularization.regularize_network_params(last_layer,
@@ -721,8 +721,7 @@ class NetBuilder:
         loss_valid_f = theano.function([l_in_data.input_var,
                                         l_in_direction.input_var],
                                        loss_valid)
-        probs_f = theano.function([l_in_data.input_var, l_in_direction.input_var],
-                                  l_out_valid)
+        probs_f = theano.function([l_in_data.input_var], l_out_prediciton)
 
         return loss_train_f, loss_valid_f, probs_f
 
