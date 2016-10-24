@@ -46,8 +46,6 @@ class HoneyBatcherPredict(object):
         self.batch_shape = self.batch_data_provider.get_batch_shape()
         self.image_shape = self.batch_data_provider.get_image_shape()
         self.label_shape = self.batch_data_provider.get_label_shape()
-        print "image_shape",self.image_shape
-        print "label_shape",self.label_shape
         self.global_input_batch = np.zeros(self.batch_shape,
                                            dtype=np.float32)
         self.global_label_batch = np.zeros(self.label_shape,
@@ -1148,7 +1146,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         plot_images.insert(5,{"title": "Overflow Map",
                             'im': self.global_errormap[b, 1, :, :],
                             'interpolation': 'none'})
-        
+
         plot_images.insert(6,{"title": "Heightmap GT",
                             'im': self.global_height_gt_batch[b, :, :],
                             'scatter': np.array(self.global_seeds[b]) - self.pad,
@@ -1488,6 +1486,25 @@ def height_to_grad(height):
     grad[:,1,:,:] = height[:,2,:,:]-height[:,0,:,:]
     grad[:,2,:,:] = height[:,1,:,:]-height[:,3,:,:]
     return grad
+
+def height_to_fc_height_gt(height):
+    fc_height_shape = list(height.shape)
+    fc_height_shape.insert(1, 4)
+    fc_height_shape[2] += 1
+    fc_height_shape[3] += 1
+    fc_height = np.zeros((fc_height_shape), dtype='float32')
+    cross_coords = [[-1, 0], [0, -1], [1, 0], [0, 1]]
+    for i, (x, y) in enumerate(cross_coords):
+        fc_height[:, x:, y:]
+    # top
+    fc_height[:, 0, 2:, 1:] = height[:, :-1, :]
+    # left
+    fc_height[:, 1, 1:, 2:] = height[:, :, :-1]
+    # bottom
+    fc_height[:, 2, :-2, 1:] = height[:, 1:, :]
+    # right
+    fc_height[:, 3, 1:, :-2] = height[:, :, 1:]
+    return fc_height
 
 class MergeDict(dict):
     def __missing__(self, key):

@@ -33,6 +33,14 @@ def calc_conv_reduction(edge_len, filter_size, stride=1, pooling=1, padding=0):
         #                     nonlinearity=las.nonlinearities.rectify,
         #                     b=np.random.random(n_classes)*10+10.)
 
+
+def add_channel(net, additionl_channels):
+
+    print net
+    exit()
+
+
+
 if __name__ == '__main__':
 
 	filt = [3, 5, 5]

@@ -2,6 +2,7 @@ import h5py as h
 import numpy as np
 import random
 from os import makedirs
+import utils as u
 from os.path import exists
 import cairo
 import math
@@ -19,6 +20,7 @@ def segmenation_to_membrane_core(label_image):
     height = distance_transform_edt(boundary == 0)
     return boundary, height.astype(np.float32)
 
+
 def generate_gt_height(label_image, max_height, clip_method='clip'):
     _, height = segmenation_to_membrane_core(label_image)
     if clip_method=='clip':
@@ -32,13 +34,14 @@ def generate_gt_height(label_image, max_height, clip_method='clip'):
         np.exp(height, out=height)
     return height
 
+
 class DataProvider(object):
     def __init__(self, options):
         self.options = options
         self.bs = options.batch_size
         self.slices = None
         self.pad = options.patch_len /2
-
+        self.pl = options.patch_len
         self.load_data(options)
         self.n_slices = range(self.full_input.shape[0])
         print "options.network_channels",options.network_channels
@@ -57,15 +60,16 @@ class DataProvider(object):
             self.full_input = mirror_cube(self.full_input, self.pad)
 
     def get_batch_shape(self):
-        data_shape =  list(self.full_input.shape)
+        data_shape = list(self.full_input.shape)
+        print 'data sahpe', data_shape
         data_shape[0] = self.bs
         if self.options.global_edge_len > 0:
-            data_shape[1] = self.options.global_edge_len
             data_shape[2] = self.options.global_edge_len
+            data_shape[3] = self.options.global_edge_len
         return data_shape
 
     def get_image_shape(self):
-        data_shape =  list(self.get_batch_shape())
+        data_shape = list(self.get_batch_shape())
         del data_shape[1]
         return data_shape
 
@@ -98,8 +102,8 @@ class DataProvider(object):
                                       self.rl_y - self.options.global_edge_len + 1,
                                       size=self.bs)
             for b in range(self.bs):
-                input[b, :, :] = \
-                    self.full_input[ind_b[b],
+                input[b, :, :, :] = \
+                    self.full_input[ind_b[b], :,
                              ind_x[b]:ind_x[b] + self.options.global_edge_len,
                              ind_y[b]:ind_y[b] + self.options.global_edge_len]
             return [ind_b, ind_x, ind_y]
@@ -115,12 +119,12 @@ class DataProvider(object):
             for b in range(self.bs):
                 height[b, :, :] = \
                     self.height_gt[ind_b[b],
-                       ind_x[b]:ind_x[b] + self.options.global_edge_len - self.pl,
-                       ind_y[b]:ind_y[b] + self.options.global_edge_len - self.pl]
+                       ind_x[b]:ind_x[b] + self.options.global_edge_len,
+                       ind_y[b]:ind_y[b] + self.options.global_edge_len]
                 label[b, :, :] = \
-                    self.labels[ind_b[b],
-                        ind_x[b]:ind_x[b] + self.options.global_edge_len - self.pl,
-                        ind_y[b]:ind_y[b] + self.options.global_edge_len - self.pl]
+                    self.label[ind_b[b],
+                        ind_x[b]:ind_x[b] + self.options.global_edge_len,
+                        ind_y[b]:ind_y[b] + self.options.global_edge_len]
         else:
             for b in range(self.bs):
                 if self.options.padding_b:
@@ -153,6 +157,7 @@ class DataProvider(object):
                                     h5_key=None,
                                     slices=self.slices)[0]
 
+
 class CremiDataProvider(DataProvider):
     def load_data(self, options):
         membrane = load_h5(self.options.membrane_path,
@@ -162,13 +167,14 @@ class CremiDataProvider(DataProvider):
                                     h5_key=None,
                                     slices=self.slices)[0]
         raw /= 256. - 0.5
-        self.full_input = np.dstack((raw, membrane), axis=1)
+        self.full_input = np.dstack((raw, membrane))
         self.height_gt = load_h5(self.options.height_gt_path,
                                     h5_key=None,
                                     slices=self.slices)[0]
         self.label = load_h5(self.options.label_path,
                                     h5_key=None,
                                     slices=self.slices)[0]
+
 
 class PolygonDataProvider(DataProvider):
     def __init__(self, options):
@@ -205,7 +211,7 @@ class PolygonDataProvider(DataProvider):
         #     out.create_dataset("data",data=self.full_input.astype(np.float32)) 
         #     out.create_dataset("label",data=self.label.astype(np.float32)) 
 
-    def make_dataset(self, data, labels = [0., 1.]):
+    def make_dataset(self, data, labels=[0., 1.]):
 
         self.full_input = data[np.newaxis, np.newaxis,:,:,0].astype(np.float32)
         self.full_input /= 256.
@@ -228,7 +234,6 @@ class PolygonDataProvider(DataProvider):
                                    self.options.patch_len / 2,
                                    clip_method=self.options.clip_method)
 
-
     def draw_polygon(self):
         data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
         surface = cairo.ImageSurface.create_for_data(
@@ -244,11 +249,11 @@ class PolygonDataProvider(DataProvider):
         cr.rel_line_to(-xm/2.5, 0)
         cr.curve_to (xm/5., ym/2., xm/5., ym/2., xm/2.,ym/2.) 
         cr.close_path()
-        cr.set_source_rgb (0, 1., 0);
-        cr.fill_preserve();
+        cr.set_source_rgb(0, 1., 0)
+        cr.fill_preserve()
         cr.set_operator(cairo.OPERATOR_ADD)
         cr.set_source_rgb(0., 0., 1.0)
-        cr.stroke();
+        cr.stroke()
 
         self.make_dataset(data)
 
@@ -289,228 +294,7 @@ class PolygonDataProvider(DataProvider):
     def load_data(self, options):
         self.draw_passage()
 
-if __name__ == '__main__':
-    class opt():
-        def __init__(self):
-            self.batch_size = 1
-            self.patch_len = 40
-            self.network_channels = 1
-            self.global_edge_len = 0
-            self.padding_b=False
-    options = opt()
-    p = PolygonDataProvider(options)
-    p.draw_circle()
-    # p.draw_polygon()
-# # TODO: move to data loader
-# def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
-#                         n_z=64,
-#                         padding_b=False,
-#                         av_line_dens=0.1 # lines per pixel
-#                         ):
 
-#     raw = np.zeros((n_z, edge_len, edge_len), dtype='float32')
-#     membrane_gt = np.zeros((n_z, edge_len, edge_len), dtype='float32')
-#     gt = np.zeros_like(membrane_gt)
-#     dist_trf = np.zeros_like(membrane_gt)
-
-#     for b in range(n_z):
-#         # horizontal_lines = \
-#         #     sorted(
-#         #         min_distance*np.random.choice(edge_len/min_distance,
-#         #                          replace=False,
-#         #                          size=int(edge_len/min_distance * av_line_dens)))
-#         horizontal_lines = np.array([5])
-#         membrane_gt[b, horizontal_lines, :] = 1.
-#         # raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
-#         raw[b] = membrane_gt[b].copy()
-#         last = 0
-#         i = 0
-#         for hl in horizontal_lines:
-#             i += 1
-#             gt[b, last:hl, :] = i
-#             last = hl
-#         gt[b, last:] = i + 1
-
-#         dist_trf[b] = distance_transform_edt(membrane_gt[b] - 1)
-#     # fig, ax = plt.subplots(4, 2)
-#     # for i in range(2):
-#     #     ax[0, i].imshow(raw[i], cmap='gray', interpolation='none')
-#     #     ax[1, i].imshow(gt[i], cmap=u.random_color_map(), interpolation='none')
-#     #     ax[2, i].imshow(dist_trf[i], cmap='gray', interpolation='none')
-#     #     ax[3, i].imshow(membrane_gt[i], cmap='gray', interpolation='none')
-#     # plt.show()
-#     assert (np.all(gt != 0))
-#     return raw, raw, dist_trf, gt
-
-# # TODO: move to data loader
-# def generate_dummy_data2(batch_size, edge_len, patch_len, save_path=None):
-#     raw = np.zeros((batch_size, edge_len, edge_len))
-#     dist_trf = np.zeros_like(raw)
-
-#     # get membrane gt
-#     membrane_gt = random_lines(n_lines=20, bs=batch_size, edge_len=edge_len,
-#                                rand=False, granularity=10./edge_len)
-#     # get membrane probs
-#     membrane_prob = random_lines(n_lines=8, input_array=membrane_gt.copy(),
-#                                  rand=True, granularity=0.1)
-#     raw = random_lines(n_lines=8, input_array=membrane_gt.copy(),
-#                                  rand=True, granularity=0.1)
-
-#     raw = gaussian_filter(raw, sigma=1)
-#     raw /= np.max(raw)
-#     membrane_prob = gaussian_filter(membrane_prob, sigma=1)
-#     membrane_prob /= np.max(membrane_prob)
-
-#     # get label gt and dist trf
-#     gt = np.ones_like(membrane_gt)
-#     gt[membrane_gt == 1] = 0
-#     for i in range(membrane_gt.shape[0]):
-#         dist_trf[i] = distance_transform_edt(gt[i])
-#         gt[i] = label(gt[i], background=0)
-#         # gt[i] = dilate(gt[i], kernel=np.ones((4,4)), iterations=1)
-
-#     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
-#     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
-
-#     if isinstance(save_path, str):
-#         fig, ax = plt.subplots(2, 5)
-#         ax[0, 0].imshow(membrane_gt[0], cmap='gray')
-#         ax[1, 0].imshow(membrane_gt[1], cmap='gray')
-#         ax[0, 1].imshow(membrane_prob[0], cmap='gray')
-#         ax[1, 1].imshow(membrane_prob[1], cmap='gray')
-#         ax[0, 2].imshow(gt[0])
-#         ax[1, 2].imshow(gt[1])
-#         ax[0, 3].imshow(dist_trf[0], cmap='gray')
-#         ax[1, 3].imshow(dist_trf[1], cmap='gray')
-#         ax[0, 4].imshow(raw[0], cmap='gray')
-#         ax[1, 4].imshow(raw[0], cmap='gray')
-#         plt.savefig(save_path)
-#         plt.show()
-
-#     return raw, membrane_prob, dist_trf, gt
-
-# # TODO: move to data loader
-# def generate_dummy_data3(batch_size, edge_len, patch_len=40, save_path=None,
-#                          nz=64):
-#     batch_size = nz
-#     raw = np.zeros((batch_size, edge_len, edge_len))
-#     label_gt = np.empty_like(raw)
-#     dist_trf = np.zeros_like(raw)
-
-#     # get membrane gt
-#     boundary = random_lines2(n_lines=3, bs=batch_size, edge_len=edge_len)
-#     boundary[:, 5, :] = 1
-#     invers_memb = np.ones_like(boundary)
-#     invers_memb[boundary == 1] = 0
-
-#     for b in range(boundary.shape[0]):
-#         # raw[b, :, :] = create_holes2(boundary[b, :, :].copy(),
-#         #                                        edge_len)
-#         raw[b, :, :] = boundary[b]
-#         raw[b, :, :] /= np.max(raw[b, :, :])
-#         dist_trf[b] = distance_transform_edt(invers_memb[b])
-#         label_gt[b] = label(boundary[b], background=1, connectivity=1)
-#     seeds = u.get_seed_coords(label_gt, ignore_0=True)
-#     gt_new = np.zeros_like(raw)
-#     marker = np.zeros_like(raw).astype(np.int32)
-#     footprint = ndimage.generate_binary_structure(2, 1)
-
-#     for b in range(boundary.shape[0]):
-#         ims_seeds = np.array(seeds[b]) - 20
-#         for i, im_seed in enumerate(ims_seeds):
-#             marker[b, im_seed[0], im_seed[1]] = i + 1
-#         dist_im = (- dist_trf[b] + np.max(dist_trf[b])).astype(np.uint16)
-#         gt_new[b, :, :] = watershed(dist_im, marker[b, :, :])
-#         # p = []
-#         # seed = np.array(seeds[b])
-#         # p.append({"title":"boundary",
-#         #           'im':boundary[b],
-#         #           'interpolation':'none',
-#         #           'scatter':seed - 20})
-#         # p.append({"title":"GT new",
-#         #           'im':gt_new[b],
-#         #           'cmap':'rand',
-#         #           'interpolation':'none',
-#         #           'scatter':seed - 20})
-#         # p.append({"title":"marker",
-#         #           'im':marker[b],
-#         #           'interpolation':'none',
-#         #           'scatter':seed - 20})
-#         # p.append({"title": "dist",
-#         #           'im': dist_trf[b] + edge_len**2,
-#         #           'interpolation': 'none',
-#         #           'scatter': seed - 20})
-#         # p.append({"title": "dist input",
-#         #           'im': dist_im,
-#         #           'interpolation': 'none',
-#         #           'scatter': seed - 20})
-#         # u.save_images(p, './../data/debug/', 'gt_no_holes')
-#         #
-#         # print seeds
-#         # exit()
-#     raw[raw < 0.1] = 0
-#     gt = gt_new
-#     membrane_prob = raw
-
-#     return raw, membrane_prob, dist_trf, gt
-
-
-
-# def random_lines(n_lines, bs=None, edge_len=None, input_array=None, rand=False,
-#                  granularity=0.1):
-#     if input_array is None:
-#         input_array = np.zeros((bs, edge_len, edge_len))
-#     else:
-#         bs = input_array.shape[0]
-#         edge_len = input_array.shape[1]
-
-#     for b in range(bs):
-#         for i in range(n_lines):
-#             m = np.random.uniform() * 10 - 5
-#             c = np.random.uniform() * edge_len * 2 - edge_len
-#             if rand:
-#                 rand_n = np.random.random()
-#                 start = (edge_len - 1)/2 * rand_n
-#                 x = np.arange(start, edge_len - start - 1, granularity)
-#             else:
-#                 x = np.arange(0, edge_len-1, 0.1/edge_len)
-#             y = m * x + c
-#             x = np.round(x[(y < edge_len) & (y >= 0)]).astype(np.int)
-#             y = y[(y < edge_len) & (y >= 0)].astype(np.int)
-#             input_array[b, x, y] = 1.
-#     return input_array
-
-# def random_lines2(n_lines, bs=None, edge_len=None, input_array=None):
-#     if input_array is None:
-#         input_array = np.zeros((bs, edge_len, edge_len))
-#     else:
-#         bs = input_array.shape[0]
-#         edge_len = input_array.shape[1]
-
-#     for b in range(bs):
-#         for i in range(n_lines):
-#             bott_left = np.random.randint(0, 2)
-#             if bott_left == 0:
-#                 start = (np.random.randint(0, edge_len), 0)
-#             else:
-#                 start = (0, np.random.randint(0, edge_len))
-#             top_right = np.random.randint(0, 2)
-#             if top_right == 0:
-#                 end = (edge_len, np.random.randint(0, edge_len))
-#             else:
-#                 end = (np.random.randint(0, edge_len), edge_len)
-
-#             x_points, y_points = u.get_line(start, end)
-#             x_points, y_points = \
-#                 x_points[x_points < edge_len], y_points[x_points < edge_len]
-#             x_points, y_points = \
-#                 x_points[y_points < edge_len], y_points[y_points < edge_len]
-#             input_array[b, x_points, y_points] = 1
-
-#     return input_array
-
-
-# Utility functions
 def cut_reprs(path):
     label_path = path + 'label_first_repr_big_zstack_cut.h5'
     memb_path = path + 'membranes_first_repr_big_zstack.h5'
@@ -890,3 +674,229 @@ def create_holes2(image, edge_len, n_holes=10):
         gauss = 1. - gauss
         image[:, :] *= gauss
     return image
+
+
+def generate_dummy_data3(batch_size, edge_len, patch_len=40, save_path=None,
+                         nz=64):
+    batch_size = nz
+    raw = np.zeros((batch_size, edge_len, edge_len), dtype='float32')
+    label_gt = np.empty_like(raw)
+    dist_trf = np.zeros_like(raw)
+
+    # get membrane gt
+    boundary = random_lines2(n_lines=3, bs=batch_size, edge_len=edge_len)
+    boundary[:, 5, :] = 1
+    invers_memb = np.ones_like(boundary)
+    invers_memb[boundary == 1] = 0
+
+    for b in range(boundary.shape[0]):
+
+        raw[b, :, :] = boundary[b]
+        raw[b, :, :] = create_holes2(boundary[b, :, :].copy(),
+                                               edge_len)
+        raw[b, :, :] /= np.max(raw[b, :, :])
+        dist_trf[b] = distance_transform_edt(invers_memb[b])
+        label_gt[b] = label(boundary[b], background=1, connectivity=1)
+    seeds = u.get_seed_coords(label_gt, ignore_0=True)
+    gt_new = np.zeros_like(raw)
+    marker = np.zeros_like(raw).astype(np.int32)
+    footprint = ndimage.generate_binary_structure(2, 1)
+
+    for b in range(boundary.shape[0]):
+        ims_seeds = np.array(seeds[b]) - 20
+        for i, im_seed in enumerate(ims_seeds):
+            marker[b, im_seed[0], im_seed[1]] = i + 1
+        dist_trf[b] = (- dist_trf[b] + np.max(dist_trf[b])).astype(np.uint16)
+        gt_new[b, :, :] = watershed(dist_trf[b], marker[b, :, :])
+        # p = []
+        # seed = np.array(seeds[b])
+        # p.append({"title":"boundary",
+        #           'im':boundary[b],
+        #           'interpolation':'none',
+        #           'scatter':seed - 20})
+        # p.append({"title":"GT new",
+        #           'im':gt_new[b],
+        #           'cmap':'rand',
+        #           'interpolation':'none',
+        #           'scatter':seed - 20})
+        # p.append({"title":"marker",
+        #           'im':marker[b],
+        #           'interpolation':'none',
+        #           'scatter':seed - 20})
+        # p.append({"title": "dist",
+        #           'im': dist_trf[b] + edge_len**2,
+        #           'interpolation': 'none',
+        #           'scatter': seed - 20})
+        # p.append({"title": "dist input",
+        #           'im': dist_im,
+        #           'interpolation': 'none',
+        #           'scatter': seed - 20})
+        # u.save_images(p, './../data/debug/', 'gt_no_holes')
+        #
+        # print seeds
+        # exit()
+    raw[raw < 0.1] = 0
+    gt = gt_new
+    membrane_prob = raw
+
+    return raw, membrane_prob, dist_trf, gt
+
+
+def random_lines2(n_lines, bs=None, edge_len=None, input_array=None):
+    if input_array is None:
+        input_array = np.zeros((bs, edge_len, edge_len))
+    else:
+        bs = input_array.shape[0]
+        edge_len = input_array.shape[1]
+
+    for b in range(bs):
+        for i in range(n_lines):
+            bott_left = np.random.randint(0, 2)
+            if bott_left == 0:
+                start = (np.random.randint(0, edge_len), 0)
+            else:
+                start = (0, np.random.randint(0, edge_len))
+            top_right = np.random.randint(0, 2)
+            if top_right == 0:
+                end = (edge_len, np.random.randint(0, edge_len))
+            else:
+                end = (np.random.randint(0, edge_len), edge_len)
+
+            x_points, y_points = u.get_line(start, end)
+            x_points, y_points = \
+                x_points[x_points < edge_len], y_points[x_points < edge_len]
+            x_points, y_points = \
+                x_points[y_points < edge_len], y_points[y_points < edge_len]
+            input_array[b, x_points, y_points] = 1
+
+    return input_array
+
+
+
+if __name__ == '__main__':
+    class opt():
+        def __init__(self):
+            self.batch_size = 1
+            self.patch_len = 40
+            self.network_channels = 1
+            self.global_edge_len = 0
+            self.padding_b=False
+    options = opt()
+    p = PolygonDataProvider(options)
+    p.draw_circle()
+    # p.draw_polygon()
+# # TODO: move to data loader
+# def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
+#                         n_z=64,
+#                         padding_b=False,
+#                         av_line_dens=0.1 # lines per pixel
+#                         ):
+
+#     raw = np.zeros((n_z, edge_len, edge_len), dtype='float32')
+#     membrane_gt = np.zeros((n_z, edge_len, edge_len), dtype='float32')
+#     gt = np.zeros_like(membrane_gt)
+#     dist_trf = np.zeros_like(membrane_gt)
+
+#     for b in range(n_z):
+#         # horizontal_lines = \
+#         #     sorted(
+#         #         min_distance*np.random.choice(edge_len/min_distance,
+#         #                          replace=False,
+#         #                          size=int(edge_len/min_distance * av_line_dens)))
+#         horizontal_lines = np.array([5])
+#         membrane_gt[b, horizontal_lines, :] = 1.
+#         # raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
+#         raw[b] = membrane_gt[b].copy()
+#         last = 0
+#         i = 0
+#         for hl in horizontal_lines:
+#             i += 1
+#             gt[b, last:hl, :] = i
+#             last = hl
+#         gt[b, last:] = i + 1
+
+#         dist_trf[b] = distance_transform_edt(membrane_gt[b] - 1)
+#     # fig, ax = plt.subplots(4, 2)
+#     # for i in range(2):
+#     #     ax[0, i].imshow(raw[i], cmap='gray', interpolation='none')
+#     #     ax[1, i].imshow(gt[i], cmap=u.random_color_map(), interpolation='none')
+#     #     ax[2, i].imshow(dist_trf[i], cmap='gray', interpolation='none')
+#     #     ax[3, i].imshow(membrane_gt[i], cmap='gray', interpolation='none')
+#     # plt.show()
+#     assert (np.all(gt != 0))
+#     return raw, raw, dist_trf, gt
+
+# # TODO: move to data loader
+# def generate_dummy_data2(batch_size, edge_len, patch_len, save_path=None):
+#     raw = np.zeros((batch_size, edge_len, edge_len))
+#     dist_trf = np.zeros_like(raw)
+
+#     # get membrane gt
+#     membrane_gt = random_lines(n_lines=20, bs=batch_size, edge_len=edge_len,
+#                                rand=False, granularity=10./edge_len)
+#     # get membrane probs
+#     membrane_prob = random_lines(n_lines=8, input_array=membrane_gt.copy(),
+#                                  rand=True, granularity=0.1)
+#     raw = random_lines(n_lines=8, input_array=membrane_gt.copy(),
+#                                  rand=True, granularity=0.1)
+
+#     raw = gaussian_filter(raw, sigma=1)
+#     raw /= np.max(raw)
+#     membrane_prob = gaussian_filter(membrane_prob, sigma=1)
+#     membrane_prob /= np.max(membrane_prob)
+
+#     # get label gt and dist trf
+#     gt = np.ones_like(membrane_gt)
+#     gt[membrane_gt == 1] = 0
+#     for i in range(membrane_gt.shape[0]):
+#         dist_trf[i] = distance_transform_edt(gt[i])
+#         gt[i] = label(gt[i], background=0)
+#         # gt[i] = dilate(gt[i], kernel=np.ones((4,4)), iterations=1)
+
+#     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
+#     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
+
+#     if isinstance(save_path, str):
+#         fig, ax = plt.subplots(2, 5)
+#         ax[0, 0].imshow(membrane_gt[0], cmap='gray')
+#         ax[1, 0].imshow(membrane_gt[1], cmap='gray')
+#         ax[0, 1].imshow(membrane_prob[0], cmap='gray')
+#         ax[1, 1].imshow(membrane_prob[1], cmap='gray')
+#         ax[0, 2].imshow(gt[0])
+#         ax[1, 2].imshow(gt[1])
+#         ax[0, 3].imshow(dist_trf[0], cmap='gray')
+#         ax[1, 3].imshow(dist_trf[1], cmap='gray')
+#         ax[0, 4].imshow(raw[0], cmap='gray')
+#         ax[1, 4].imshow(raw[0], cmap='gray')
+#         plt.savefig(save_path)
+#         plt.show()
+
+#     return raw, membrane_prob, dist_trf, gt
+
+# # TODO: move to data loader
+
+# Utility functions
+
+# def random_lines(n_lines, bs=None, edge_len=None, input_array=None, rand=False,
+#                  granularity=0.1):
+#     if input_array is None:
+#         input_array = np.zeros((bs, edge_len, edge_len))
+#     else:
+#         bs = input_array.shape[0]
+#         edge_len = input_array.shape[1]
+
+#     for b in range(bs):
+#         for i in range(n_lines):
+#             m = np.random.uniform() * 10 - 5
+#             c = np.random.uniform() * edge_len * 2 - edge_len
+#             if rand:
+#                 rand_n = np.random.random()
+#                 start = (edge_len - 1)/2 * rand_n
+#                 x = np.arange(start, edge_len - start - 1, granularity)
+#             else:
+#                 x = np.arange(0, edge_len-1, 0.1/edge_len)
+#             y = m * x + c
+#             x = np.round(x[(y < edge_len) & (y >= 0)]).astype(np.int)
+#             y = y[(y < edge_len) & (y >= 0)].astype(np.int)
+#             input_array[b, x, y] = 1.
+#     return input_array

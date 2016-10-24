@@ -304,7 +304,7 @@ def get_seed_coords(global_label_batch, rand_x_coord_seed=False, pl=40,
             global_label_batch[b, :, :]).astype(int))
 
         _, dist_trf[b, :, :] = \
-            du.segmenation_to_membrane_core(
+            dp.segmenation_to_membrane_core(
                 global_label_batch[b, :, :])
 
     for b, ids in zip(range(bs),
@@ -333,7 +333,7 @@ def get_seed_coords(global_label_batch, rand_x_coord_seed=False, pl=40,
     return global_seeds
 
 
-def load_network(load_path, l_last):
+def load_network(load_path, l_last=None):
     h5_keys = []
     all_params = las.layers.get_all_params(l_last)
     i = -1
@@ -342,8 +342,10 @@ def load_network(load_path, l_last):
         h5_keys.append(str(param) + str(i))
     print 'load', load_path, 'keys', h5_keys
     all_param_values = dp.load_h5(load_path, h5_keys)
-    las.layers.set_all_param_values(l_last, all_param_values)
-
+    if l_last is not None:
+        las.layers.set_all_param_values(l_last, all_param_values)
+    else:
+        return all_param_values
 
 def load_options(load_path, options={}):
     with h5py.File(load_path, 'r') as net_file:

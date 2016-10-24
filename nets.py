@@ -7,8 +7,9 @@ import custom_layer as cs
 
 
 class NetBuilder:
-    def __init__(self):
+    def __init__(self, n_channels=None):
         self.net_name = None
+        self.n_channels = n_channels
         self.build_methods = \
             dict( (method,getattr(self, method)) \
                 for method in dir(self) \
@@ -373,6 +374,56 @@ class NetBuilder:
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
 
+    def build_net_v8_dilated(self):
+        n_channels = self.n_channels
+        n_classes = 4
+        fov = None
+        filts =         [4,     3,      3,      3,      3,      3,      3,      1,      1]
+        dils  =         [1,     1,      2,      4,      8,      16,     1,      1,      1]
+        n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048, n_classes]
+        batch_norms =   [True, True,   True,   True,   True,   True,   True,   True,   False]
+        names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'last_conv','fc']
+        l_in = L.InputLayer((None, n_channels, fov, fov))
+        l_prev = l_in
+        i = 0
+        for filt, dil, n_filt, batch_norm, name in \
+                zip(filts, dils, n_filts, batch_norms, names):
+            i += 1
+            if batch_norm:
+                l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
+                                              dilation=(dil, dil), name=name))
+            else:
+                l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
+                                              dilation=(dil, dil), name=name)
+            l_prev = l_next
+
+        return l_in, l_prev, fov
+
+    def build_net_v8_dilated_ft(self, last_conv):
+        n_channels = self.n_channels
+        n_classes = 4
+        fov = None
+        filts = [4, 3, 3, 3, 3, 3, 3, 1, 1]
+        dils = [1, 1, 2, 4, 8, 16, 1, 1, 1]
+        n_filts = [32, 32, 64, 64, 128, 128, 256, 2048, n_classes]
+        batch_norms = [True, True, True, True, True, True, True, True, False]
+
+        l_in = L.InputLayer((None, n_channels, fov, fov))
+        l_prev = l_in
+        i = 0
+        for filt, dil, n_filt, batch_norm in zip(filts, dils, n_filts,
+                                                 batch_norms):
+            i += 1
+            if batch_norm:
+                l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
+                                                           dilation=(dil, dil)))
+            else:
+                l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
+                                              dilation=(dil, dil), name='fc')
+            l_prev = l_next
+
+        return l_in, l_prev, fov
+
 
     def build_ID_v5_hydra_big(self):
         l_in, l_9, fov = self.build_net_v5_big()
@@ -411,6 +462,11 @@ class NetBuilder:
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
     
+    def build_v8_hydra_dilated(self):
+        l_in, l_9, fov = self.build_net_v8_dilated()
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return l_in, l_in_direction, l_9, l_10, fov, None
 
     def build_ID_v5_hydra_BN(self):
         l_in, l_9, fov = self.build_net_v5_BN()
@@ -533,14 +589,15 @@ class NetBuilder:
 
         loss_train = T.mean(loss_individual_batch)
         if L1_weight > 0:
-            loss_train +=  L1_weight * L1_norm
+            loss_train += L1_weight * L1_norm
         loss_valid = T.mean(loss_individual_batch)
         if update == 'adam':
             updates = las.updates.adam(loss_train, all_params)
         if update == 'sgd':
             updates = las.updates.sgd(loss_train, all_params, 0.0001)
         loss_train_f = theano.function([l_in.input_var, target],
-                                       [loss_train, loss_individual_batch, l_out_train],
+                                       [loss_train, loss_individual_batch,
+                                        l_out_train],
                                        updates=updates)
 
         loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
