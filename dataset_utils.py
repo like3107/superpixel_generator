@@ -208,7 +208,7 @@ class HoneyBatcherPredict(object):
             padded_label = data_provider.pad_cube(
                                     self.global_label_batch[b, :, :],
                                     1,
-                                    value=seed_ids[-1]+1)
+                                    value=np.max(seed_ids[-1])+1)
 
             dist_trf[b, :, :] = \
                 data_provider.segmenation_to_membrane_core(

@@ -257,7 +257,7 @@ class PolygonDataProvider(DataProvider):
         surface = cairo.ImageSurface.create_for_data(
                     data, cairo.FORMAT_ARGB32, self.size, self.size)
         cr = cairo.Context(surface)
-        cr.set_source_rgb(1.0, 0, 0)
+        cr.set_source_rgb(1.0, 0.5, 0)
         cr.paint()
         cr.set_line_width (self.linewidth)
         # cr.set_dash(self.get_dashes()); 
@@ -269,7 +269,7 @@ class PolygonDataProvider(DataProvider):
         cr.set_source_rgb (0, 1., 0);
         cr.fill_preserve();
         cr.set_operator(cairo.OPERATOR_ADD)
-        cr.set_source_rgb(0., 0., 1.0)
+        cr.set_source_rgb(0., 0.0, 1.0)
         cr.stroke();
 
         cr.set_operator(cairo.OPERATOR_SOURCE)
@@ -278,18 +278,13 @@ class PolygonDataProvider(DataProvider):
         cr.line_to((1-0.2)*xm,(1+passage_size) * ym/2)
         cr.line_to((0.2)*xm,(1+passage_size) * ym/2) 
         cr.line_to(0,1*ym) 
-        cr.set_source_rgb (0, 0.6, 0);
+        cr.set_source_rgb (0, 0., 0);
         cr.fill_preserve();
         cr.set_operator(cairo.OPERATOR_ADD)
         cr.set_source_rgb(0., 0., 1.0)
         cr.stroke();
 
-        data[:,:,2] = 0
-        data[:,:,0] = 0
-
-        surface.write_to_png ("example.png") 
-
-        self.make_dataset(data, labels = [0.0, 0.3, 0.6, 1.] )
+        self.make_dataset(data, labels = [0.0, 0.5, 1.] )
 
     def load_data(self, options):
         self.draw_passage()

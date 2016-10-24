@@ -146,7 +146,7 @@ def train_script_v1(options):
     print 'training'
     converged = False       # placeholder, this is not yet implemented
     iteration = -1
-    losses = [[], [], []]
+    losses = [[], [], [], []]
     fine_tune_losses = [[], []]
     iterations = []
     ft_iteration = 0
@@ -159,6 +159,7 @@ def train_script_v1(options):
     bigcounter = 0
     loss_train = 0
     loss_train_no_reg = 0
+    loss_reset = 0
 
     while not converged and (iteration < options.max_iter):
         iteration += 1
@@ -450,7 +451,7 @@ def train_script_v1(options):
             elif (options.reset_pretraining):
                 bm.serialize_to_h5("reset_"+str(iteration)+".h5",path=debug_path)
 
-                loss_train, individual_loss, pred = loss_train_f(bigbatch, biggt)
+                loss_reset, individual_loss, pred = loss_train_f(bigbatch, biggt)
                 with h5py.File(debug_path + "/bigbatch_%08i"% iteration, 'w') as out_h5:
                     out_h5.create_dataset("bigbatch",data=bigbatch ,compression="gzip")
                     out_h5.create_dataset("biggt",data=biggt ,compression="gzip")
@@ -460,7 +461,7 @@ def train_script_v1(options):
                 print "pred max,min",np.max(pred),np.min(pred)
                 print "bigloss(", bigcounter,"/",num_batch,") ", loss_train
                 print "loss_train",loss_train,"reen",np.mean((pred - biggt)**2)
-                loss_train_no_reg = loss_valid_f(bigbatch, biggt)
+                loss_reset_valid = loss_valid_f(bigbatch, biggt)
                 bigbatch.fill(0)
                 biggt.fill(0)
                 bigcounter = 0
@@ -502,11 +503,12 @@ def train_script_v1(options):
                 losses[0].append(float(loss_train))
                 losses[1].append(loss_train_no_reg)
                 losses[2].append(loss_valid)
+                losses[3].append(loss_reset)
                 u.plot_train_val_errors(
                     losses,
                     iterations,
                     save_net_path + 'training.png',
-                    names=['loss train', 'loss train no reg', 'loss valid'])
+                    names=['loss train', 'loss train no reg', 'loss valid', 'loss_reset'])
 
         # monitor growth on validation set tmp debug change train to val
         if iteration % options.save_counter == 0:
