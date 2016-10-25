@@ -118,9 +118,13 @@ class DataProvider(object):
 
         if self.options.global_edge_len > 0:
             ind_b, ind_x, ind_y = rois
+            if not self.options.padding_b:
+                ind_x += self.options.patch_len / 2
+                ind_y += self.options.patch_len / 2
             for b in range(self.bs):
                 label_inp_len = \
                     self.options.global_input_len - self.options.patch_len
+
                 height[b, :, :] = \
                     self.height_gt[ind_b[b],
                        ind_x[b]:ind_x[b] + label_inp_len,
