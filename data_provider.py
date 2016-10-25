@@ -12,6 +12,9 @@ from scipy.ndimage import convolve, gaussian_filter
 from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
 from skimage.feature import peak_local_max
 from skimage.morphology import label, watershed
+from scipy.spatial import Voronoi as voronoi
+from voronoi_polygon import voronoi_finite_polygons_2d
+
 
 def segmenation_to_membrane_core(label_image):
     gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -189,61 +192,124 @@ class PolygonDataProvider(DataProvider):
         self.size = (options.global_edge_len if options.global_edge_len != 0 else 500)
         self.linewidth = 3
         super(PolygonDataProvider, self).__init__(options)
-        print self.size
 
     def get_dashes(self):
         return np.random.randint(5, 15, size=4)
 
     def draw_circle(self):
-        data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
-        surface = cairo.ImageSurface.create_for_data(
-                data, cairo.FORMAT_ARGB32, self.size, self.size)
-        cr = cairo.Context(surface)
-        cr.set_source_rgb(1.0, 0, 0)
-        cr.paint()
-        cr.set_line_width (self.linewidth)
-        # cr.set_dash(self.get_dashes()); 
-        cr.arc(self.size/2, self.size/2, self.size/4, 0, 1.2*math.pi) 
-        cr.close_path()
-        cr.set_source_rgb (0, 1., 0);
-        cr.fill_preserve();
-        cr.set_operator(cairo.OPERATOR_ADD)
-        cr.set_source_rgb(0., 0., 1.0)
-        cr.stroke();
-        self.full_input = data[:,:,0]
+        data = np.zeros((self.bs, self.size, self.size, 4), dtype=np.uint8)
+        for b in range(self.bs):
+            surface = cairo.ImageSurface.create_for_data(
+                    data[b], cairo.FORMAT_ARGB32, self.size, self.size)
+            cr = cairo.Context(surface)
+            cr.set_source_rgb(1.0, 0, 0)
+            cr.paint()
+            cr.set_line_width (self.linewidth)
+            # cr.set_dash(self.get_dashes()); 
+            cr.arc(self.size/2, self.size/2, self.size/4, 0, 1.2*math.pi) 
+            cr.close_path()
+            cr.set_source_rgb (0, 1., 0);
+            cr.fill_preserve();
+            cr.set_operator(cairo.OPERATOR_ADD)
+            cr.set_source_rgb(0., 0., 1.0)
+            cr.stroke();
+            self.full_input = data[b,:,:,0]
 
         self.make_dataset(data)
-
-        # with h.File("shape.h5","w") as out:
+        # with h.File("circle.h5","w") as out:
         #     out.create_dataset("test",data=data) 
         #     out.create_dataset("data",data=self.full_input.astype(np.float32)) 
         #     out.create_dataset("label",data=self.label.astype(np.float32)) 
+        #     out.create_dataset("height",data=self.height_gt.astype(np.float32)) 
+
+
+    def draw_voronoi(self, num_seeds = 5):
+        
+        self.label = np.zeros((self.bs,self.size, self.size), dtype=np.uint8)
+        self.full_input = np.zeros((self.bs, 1,self.size,self.size)\
+                                    ,dtype=np.float32)
+        
+        b = 0
+        while b < self.bs:
+            seeds = np.random.randint(0, self.size, size=num_seeds*2).reshape((-1, 2))
+            vor = voronoi(seeds)
+            # print seeds, vor.vertices
+            regions, vertices = voronoi_finite_polygons_2d(vor, radius=10000)
+
+            data_border = np.zeros((self.size, self.size, 4), dtype=np.uint8)
+            surface_border = cairo.ImageSurface.create_for_data(
+                        data_border, cairo.FORMAT_ARGB32, self.size, self.size)
+            cr_b = cairo.Context(surface_border)
+            cr_b.set_source_rgb(1.0, 1.0, 1.0)
+            border_line = []
+
+            for i, region in enumerate(regions):
+                data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
+                surface = cairo.ImageSurface.create_for_data(
+                        data, cairo.FORMAT_ARGB32, self.size, self.size)
+                cr = cairo.Context(surface)
+                polygon = vertices[region]
+                cr.move_to(polygon[0][0],polygon[0][1])
+                cr_b.move_to(polygon[0][0],polygon[0][1])
+                cr.set_source_rgb(1, 0, 0)
+                for p in polygon[1:]:
+                    cr.line_to(p[0],p[1])
+                    cr_b.line_to(p[0],p[1])
+                cr.close_path()
+                cr_b.close_path()
+                cr_b.stroke()
+                cr.fill_preserve()
+                self.label[b][data[:,:,2] > 100] = i+1
+
+            self.full_input[b,0,:,:] = data_border[:,:,0]
+
+            # failsafe if some pixels are not claimed
+            for x,y in np.transpose(np.where(self.label[b]==0)):
+                if x < self.size/2:
+                    self.label[b,x,y] = self.label[b,x+1,y]
+                else:
+                    self.label[b,x,y] = self.label[b,x-1,y]
+            if np.all(self.label[b] > 0):
+                b += 1
+            else:
+                print "generating new voronoy cells"
+
+        self.make_height_gt()
+        # with h.File("labels.h5","w") as out:
+        #     out.create_dataset("labels",data=self.label)
+        #     out.create_dataset("full_input",data=self.full_input)
+        #     out.create_dataset("height",data=self.height_gt)
 
     def make_dataset(self, data, labels=[0., 1.]):
 
-        self.full_input = data[np.newaxis, np.newaxis,:,:,0].astype(np.float32)
+        self.full_input = data[:, np.newaxis,:,:,0].astype(np.float32)
         self.full_input /= 256.
 
-        self.label = np.zeros_like(data[np.newaxis, :,:,1],dtype=np.float32)
+        self.label = np.zeros_like(data[:, :,:,1],dtype=np.float32)
         thresholds = [(l1+l0)/2 for (l0,l1) in zip(sorted(labels),sorted(labels[1:]))]
 
-        mask = self.label >= thresholds[0]
-        self.label[mask] = 0
+        for b in range(self.bs):
 
-        print thresholds
-        for i, l in enumerate(thresholds):
-            mask = data[np.newaxis, :,:,1] > l*256
-            print "u", np.unique(data[np.newaxis, :,:,1][mask])
-            self.label[mask] = i+1
-            print np.sum(mask)
+            mask = self.label[b] >= thresholds[0]
+            self.label[b][mask] = 0
 
+            for i, l in enumerate(thresholds):
+                mask = data[b, :,:,1] > l*256
+                self.label[b][mask] = i+1
+
+        self.make_height_gt()
+
+    def make_height_gt(self):
         self.height_gt = np.empty_like(self.label, dtype=np.float32)
-        self.height_gt[0] = generate_gt_height(self.label[0],
-                                   self.options.patch_len / 2,
-                                   clip_method=self.options.clip_method)
+
+        for b in range(self.bs):
+            self.height_gt[b] = generate_gt_height(self.label[b],
+                                       self.options.patch_len / 2,
+                                       clip_method=self.options.clip_method)
+
 
     def draw_polygon(self):
-        data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
+        data = np.zeros((self.bs, self.size, self.size, 4), dtype=np.uint8)
         surface = cairo.ImageSurface.create_for_data(
                     data, cairo.FORMAT_ARGB32, self.size, self.size)
         cr = cairo.Context(surface)
@@ -266,7 +332,7 @@ class PolygonDataProvider(DataProvider):
         self.make_dataset(data)
 
     def draw_passage(self, passage_size=0.1):
-        data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
+        data = np.zeros((self.bs, self.size, self.size, 4), dtype=np.uint8)
         surface = cairo.ImageSurface.create_for_data(
                     data, cairo.FORMAT_ARGB32, self.size, self.size)
         cr = cairo.Context(surface)
@@ -410,7 +476,6 @@ def prepare_data_mc(segmentation):
     segmentation = np.swapaxes(segmentation, 0, 2).astype(np.uint64)
     segmentation = segmentation[:, 75:-75, :]
     print 'seg fi', segmentation.shape
-    # exit()
     return segmentation
 
 
@@ -784,127 +849,15 @@ def random_lines2(n_lines, bs=None, edge_len=None, input_array=None):
 if __name__ == '__main__':
     class opt():
         def __init__(self):
-            self.batch_size = 1
+            self.batch_size = 10
             self.patch_len = 40
             self.network_channels = 1
             self.global_edge_len = 0
+            self.clip_method='clip'
             self.padding_b=False
     options = opt()
     p = PolygonDataProvider(options)
+    p.draw_voronoi()
+    p.draw_passage()
     p.draw_circle()
-    # p.draw_polygon()
-# # TODO: move to data loader
-# def generate_dummy_data(batch_size, edge_len, pl=40, # patch len
-#                         n_z=64,
-#                         padding_b=False,
-#                         av_line_dens=0.1 # lines per pixel
-#                         ):
 
-#     raw = np.zeros((n_z, edge_len, edge_len), dtype='float32')
-#     membrane_gt = np.zeros((n_z, edge_len, edge_len), dtype='float32')
-#     gt = np.zeros_like(membrane_gt)
-#     dist_trf = np.zeros_like(membrane_gt)
-
-#     for b in range(n_z):
-#         # horizontal_lines = \
-#         #     sorted(
-#         #         min_distance*np.random.choice(edge_len/min_distance,
-#         #                          replace=False,
-#         #                          size=int(edge_len/min_distance * av_line_dens)))
-#         horizontal_lines = np.array([5])
-#         membrane_gt[b, horizontal_lines, :] = 1.
-#         # raw[b, :, :] = create_holes2(membrane_gt[b, :, :].copy(), edge_len)
-#         raw[b] = membrane_gt[b].copy()
-#         last = 0
-#         i = 0
-#         for hl in horizontal_lines:
-#             i += 1
-#             gt[b, last:hl, :] = i
-#             last = hl
-#         gt[b, last:] = i + 1
-
-#         dist_trf[b] = distance_transform_edt(membrane_gt[b] - 1)
-#     # fig, ax = plt.subplots(4, 2)
-#     # for i in range(2):
-#     #     ax[0, i].imshow(raw[i], cmap='gray', interpolation='none')
-#     #     ax[1, i].imshow(gt[i], cmap=u.random_color_map(), interpolation='none')
-#     #     ax[2, i].imshow(dist_trf[i], cmap='gray', interpolation='none')
-#     #     ax[3, i].imshow(membrane_gt[i], cmap='gray', interpolation='none')
-#     # plt.show()
-#     assert (np.all(gt != 0))
-#     return raw, raw, dist_trf, gt
-
-# # TODO: move to data loader
-# def generate_dummy_data2(batch_size, edge_len, patch_len, save_path=None):
-#     raw = np.zeros((batch_size, edge_len, edge_len))
-#     dist_trf = np.zeros_like(raw)
-
-#     # get membrane gt
-#     membrane_gt = random_lines(n_lines=20, bs=batch_size, edge_len=edge_len,
-#                                rand=False, granularity=10./edge_len)
-#     # get membrane probs
-#     membrane_prob = random_lines(n_lines=8, input_array=membrane_gt.copy(),
-#                                  rand=True, granularity=0.1)
-#     raw = random_lines(n_lines=8, input_array=membrane_gt.copy(),
-#                                  rand=True, granularity=0.1)
-
-#     raw = gaussian_filter(raw, sigma=1)
-#     raw /= np.max(raw)
-#     membrane_prob = gaussian_filter(membrane_prob, sigma=1)
-#     membrane_prob /= np.max(membrane_prob)
-
-#     # get label gt and dist trf
-#     gt = np.ones_like(membrane_gt)
-#     gt[membrane_gt == 1] = 0
-#     for i in range(membrane_gt.shape[0]):
-#         dist_trf[i] = distance_transform_edt(gt[i])
-#         gt[i] = label(gt[i], background=0)
-#         # gt[i] = dilate(gt[i], kernel=np.ones((4,4)), iterations=1)
-
-#     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
-#     # gt = gt[:, patch_len/2:-patch_len/2, patch_len/2:-patch_len/2]
-
-#     if isinstance(save_path, str):
-#         fig, ax = plt.subplots(2, 5)
-#         ax[0, 0].imshow(membrane_gt[0], cmap='gray')
-#         ax[1, 0].imshow(membrane_gt[1], cmap='gray')
-#         ax[0, 1].imshow(membrane_prob[0], cmap='gray')
-#         ax[1, 1].imshow(membrane_prob[1], cmap='gray')
-#         ax[0, 2].imshow(gt[0])
-#         ax[1, 2].imshow(gt[1])
-#         ax[0, 3].imshow(dist_trf[0], cmap='gray')
-#         ax[1, 3].imshow(dist_trf[1], cmap='gray')
-#         ax[0, 4].imshow(raw[0], cmap='gray')
-#         ax[1, 4].imshow(raw[0], cmap='gray')
-#         plt.savefig(save_path)
-#         plt.show()
-
-#     return raw, membrane_prob, dist_trf, gt
-
-# # TODO: move to data loader
-
-# Utility functions
-
-# def random_lines(n_lines, bs=None, edge_len=None, input_array=None, rand=False,
-#                  granularity=0.1):
-#     if input_array is None:
-#         input_array = np.zeros((bs, edge_len, edge_len))
-#     else:
-#         bs = input_array.shape[0]
-#         edge_len = input_array.shape[1]
-
-#     for b in range(bs):
-#         for i in range(n_lines):
-#             m = np.random.uniform() * 10 - 5
-#             c = np.random.uniform() * edge_len * 2 - edge_len
-#             if rand:
-#                 rand_n = np.random.random()
-#                 start = (edge_len - 1)/2 * rand_n
-#                 x = np.arange(start, edge_len - start - 1, granularity)
-#             else:
-#                 x = np.arange(0, edge_len-1, 0.1/edge_len)
-#             y = m * x + c
-#             x = np.round(x[(y < edge_len) & (y >= 0)]).astype(np.int)
-#             y = y[(y < edge_len) & (y >= 0)].astype(np.int)
-#             input_array[b, x, y] = 1.
-#     return input_array
