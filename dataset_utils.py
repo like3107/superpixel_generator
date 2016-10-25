@@ -317,7 +317,6 @@ class HoneyBatcherPredict(object):
                          path='./../data/debug/images/',
                          save=True, b=0, inherite_code=False):
         plot_images = []
-        # TODO: loop over input
         for channel in range(self.batch_shape[1]):
             plot_images.append({"title": "Input %d" % channel,
                                 'im': self.global_input_batch[b, channel,
@@ -1122,14 +1121,14 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 print "skipping ", e_idx
 
     def draw_debug_image(self, image_name, path='./../data/debug/',
-                         save=True, b=0, inheritance=False):
+                         save=True, b=0, inheritance=False,
+                         plot_height_pred=False):
         plot_images = super(HoneyBatcherPath, self).\
             draw_debug_image(image_name=image_name,
                              path=path,
                              save=False,
                              b=b,
                              inherite_code=True)
-
         plot_images.insert(2,{"title": "Error Map",
                             'im': self.global_errormap[b, 0, :, :],
                              'interpolation': 'none'})
@@ -1174,6 +1173,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         timemap[timemap < 0] = 0
         plot_images.insert(11,{"title": "Time Map ",
                                 'im': timemap})
+        if plot_height_pred:
+            for i in range(4):
+                plot_images.append({"title": "Heightmap Prediciton %i" %i,
+                                    'im': self.global_prediction_map[b, :, :, i],
+                                    'interpolation': 'none'})
 
         if save:
             u.save_images(plot_images, path=path, name=image_name)
@@ -1490,20 +1494,20 @@ def height_to_grad(height):
 def height_to_fc_height_gt(height):
     fc_height_shape = list(height.shape)
     fc_height_shape.insert(1, 4)
-    fc_height_shape[2] += 1
-    fc_height_shape[3] += 1
     fc_height = np.zeros((fc_height_shape), dtype='float32')
-    cross_coords = [[-1, 0], [0, -1], [1, 0], [0, 1]]
-    for i, (x, y) in enumerate(cross_coords):
-        fc_height[:, x:, y:]
+    # cross_coords = [[-1, 0], [0, -1], [1, 0], [0, 1]]
     # top
-    fc_height[:, 0, 2:, 1:] = height[:, :-1, :]
+    fc_height[:, 0, 1:, :] = height[:, :-1, :]
+    fc_height[:, 0, 0, :] = height[:, 0, :]
     # left
-    fc_height[:, 1, 1:, 2:] = height[:, :, :-1]
+    fc_height[:, 1, :, 1:] = height[:, :, :-1]
+    fc_height[:, 1, :, 0] = height[:, :, 0]
     # bottom
-    fc_height[:, 2, :-2, 1:] = height[:, 1:, :]
+    fc_height[:, 2, :-1, :] = height[:, 1:, :]
+    fc_height[:, 2, -1, :] = height[:, -1, :]
     # right
-    fc_height[:, 3, 1:, :-2] = height[:, :, 1:]
+    fc_height[:, 3, :, :-1] = height[:, :, 1:]
+    fc_height[:, 3, :, -1] = height[:, :, -1]
     return fc_height
 
 class MergeDict(dict):

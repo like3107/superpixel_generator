@@ -47,6 +47,7 @@ def get_options():
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)
     p.add('--regularization', default=10. ** 1, type=float)
+    p.add('--network_channels', default=0, type=int)
     p.add('--batch_size', default=16, type=int)
     p.add('--no-augment_pretraining', dest='augment_pretraining',
                                       action='store_false')
@@ -87,7 +88,6 @@ def get_options():
     options.membrane_path ='./../data/volumes/membranes_%s.h5' % options.train_version
     options.label_path ='./../data/volumes/label_%s.h5' % options.train_version
     options.height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version
-
     return options
 
 
