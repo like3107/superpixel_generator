@@ -44,28 +44,29 @@ class DataProvider(object):
         self.pl = options.patch_len
         self.load_data(options)
         self.n_slices = range(self.full_input.shape[0])
-        print "options.network_channels",options.network_channels
-        print "self.full_input.shape",self.full_input.shape
 
-        self.rl_x = self.full_input.shape[2]
-        self.rl_y = self.full_input.shape[3]
-
-        print "patch_len, global_edge_len, self.rlxy", options.patch_len, \
-            options.global_edge_len, self.rl_x, self.rl_y
-        # assert (patch_len <= global_edge_len)
-        assert (options.global_edge_len <= self.rl_x)
-        assert (options.global_edge_len <= self.rl_y)
+        self.options.global_input_len = self.options.global_edge_len
 
         if options.padding_b:
             self.full_input = mirror_cube(self.full_input, self.pad)
+            self.options.global_input_len += self.options.patch_len
+
+        self.rl_x = self.full_input.shape[2]
+        self.rl_y = self.full_input.shape[3]
+        print "patch_len, global_edge_len, self.rlxy", options.patch_len, \
+            options.global_edge_len, self.rl_x, self.rl_y
+
+        # assert (patch_len <= global_edge_len)
+        assert (options.global_input_len <= self.rl_x)
+        assert (options.global_input_len <=  self.rl_y)
 
     def get_batch_shape(self):
         data_shape = list(self.full_input.shape)
-        print 'data sahpe', data_shape
         data_shape[0] = self.bs
         if self.options.global_edge_len > 0:
-            data_shape[2] = self.options.global_edge_len
-            data_shape[3] = self.options.global_edge_len
+            data_shape[2] = self.options.global_input_len
+            data_shape[3] = self.options.global_input_len
+
         return data_shape
 
     def get_image_shape(self):
@@ -82,8 +83,9 @@ class DataProvider(object):
             data_shape[2] = self.options.global_edge_len
 
         if not self.options.padding_b:
-            data_shape[1] -= options.patch_len
-            data_shape[2] -= options.patch_len
+            data_shape[1] -= self.options.patch_len
+            data_shape[2] -= self.options.patch_len
+
 
         return data_shape
 
@@ -96,16 +98,16 @@ class DataProvider(object):
         # indices to raw, correct for label which edge len is -self.pl shorter
         if self.options.global_edge_len > 0:
             ind_x = np.random.randint(0,
-                                      self.rl_x - self.options.global_edge_len + 1,
+                                      self.rl_x - self.options.global_input_len + 1,
                                       size=self.bs)
             ind_y = np.random.randint(0,
-                                      self.rl_y - self.options.global_edge_len + 1,
+                                      self.rl_y - self.options.global_input_len + 1,
                                       size=self.bs)
             for b in range(self.bs):
                 input[b, :, :, :] = \
                     self.full_input[ind_b[b], :,
-                             ind_x[b]:ind_x[b] + self.options.global_edge_len,
-                             ind_y[b]:ind_y[b] + self.options.global_edge_len]
+                             ind_x[b]:ind_x[b] + self.options.global_input_len,
+                             ind_y[b]:ind_y[b] + self.options.global_input_len]
             return [ind_b, ind_x, ind_y]
         else:
             for b in range(self.bs):
@@ -117,22 +119,24 @@ class DataProvider(object):
         if self.options.global_edge_len > 0:
             ind_b, ind_x, ind_y = rois
             for b in range(self.bs):
+                label_inp_len = \
+                    self.options.global_input_len - self.options.patch_len
                 height[b, :, :] = \
                     self.height_gt[ind_b[b],
-                       ind_x[b]:ind_x[b] + self.options.global_edge_len,
-                       ind_y[b]:ind_y[b] + self.options.global_edge_len]
+                       ind_x[b]:ind_x[b] + label_inp_len,
+                       ind_y[b]:ind_y[b] + label_inp_len]
                 label[b, :, :] = \
                     self.label[ind_b[b],
-                        ind_x[b]:ind_x[b] + self.options.global_edge_len,
-                        ind_y[b]:ind_y[b] + self.options.global_edge_len]
+                        ind_x[b]:ind_x[b] + label_inp_len,
+                        ind_y[b]:ind_y[b] + label_inp_len]
         else:
             for b in range(self.bs):
                 if self.options.padding_b:
                     label[b] = self.label[b,:,:]
                     height[b] = self.height_gt[b,:,:]
                 else:
-                    label[b] = self.label[b,self.pad:-self.pad,
-                                            self.pad:-self.pad]
+                    label[b] = self.label[b, self.pad:-self.pad,
+                                             self.pad:-self.pad]
                     height[b] = self.height_gt[b,self.pad:-self.pad,
                                                  self.pad:-self.pad]
 
@@ -178,7 +182,7 @@ class CremiDataProvider(DataProvider):
 
 class PolygonDataProvider(DataProvider):
     def __init__(self, options):
-        self.size = 100
+        self.size = (options.global_edge_len if options.global_edge_len != 0 else 500)
         self.linewidth = 3
         super(PolygonDataProvider, self).__init__(options)
         print self.size
