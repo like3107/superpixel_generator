@@ -430,7 +430,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                      rois)
 
     def init_batch(self, start=None, allowed_slices = None):
-        # self.batch_data_provider.__init__(self.batch_data_provider.options)
         super(HoneyBatcherPath, self).init_batch(start=start,
                                                  allowed_slices=allowed_slices)
         # load new global batch data

@@ -196,6 +196,12 @@ class PolygonDataProvider(DataProvider):
     def get_dashes(self):
         return np.random.randint(5, 15, size=4)
 
+    def prepare_input_batch(self, input):
+        # load_data creates a new batch
+        self.load_data(self.options)
+        super(PolygonDataProvider, self).prepare_input_batch(input)
+
+
     def draw_circle(self):
         data = np.zeros((self.bs, self.size, self.size, 4), dtype=np.uint8)
         for b in range(self.bs):
@@ -366,7 +372,7 @@ class PolygonDataProvider(DataProvider):
         self.make_dataset(data, labels = [0.0, 0.5, 1.] )
 
     def load_data(self, options):
-        self.draw_passage()
+        self.draw_voronoi()
 
 
 def cut_reprs(path):
@@ -857,7 +863,9 @@ if __name__ == '__main__':
             self.padding_b=False
     options = opt()
     p = PolygonDataProvider(options)
+    # inputx = np.zeros(p.get_batch_shape())
+    # print p.prepare_input_batch(inputx)
     p.draw_voronoi()
-    p.draw_passage()
-    p.draw_circle()
+    # p.draw_passage()
+    # p.draw_circle()
 
