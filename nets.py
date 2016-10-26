@@ -414,7 +414,7 @@ class NetBuilder:
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
             self.build_v8_hydra_dilated()
 
-        u.load_network('./../data/nets/voronoi/nets/net_100', l_out_old)
+        u.load_network('./../data/nets/voronoi3/nets/net_100', l_out_old)
         # get pointer to last conv layer
         l_out_precomp = l_out_old
         while 'conv' not in l_out_precomp.name:
@@ -427,38 +427,38 @@ class NetBuilder:
             first_fc = first_fc.input_layer
         first_fc = previous
 
-        n_channels = self.n_channels
+        n_channels = 2
 
-
-        if n_channels is None:
-            n_channels = 1
         n_classes = 4
         fov = None
-        filts = [4, 3, 3]
-        dils = [4, 8, 16]
-        n_filts = [32, 32, 64]
-        names = ['ft', 'ft', 'ft']
+        filts = [4, 3, 3, 8]
+        dils = [4, 8, 16, 1]
+        n_filts = [32, 32, 64, 64]
+        names = ['ft', 'ft', 'ft', 'ft']
         l_in = L.InputLayer((None, n_channels, fov, fov))
         l_prev = l_in
-        i = 0
         for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
-            i += 1
+            print 'opts', filt, dil, n_filt, name
             l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
                                                        dilation=(dil, dil)),
                                   name=name)
             l_prev = l_next
-            l_in_dense = las.layers.InputLayer((None, 256, 1, 1))
-        l_merge = las.layers.ConcatLayer([l_in_dense, l_prev])
-        print l_merge.output_shape
+        l_claims_out = l_prev
 
-        W = np.zeros((320, 2048, 1, 1)).astype('float32')
-        W[:-64, :, 0, 0] = np.array(first_fc.W.eval())[:, :, 0, 0]
+        l_in_dense = las.layers.InputLayer((None, 256, 1, 1))
+        l_merge = las.layers.ConcatLayer([l_in_dense, l_claims_out])
+        print 'merge output', l_merge.output_shape
+
+        W = np.random.random((2048, 320, 1, 1)).astype('float32') / 100.
+        W[:, :-64, 0, 0] = np.array(first_fc.W.eval()).swapaxes(0, 1)[:, :, 0, 0]
         W = theano.shared(W)
+
         fc_1 = las.layers.Conv2DLayer(l_merge, 2048, filter_size=1,
                                        name='fc', W=W, b=first_fc.b)
         l_out_cross = las.layers.Conv2DLayer(fc_1, 4, filter_size=1,
-                                       name='fc', W=l_out_old.W,
-                                       b=l_out_old.b)
+                                             name='fc',
+                                             W=l_out_old.W.dimshuffle(1,0,2,3),
+                                             b=l_out_old.b)
         layers = {}
         layers['l_in_claims'] = l_in
         layers['l_in_precomp'] = l_in_old
@@ -466,16 +466,19 @@ class NetBuilder:
         layers['l_in_old'] = l_in_old
         layers['l_out_cross'] = l_out_cross
         layers['l_out_precomp'] = l_out_precomp
+        layers['l_claims_out'] = l_claims_out
 
-        # print 'b new', fc_1.b.eval()
+        # print 'b new', l_out_cross.b.shape.eval()
+        # print 'W new', l_out_cross.W.shape.eval()
+        #
         # print 'b old', first_fc.b.eval()
         # print 'old out', first_fc.W.shape.eval()
         # print 'old out', first_fc.output_shape
         #
-        # print 'lout', fc_1.W.shape.eval()
-        # print 'lout', fc_1.b.shape.eval()
-        # print 'lout', fc_1.output_shape
-        #
+        # print 'lout', l_out_old.W.shape.eval()
+        # print 'lout', l_out_old.b.shape.eval()
+        # print 'lout', l_out_old.output_shape
+
         # print 'l_prev', l_prev.output_shape
         # print 'l_prev', l_prev.input_layer.input_layer.W.shape.eval()
         # print 'l_prev', l_prev.input_layer.beta.shape.eval()
@@ -835,7 +838,8 @@ class NetBuilder:
         loss_train_f = theano.function([layers['l_in_claims'].input_var,
                                         layers['l_in_dense'].input_var,
                                         layers['l_in_direction'].input_var],
-                                       [loss_train, individual_batch],
+                                       [loss_train, individual_batch,
+                                        l_out_prediciton],
                                        updates=updates)
         loss_valid_f = theano.function([layers['l_in_claims'].input_var,
                                         layers['l_in_dense'].input_var,
@@ -844,7 +848,10 @@ class NetBuilder:
         probs_f = theano.function([layers['l_in_claims'].input_var,
                                    layers['l_in_dense'].input_var],
                                   l_out_prediciton)
-        return loss_train_f, loss_valid_f, probs_f, fc_prec_conv_body
+        claim_out = las.layers.get_output(layers['l_claims_out'])
+        debug_f = theano.function([layers['l_in_claims'].input_var],
+                                  claim_out)
+        return probs_f, fc_prec_conv_body, debug_f
 
     def loss_updates_probs_v1_hybrid(self, l_in, target, last_layer, L1_weight=10**-5):
 

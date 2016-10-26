@@ -1329,6 +1329,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
 
+
+class HoneyBatcherPatchFast(HoneyBatcherPath):
+    def get_network_input(self, center, b, Id, out):
+        out[0:2] = self.crop_mask_claimed(center, b, Id)
+
 # TODO: make this loopy (maybe with lambdas and slices ???)
 def augment_batch(batch, gt=None, direction=None):
 

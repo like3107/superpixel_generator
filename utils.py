@@ -8,7 +8,7 @@ import sys
 import h5py
 import data_provider as dp
 
-np.random.seed(1234)
+np.random.seed(1236)
 fixed_rand = np.random.rand(256, 3)
 import multiprocessing
 
