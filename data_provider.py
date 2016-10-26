@@ -191,6 +191,7 @@ class PolygonDataProvider(DataProvider):
     def __init__(self, options):
         self.size = (options.global_edge_len if options.global_edge_len != 0 else 500)
         self.linewidth = 3
+        self.exception_counter = 0
         super(PolygonDataProvider, self).__init__(options)
 
     def get_dashes(self):
@@ -199,6 +200,7 @@ class PolygonDataProvider(DataProvider):
 
     def prepare_input_batch(self, input):
         # load_data creates a new batch
+        self.exception_counter = 0
         self.load_data(self.options)
         if self.options.padding_b:
             self.full_input = mirror_cube(self.full_input, self.pad)
@@ -293,10 +295,10 @@ class PolygonDataProvider(DataProvider):
                 print "generating new voronoi cells batch=",b,
 
         self.make_height_gt()
-        with h.File("voronoi.h5","w") as out:
-            out.create_dataset("labels",data=self.label)
-            out.create_dataset("full_input",data=self.full_input)
-            out.create_dataset("height",data=self.height_gt)
+        # with h.File("voronoi.h5","w") as out:
+        #     out.create_dataset("labels",data=self.label)
+        #     out.create_dataset("full_input",data=self.full_input)
+        #     out.create_dataset("height",data=self.height_gt)
 
     def make_dataset(self, data, labels=[0., 1.]):
         self.full_input = data[:, np.newaxis,:,:,0].astype(np.float32)
@@ -383,8 +385,15 @@ class PolygonDataProvider(DataProvider):
         self.make_dataset(data, labels = [0.0, 0.5, 1.] )
 
     def load_data(self, options):
-        self.draw_voronoi()
-
+        try:
+            self.draw_voronoi()
+        except KeyError, e:
+            print "Error during batch creation, retry ... Key Error %s" % str(e)
+            self.exception_counter += 1
+            if self.exception_counter < 20:
+                self.load_data(options)
+            else:
+                exit()
 
 def cut_reprs(path):
     label_path = path + 'label_first_repr_big_zstack_cut.h5'
@@ -874,9 +883,11 @@ if __name__ == '__main__':
             self.padding_b=False
     options = opt()
     p = PolygonDataProvider(options)
-    # inputx = np.zeros(p.get_batch_shape())
+    inputx = np.zeros(p.get_batch_shape())
     # print p.prepare_input_batch(inputx)
-    p.draw_voronoi()
+    for i in range(1000000):
+        print i
+        p.prepare_input_batch(inputx)
     # p.draw_passage()
     # p.draw_circle()
 
