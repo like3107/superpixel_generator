@@ -32,8 +32,8 @@ def voronoi_finite_polygons_2d(vor, radius=None):
 
     center = vor.points.mean(axis=0)
     if radius is None:
-    	# times 1000 is a hack to reduce the chance of non connected regions
-    	radius = vor.points.ptp(axis=0).max() * 1000
+        # times 1000 is a hack to reduce the chance of non connected regions
+        radius = vor.points.ptp(axis=0).max() * 1000
         # radius = vor.points.ptp().max()
 
     # Construct a map containing all ridges for a given point
@@ -64,7 +64,7 @@ def voronoi_finite_polygons_2d(vor, radius=None):
 
             # Compute the missing endpoint of an infinite ridge
 
-            t = vor.points[p2] - vor.points[p1] # tangent
+            t = vor.points[p2] - vor.points[p1]     # tangent
             t /= np.linalg.norm(t)
             n = np.array([-t[1], t[0]])  # normal
 
@@ -78,7 +78,7 @@ def voronoi_finite_polygons_2d(vor, radius=None):
         # sort region counterclockwise
         vs = np.asarray([new_vertices[v] for v in new_region])
         c = vs.mean(axis=0)
-        angles = np.arctan2(vs[:,1] - c[1], vs[:,0] - c[0])
+        angles = np.arctan2(vs[:, 1] - c[1], vs[:, 0] - c[0])
         new_region = np.array(new_region)[np.argsort(angles)]
 
         # finish

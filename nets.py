@@ -4,6 +4,7 @@ import lasagne as las
 from theano import tensor as T
 from lasagne import layers as L
 import custom_layer as cs
+import utils as u
 
 
 class NetBuilder:
@@ -376,53 +377,106 @@ class NetBuilder:
 
     def build_net_v8_dilated(self):
         n_channels = self.n_channels
-        n_classes = 4
+        if n_channels is None:
+            n_channels = 1
         fov = None
+        n_classes = 4
         filts =         [4,     3,      3,      3,      3,      3,      3,      1,      1]
         dils  =         [1,     1,      2,      4,      8,      16,     1,      1,      1]
         n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048, n_classes]
-        batch_norms =   [True, True,   True,   True,   True,   True,   True,   True,   False]
-        names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'last_conv','fc']
+        batch_norms =   [True, True,   True,   True,   True,   True,   True,   False,   False]
+        ELU = las.nonlinearities.elu
+        ReLU = las.nonlinearities.rectify
+        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU,   ReLU]
+        names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc','fc']
         l_in = L.InputLayer((None, n_channels, fov, fov))
         l_prev = l_in
         i = 0
-        for filt, dil, n_filt, batch_norm, name in \
-                zip(filts, dils, n_filts, batch_norms, names):
+        for filt, dil, n_filt, batch_norm, act_fct, name in \
+                zip(filts, dils, n_filts, batch_norms, act_fcts, names):
             i += 1
             if batch_norm:
-                l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
-                                              dilation=(dil, dil), name=name))
+                l_next = L.batch_norm(
+                    L.DilatedConv2DLayer(l_prev, n_filt, filt,
+                                         dilation=(dil, dil), name=name,
+                                         nonlinearity=act_fct))
             else:
                 l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
-                                              dilation=(dil, dil), name=name)
+                                              dilation=(dil, dil), name=name,
+                                              nonlinearity=act_fct)
             l_prev = l_next
+        fov = 68
 
         return l_in, l_prev, fov
 
-    def build_net_v8_dilated_ft(self, last_conv):
+    def build_net_v8_dilated_ft(self):
+
+        l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
+            self.build_v8_hydra_dilated()
+        u.load_network('./../data/nets/voronoi/nets/net_100', l_out_old)
+        # get pointer to last conv layer
+        last_conv_layer = l_out_old
+        while 'conv' not in last_conv_layer.name:
+            last_conv_layer = last_conv_layer.input_layer
+
+        # pointer to first fc layer
+        first_fc = l_out_old
+        while 'fc' in first_fc.name:
+            previous = first_fc
+            first_fc = first_fc.input_layer
+            first_fc = previous
+
         n_channels = self.n_channels
+
+
+        if n_channels is None:
+            n_channels = 1
         n_classes = 4
         fov = None
-        filts = [4, 3, 3, 3, 3, 3, 3, 1, 1]
-        dils = [1, 1, 2, 4, 8, 16, 1, 1, 1]
-        n_filts = [32, 32, 64, 64, 128, 128, 256, 2048, n_classes]
-        batch_norms = [True, True, True, True, True, True, True, True, False]
-
+        filts = [4, 3, 3]
+        dils = [4, 8, 16]
+        n_filts = [32, 32, 64]
+        names = ['ft', 'ft', 'ft']
         l_in = L.InputLayer((None, n_channels, fov, fov))
         l_prev = l_in
         i = 0
-        for filt, dil, n_filt, batch_norm in zip(filts, dils, n_filts,
-                                                 batch_norms):
+        for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
             i += 1
-            if batch_norm:
-                l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
-                                                           dilation=(dil, dil)))
-            else:
-                l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
-                                              dilation=(dil, dil), name='fc')
+            l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
+                                                       dilation=(dil, dil)),
+                                  name=name)
             l_prev = l_next
+        l_merge = las.layers.ConcatLayer([last_conv, l_prev])
+        print l_merge.output_shape
 
-        return l_in, l_prev, fov
+        W = np.zeros((320, 2048, 1, 1)).astype('float32')
+        W[:-64, :, 0, 0] = np.array(first_fc.W.eval())[:, :, 0, 0]
+        W = theano.shared(W)
+        fc_1 = las.layers.Conv2DLayer(l_merge, 2048, filter_size=1,
+                                       name='fc', W=W, b=first_fc.b)
+        l_out = las.layers.Conv2DLayer(fc_1, 4, filter_size=1,
+                                       name='fc', W=l_out_old.W,
+                                       b=l_out_old.b)
+
+        # print 'b new', fc_1.b.eval()
+        # print 'b old', first_fc.b.eval()
+        # print 'old out', first_fc.W.shape.eval()
+        # print 'old out', first_fc.output_shape
+        #
+        # print 'lout', fc_1.W.shape.eval()
+        # print 'lout', fc_1.b.shape.eval()
+        # print 'lout', fc_1.output_shape
+        #
+        # print 'l_prev', l_prev.output_shape
+        # print 'l_prev', l_prev.input_layer.input_layer.W.shape.eval()
+        # print 'l_prev', l_prev.input_layer.beta.shape.eval()
+        #
+        # print 'last_conv', last_conv.output_shape
+        # print 'last_conv', last_conv.input_layer.input_layer.W.shape.eval()
+        #
+        # print 'BN beta', last_conv.input_layer.beta.shape.eval()
+        # print 'BN gamma', last_conv.input_layer.gamma.shape.eval()
+        return (l_in, l_in_old), l_prev, fov
 
 
     def build_ID_v5_hydra_big(self):
@@ -461,12 +515,18 @@ class NetBuilder:
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
-    
+
     def build_v8_hydra_dilated(self):
         l_in, l_9, fov = self.build_net_v8_dilated()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
+
+    def build_v8_hydra_dilated_ft(self):
+        (l_in, l_in_old), l_9, fov = self.build_net_v8_dilated_ft()
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
+        return (l_in, l_in_old), l_in_direction, l_9, l_10, fov, None
 
     def build_ID_v5_hydra_BN(self):
         l_in, l_9, fov = self.build_net_v5_BN()

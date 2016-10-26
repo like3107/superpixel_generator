@@ -30,7 +30,7 @@ class PokemonTrainer(object):
         self.bm = self.BM(options)
         self.bm.init_batch()
 
-        self.iterations = 0
+        self.iterations = -1
         self.update_steps = 10
         self.free_voxel_empty = self.bm.get_num_free_voxel()
         self.free_voxel = self.free_voxel_empty
@@ -94,7 +94,6 @@ class PokemonTrainer(object):
             if self.free_voxel == 0:
                 self.reset_image()
 
-
         # update parameters once
         loss_train, individual_loss, _ = self.loss_train_f(inputs, gt)
         self.update_history.append(self.iterations)
@@ -127,7 +126,7 @@ class PokemonTrainer(object):
 
     def save_net(self, path=None, name=None):
         if path is None:
-            path = self.save_net_path
+            path = self.net_param_path
         if name is None:
             name = 'net_%i' % self.iterations
         u.save_network(path, self.l_out,
@@ -212,9 +211,6 @@ class FinePokemonTrainer(PokemonTrainer):
             self.loss(l_in, l_in_direction, l_out_direction, self.l_out,
                           L1_weight=options.regularization)
 
-    def define_loss(self):
-        self.loss = self.builder.get_loss('updates_hydra_v5')
-
     def train(self):
         while (self.free_voxel > 0):
             self.iterations += 1
@@ -253,6 +249,20 @@ class FinePokemonTrainer(PokemonTrainer):
     def converged(self):
         return self.iterations >= self.options.max_iter
 
+# class FCFinePokemonTrainer(FinePokemonTrainer):
+#     def network_i_choose_you(self):
+#         network = self.builder.get_net(options.net_arch)
+#         c.use(options.gpu)
+#         l_in, l_in_direction, self.l_out, l_out_direction,\
+#                  options.patch_len, _ = network()
+#         options.network_channels = l_in.shape[1]
+#         target_t = T.ftensor4()
+#
+#         self.loss_train_fine_f, loss_valid_fine_f, self.prediction_f  = \
+#             self.loss(l_in, l_in_direction, l_out_direction, self.l_out,
+#                       L1_weight=options.regularization)
+
+
 class GottaCatchemAllTrainer(PokemonTrainer):
     """
     Fully conv pretrain
@@ -260,12 +270,15 @@ class GottaCatchemAllTrainer(PokemonTrainer):
     def __init__(self,  options):
         super(GottaCatchemAllTrainer, self).__init__(options)
         self.update_steps = 1
-        self.observation_counter = 1
+        self.observation_counter = 10
 
     def init_BM(self):
         self.BM = du.HoneyBatcherPath
 
     def update_BM(self):
+        # self.bm.batch_data_provider.load_data(options)
+        # self.bm.batch_data_provider = PolygonDataProvider(options)
+        self.bm.init_batch()
         self.bm.prepare_global_batch()
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
         heights_gt = du.height_to_fc_height_gt(self.bm.global_height_gt_batch)
@@ -275,10 +288,9 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         self.free_voxel = self.free_voxel_empty
         trainer.draw_debug()
 
-
     def train(self):
+
         self.iterations += 1
-        self.free_voxel -= 1
         inputs, _, heights = self.update_BM()
 
         height_pred = self.prediction_f(inputs)
@@ -290,8 +302,9 @@ class GottaCatchemAllTrainer(PokemonTrainer):
 
         loss_train, individual_loss, _ = self.loss_train_f(inputs, heights)
 
-        if self.free_voxel == 0:
-            self.reset_image()
+
+        if self.iterations % 100 == 0:
+            self.save_net()
 
         # update parameters once
         self.update_history.append(self.iterations)
@@ -304,43 +317,59 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         return loss_train
 
     def draw_debug(self):
-        for b in range(0, self.options.batch_size):
+        for b in range(1):
             self.bm.draw_debug_image(
                 "train_b_%03i_i_%08i_f_%i" %
                 (b, self.iterations, self.free_voxel),
                 path=self.image_path, b=b, plot_height_pred=True)
 
 if __name__ == '__main__':
-
     options = get_options()
 
-    trainer = PokemonTrainer(options)
+
+    options = get_options()
+    # pret
+    trainer = GottaCatchemAllTrainer(options)
     while not trainer.converged():
-        print "prertrain", trainer.train()
+        print "\r pretrain %0.4f iteration %i free voxel %i" \
+              %(trainer.train(), trainer.iterations, trainer.free_voxel),
 
-    trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
-    finetrainer = FinePokemonTrainer(options)
-    finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')
-    while not finetrainer.converged():
-        print "finetune", finetrainer.train()
-        finetrainer.draw_debug()
-
-
-
-    # options = get_options()
-    # # pret
-    # trainer = GottaCatchemAllTrainer(options)
-    # while not trainer.converged():
-    #     print "\r pretrain %0.4f iteration %i free voxel %i" \
-    #           %(trainer.train(), trainer.iterations, trainer.free_voxel),
-    #
     # trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     #
-    # # ft
-    # # finetrainer = FinePokemonTrainer(options)
-    # # finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')
-    # #
-    # # while not finetrainer.converged():
-    # #     print "finetune",finetrainer.train()
-    # #     finetrainer.draw_debug()
-    # #
+    # trainer = FCFinePokemonTrainer(options)
+    # while not trainer.converged():
+    #     print "prertrain", trainer.train()
+
+
+    # trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
+    # finetrainer = FinePokemonTrainer(options)
+    # finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')
+    # while not finetrainer.converged():
+    #     print "finetune", finetrainer.train()
+    #     finetrainer.draw_debug()
+    #
+    #
+    #
+    #
+    #
+
+    # trainer = PokemonTrainer(options)
+    # while not trainer.converged():
+    #     print "prertrain", trainer.train()
+    #
+    # trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
+    # finetrainer = FinePokemonTrainer(options)
+    # finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')
+    # while not finetrainer.converged():
+    #     print "finetune", finetrainer.train()
+    #     finetrainer.draw_debug()
+
+
+    # ft
+    # finetrainer = FinePokemonTrainer(options)
+    # finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')
+    #
+    # while not finetrainer.converged():
+    #     print "finetune",finetrainer.train()
+    #     finetrainer.draw_debug()
+    #
