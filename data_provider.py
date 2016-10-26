@@ -156,7 +156,7 @@ class DataProvider(object):
 
 
     def load_data(self, options):
-        print self.options.input_data_path
+        # print self.options.input_data_path
         # self.full_input = load_h5(self.options.input_data_path,
         self.full_input = load_h5(str(self.options.input_data_path),
                                     h5_key=None,
@@ -199,8 +199,9 @@ class PolygonDataProvider(DataProvider):
     def prepare_input_batch(self, input):
         # load_data creates a new batch
         self.load_data(self.options)
-        super(PolygonDataProvider, self).prepare_input_batch(input)
-
+        if self.options.padding_b:
+            self.full_input = mirror_cube(self.full_input, self.pad)
+        return super(PolygonDataProvider, self).prepare_input_batch(input)
 
     def draw_circle(self):
         data = np.zeros((self.bs, self.size, self.size, 4), dtype=np.uint8)
@@ -232,8 +233,8 @@ class PolygonDataProvider(DataProvider):
     def draw_voronoi(self, num_seeds = 5):
         
         self.label = np.zeros((self.bs,self.size, self.size), dtype=np.uint8)
-        self.full_input = np.zeros((self.bs, 1,self.size,self.size)\
-                                    ,dtype=np.float32)
+        self.full_input = np.zeros((self.bs, 1, self.size, self.size),
+                                   dtype=np.float32)
         
         b = 0
         while b < self.bs:
@@ -287,7 +288,6 @@ class PolygonDataProvider(DataProvider):
         #     out.create_dataset("height",data=self.height_gt)
 
     def make_dataset(self, data, labels=[0., 1.]):
-
         self.full_input = data[:, np.newaxis,:,:,0].astype(np.float32)
         self.full_input /= 256.
 

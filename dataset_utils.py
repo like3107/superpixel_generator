@@ -428,6 +428,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.batch_data_provider.prepare_label_batch(self.global_label_batch,
                                                      self.global_height_gt_batch,
                                                      rois)
+        return rois
 
     def init_batch(self, start=None, allowed_slices = None):
         super(HoneyBatcherPath, self).init_batch(start=start,

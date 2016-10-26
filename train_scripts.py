@@ -249,18 +249,50 @@ class FinePokemonTrainer(PokemonTrainer):
     def converged(self):
         return self.iterations >= self.options.max_iter
 
-# class FCFinePokemonTrainer(FinePokemonTrainer):
-#     def network_i_choose_you(self):
-#         network = self.builder.get_net(options.net_arch)
-#         c.use(options.gpu)
-#         l_in, l_in_direction, self.l_out, l_out_direction,\
-#                  options.patch_len, _ = network()
-#         options.network_channels = l_in.shape[1]
-#         target_t = T.ftensor4()
-#
-#         self.loss_train_fine_f, loss_valid_fine_f, self.prediction_f  = \
-#             self.loss(l_in, l_in_direction, l_out_direction, self.l_out,
-#                       L1_weight=options.regularization)
+
+class FCFinePokemonTrainer(FinePokemonTrainer):
+
+    def define_loss(self):
+        self.loss = self.builder.get_loss('updates_hydra_v8')
+
+    def network_i_choose_you(self):
+        network = self.builder.get_net(options.net_arch)
+        c.use(options.gpu)
+        layers, options.patch_len, _ = network()
+        options.network_channels = layers['l_in_claims'].shape[1]
+        target_t = T.ftensor4()
+
+        self.loss_train_fine_f, loss_valid_fine_f, self.prediction_f, \
+        self.fc_prec_conv_body= self.loss(layers,
+                                          L1_weight=options.regularization)
+
+    def update_BM_FC(self):
+        # self.bm.batch_data_provider.load_data(options)
+        # self.bm.batch_data_provider = PolygonDataProvider(options)
+        self.bm.init_batch()
+        self.bm.prepare_global_batch()
+        inputs = self.bm.global_input_batch[:, :, :-1, :-1]
+        heights_gt = du.height_to_fc_height_gt(
+            self.bm.global_height_gt_batch)
+        return inputs
+
+    def train(self):
+        # precompute fc part
+        inputs = self.update_BM_FC()
+        print 'inputs', inputs.shape
+        hui = self.fc_prec_conv_body(inputs)
+        print 'hui', hui.shape
+
+        exit()
+
+        while (self.free_voxel > 0):
+            self.iterations += 1
+            self.free_voxel -= 1
+            self.update_BM()
+            if self.free_voxel == 0:
+                self.bm.init_batch()
+                self.free_voxel = self.free_voxel_empty
+                trainer.draw_debug()
 
 
 class GottaCatchemAllTrainer(PokemonTrainer):
@@ -289,7 +321,6 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         trainer.draw_debug()
 
     def train(self):
-
         self.iterations += 1
         inputs, _, heights = self.update_BM()
 
@@ -301,7 +332,6 @@ class GottaCatchemAllTrainer(PokemonTrainer):
             trainer.draw_debug()
 
         loss_train, individual_loss, _ = self.loss_train_f(inputs, heights)
-
 
         if self.iterations % 100 == 0:
             self.save_net()
@@ -335,11 +365,9 @@ if __name__ == '__main__':
               %(trainer.train(), trainer.iterations, trainer.free_voxel),
 
     # trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
-    #
     # trainer = FCFinePokemonTrainer(options)
     # while not trainer.converged():
     #     print "prertrain", trainer.train()
-
 
     # trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     # finetrainer = FinePokemonTrainer(options)

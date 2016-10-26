@@ -24,7 +24,8 @@ def get_options():
     # train data paths
     def_train_version = 'second_repr'       # def change me
     p.add('--train_version', default=def_train_version)
-    p.add('--seed_method', type=str, default="timo", help='available metods: gt, timo, grid',
+    p.add('--seed_method', type=str, default="timo",
+          help='available metods: gt, timo, grid',
           dest='seed_method')
     p.add('--input_data_path',type=str, default="../data/volumes/raw_honeycomb.h5")
 
