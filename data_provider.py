@@ -194,7 +194,8 @@ class PolygonDataProvider(DataProvider):
         super(PolygonDataProvider, self).__init__(options)
 
     def get_dashes(self):
-        return np.random.randint(5, 15, size=4)
+        # return np.random.randint(10, 60, size=40)
+        return [10,50]
 
     def prepare_input_batch(self, input):
         # load_data creates a new batch
@@ -212,8 +213,8 @@ class PolygonDataProvider(DataProvider):
             cr.set_source_rgb(1.0, 0, 0)
             cr.paint()
             cr.set_line_width (self.linewidth)
-            # cr.set_dash(self.get_dashes()); 
-            cr.arc(self.size/2, self.size/2, self.size/4, 0, 1.2*math.pi) 
+            cr.set_dash(self.get_dashes())
+            cr.arc(self.size/2, self.size/2, self.size/4, 0, 2*math.pi) 
             cr.close_path()
             cr.set_source_rgb (0, 1., 0);
             cr.fill_preserve();
@@ -248,7 +249,8 @@ class PolygonDataProvider(DataProvider):
                         data_border, cairo.FORMAT_ARGB32, self.size, self.size)
             cr_b = cairo.Context(surface_border)
             cr_b.set_source_rgb(1.0, 1.0, 1.0)
-            border_line = []
+            cr_b.set_dash(self.get_dashes())
+            coord_pairs = []
 
             for i, region in enumerate(regions):
                 data = np.zeros((self.size, self.size, 4), dtype=np.uint8)
@@ -256,16 +258,25 @@ class PolygonDataProvider(DataProvider):
                         data, cairo.FORMAT_ARGB32, self.size, self.size)
                 cr = cairo.Context(surface)
                 polygon = vertices[region]
-                cr.move_to(polygon[0][0],polygon[0][1])
-                cr_b.move_to(polygon[0][0],polygon[0][1])
+                cr.move_to(polygon[-1][0],polygon[-1][1])
+                cr_b.move_to(polygon[-1][0],polygon[-1][1])
+                lcoord = (polygon[-1][0],polygon[-1][1])
                 cr.set_source_rgb(1, 0, 0)
-                for p in polygon[1:]:
+
+                for p,r in zip(polygon,region):
                     cr.line_to(p[0],p[1])
-                    cr_b.line_to(p[0],p[1])
+                    if (lcoord[0],lcoord[1],p[0],p[1]) in coord_pairs:
+                        cr_b.move_to(p[0],p[1])
+                    else:
+                        cr_b.line_to(p[0],p[1])
+                        coord_pairs.append((lcoord[0],lcoord[1],p[0],p[1]))
+                        coord_pairs.append((p[0],p[1],lcoord[0],lcoord[1]))
+                        cr_b.set_dash(self.get_dashes())
+                    lcoord = (p[0],p[1])
                 cr.close_path()
-                cr_b.close_path()
                 cr_b.stroke()
                 cr.fill_preserve()
+                cr.new_sub_path()
                 self.label[b][data[:,:,2] > 100] = i+1
 
             self.full_input[b,0,:,:] = data_border[:,:,0]
@@ -279,13 +290,13 @@ class PolygonDataProvider(DataProvider):
             if np.all(self.label[b] > 0):
                 b += 1
             else:
-                print "generating new voronoy cells"
+                print "generating new voronoi cells batch=",b,
 
         self.make_height_gt()
-        # with h.File("labels.h5","w") as out:
-        #     out.create_dataset("labels",data=self.label)
-        #     out.create_dataset("full_input",data=self.full_input)
-        #     out.create_dataset("height",data=self.height_gt)
+        with h.File("voronoi.h5","w") as out:
+            out.create_dataset("labels",data=self.label)
+            out.create_dataset("full_input",data=self.full_input)
+            out.create_dataset("height",data=self.height_gt)
 
     def make_dataset(self, data, labels=[0., 1.]):
         self.full_input = data[:, np.newaxis,:,:,0].astype(np.float32)
