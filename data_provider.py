@@ -196,7 +196,8 @@ class PolygonDataProvider(DataProvider):
 
     def get_dashes(self):
         # return np.random.randint(10, 60, size=40)
-        return [10,50]
+        # 1st dash length 2nd hole
+        return [5,5]
 
     def prepare_input_batch(self, input):
         # load_data creates a new batch
@@ -300,6 +301,23 @@ class PolygonDataProvider(DataProvider):
         #     out.create_dataset("full_input",data=self.full_input)
         #     out.create_dataset("height",data=self.height_gt)
 
+    def draw_debug(self, num_seeds=5):
+
+        self.label = np.zeros((self.bs, self.size, self.size), dtype=np.uint8)
+        self.full_input = np.zeros((self.bs, 1, self.size, self.size),
+                                   dtype=np.float32)
+
+        b = 0
+        self.full_input[:, 0, self.size /2 , :] = 1
+        self.full_input[:, 0, self.size /2-5:self.size /2+5 , :] = 1
+        self.label[:, self.size /2:, :] = 1
+        self.make_height_gt()
+        # with h.File("voronoi.h5","w") as out:
+        #     out.create_dataset("labels",data=self.label)
+        #     out.create_dataset("full_input",data=self.full_input)
+        #     out.create_dataset("height",data=self.height_gt)
+
+
     def make_dataset(self, data, labels=[0., 1.]):
         self.full_input = data[:, np.newaxis,:,:,0].astype(np.float32)
         self.full_input /= 256.
@@ -358,7 +376,7 @@ class PolygonDataProvider(DataProvider):
         cr.set_source_rgb(1.0, 0.5, 0)
         cr.paint()
         cr.set_line_width (self.linewidth)
-        # cr.set_dash(self.get_dashes()); 
+        # cr.set_dash(self.get_dashes());
         xm, ym = self.size, self.size
         cr.move_to (0, 0)
         cr.line_to(0.2*xm,(1-passage_size) * ym/2) 
@@ -458,6 +476,7 @@ def mirror_cube(array, pad_length):
 
     mirrored_array = np.pad(array, pad_info, mode='reflect')
     return mirrored_array
+
 
 def pad_cube(array, pad_length, value=0):
 
@@ -693,6 +712,7 @@ def generate_quick_eval_big_FOV_z_slices(
             stack_name = ''
         save_h5(vol_path + name + '_%s' % mode + '_repr%s.h5' % stack_name, 'data',
                 data=data, overwrite='w')
+
 
 def segmentation_to_membrane(input_path,output_path):
     """

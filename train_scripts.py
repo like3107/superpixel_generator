@@ -26,6 +26,7 @@ class PokemonTrainer(object):
         self.builder = nets.NetBuilder(options.network_channels)
         self.define_loss()
         self.network_i_choose_you()
+        # options.patch_len = 68
         self.init_BM()
         self.bm = self.BM(options)
         self.bm.init_batch()
@@ -34,7 +35,7 @@ class PokemonTrainer(object):
         self.update_steps = 10
         self.free_voxel_empty = self.bm.get_num_free_voxel()
         self.free_voxel = self.free_voxel_empty
-        self.observation_counter = 500
+        self.observation_counter = self.options.save_counter
         self.update_history = []
         self.loss_history = []
 
@@ -65,15 +66,20 @@ class PokemonTrainer(object):
         self.save_net_path = './../data/nets/' + options.net_name + '/'
         self.debug_path = self.save_net_path + "/debug"
         self.image_path = self.save_net_path + '/images/pretrain/'
-        self.image_path_reset = self.save_net_path + '/images/pretrain/'
+        self.image_path_reset = self.save_net_path + '/images/reset/'
         self.net_param_path = self.save_net_path + '/nets/'
+        code_path = self.save_net_path + '/code/'
         paths = [self.save_net_path, self.debug_path,
                  self.save_net_path + '/images/', self.image_path,
-                 self.net_param_path]
+                 self.net_param_path, code_path, self.image_path_reset]
 
         for path in paths:
             if not os.path.exists(path):
                 os.makedirs(path)
+
+        os.system('cp -rf *.py ' + code_path)
+        os.system('cp -rf ./../data/config/*.conf ' + code_path)
+
 
     def update_BM(self):
         inputs, gt, seeds, ids = self.bm.get_batches()
@@ -105,7 +111,7 @@ class PokemonTrainer(object):
             names=['loss'])
         return loss_train
 
-    def reset_image(self):
+    def reset_image(self, reset=False):
         self.bm.init_batch()
         self.free_voxel = self.free_voxel_empty
         trainer.draw_debug(reset=True)
@@ -113,11 +119,12 @@ class PokemonTrainer(object):
     def converged(self):
         return self.iterations >= self.options.pre_train_iter
 
-    def draw_debug(self, reset=False):
+    def draw_debug(self, reset=False, image_path=None):
         if reset:
             image_path = self.image_path_reset
-        else:
+        elif image_path is None:
             image_path = self.image_path
+
         for b in range(1):
             self.bm.draw_debug_image(
                 "train_b_%03i_i_%08i_f_%i" %
@@ -208,7 +215,7 @@ class FinePokemonTrainer(PokemonTrainer):
         options.network_channels = l_in.shape[1]
         target_t = T.ftensor4()
 
-        self.loss_train_fine_f, loss_valid_fine_f, self.prediction_f  = \
+        self.loss_train_fine_f, self.loss_valid_fine_f, self.prediction_f  = \
             self.loss(l_in, l_in_direction, l_out_direction, self.l_out,
                           L1_weight=options.regularization)
 
@@ -265,14 +272,15 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         options.network_channels = layers['l_in_claims'].shape[1]
         target_t = T.ftensor4()
 
-        self.prediction_f,  self.fc_prec_conv_body, self.debug_f = \
+        self.prediction_f,  self.fc_prec_conv_body, self.loss_train_fine_f, \
+            self.debug_f = \
              self.loss(layers, L1_weight=options.regularization)
 
     def update_BM_FC(self):
         # self.bm.batch_data_provider.load_data(options)
         # self.bm.batch_data_provider = PolygonDataProvider(options)
-        self.bm.init_batch()
         self.bm.prepare_global_batch()
+        self.bm.init_batch()
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
         heights_gt = du.height_to_fc_height_gt(
             self.bm.global_height_gt_batch)
@@ -280,70 +288,59 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
 
     def update_BM(self):
         inputs, gt, seeds, ids = self.bm.get_batches()
-
         seeds = np.array(seeds, dtype=np.int)
         precomp_input = self.precomp_input[range(self.bm.bs), :,
                                            seeds[:, 0] - self.bm.pad,
                                            seeds[:, 1] - self.bm.pad]
         precomp_input = precomp_input[:, :, None, None]
-        # print 'debug', self.debug_f(inputs).shape
-        # print 'prec', precomp_input.shape, precomp_input.dtype
-        # print 'inputs', inputs.shape
-
         heights = self.prediction_f(inputs, precomp_input)
-        # print 'heights', heights.shape
-        # print heights
         self.bm.update_priority_queue(heights, seeds, ids)
         return inputs, heights, gt
 
     def train(self):
         # precompute fc part
         inputs = self.update_BM_FC()
-        # self.precomp_input = np.zeros((8, 256, 100, 100))
         self.precomp_input = self.fc_prec_conv_body(inputs)
-
-        print 'hui', self.precomp_input.shape
 
         while (self.free_voxel > 0):
             self.iterations += 1
             self.free_voxel -= 1
+
             self.update_BM()
-            inputs, heights, gt = self.update_BM()
 
             if self.iterations % self.observation_counter == 0:
-                self.draw_debug()
-
-
-
-
+                self.draw_debug(reset=False)
 
         self.bm.find_global_error_paths()
         if self.bm.count_new_path_errors() > 0:
-            error_b_type1, error_b_type2, dir1, dir2 = \
-                self.bm.reconstruct_path_error_inputs()
+            error_b_type1, error_b_type2, dir1, dir2, e_pos, batches = \
+                self.bm.reconstruct_path_error_inputs(fc=True)
+            precomp_input = self.precomp_input[batches, :,
+                                               e_pos[:, 0] - self.bm.pad,
+                                               e_pos[:, 1] - self.bm.pad]
+            precomp_input = precomp_input[:, :, None, None]
 
             batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
             batch_dir_ft = exp.stack_batch(dir1, dir2)
 
-            batch_ft = exp.flatten_stack(batch_ft).astype(theano.config.floatX)
+            batch_ft = exp.flatten_stack(batch_ft).astype(np.float32)
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
 
-            ft_loss_train, individual_loss_fine = \
-                self.loss_train_fine_f(batch_ft, batch_dir_ft)
-
+            ft_loss_train, individual_loss_fine, _ = \
+                self.loss_train_fine_f(batch_ft, precomp_input, batch_dir_ft)
             self.update_history.append(self.iterations)
             self.loss_history.append(ft_loss_train)
             u.plot_train_val_errors(
                 [self.loss_history],
                 self.update_history,
                 self.save_net_path + '/training_finetuning.png',
-                names=['loss finetuning'])
+                names=['loss finetuning'], log_scale=False)
 
-        #
-        # if self.free_voxel == 0:
-        #     self.bm.init_batch()
-        #     self.free_voxel = self.free_voxel_empty
-        #     trainer.draw_debug()
+
+        if self.free_voxel == 0:
+            trainer.draw_debug(reset=True)
+            self.bm.init_batch()
+            self.free_voxel = self.free_voxel_empty
 
 
 class GottaCatchemAllTrainer(PokemonTrainer):
@@ -354,6 +351,8 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         super(GottaCatchemAllTrainer, self).__init__(options)
         self.update_steps = 1
         self.observation_counter = 10
+        self.loss_history = [[], []]
+
 
     def init_BM(self):
         self.BM = du.HoneyBatcherPath
@@ -367,9 +366,6 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         heights_gt = du.height_to_fc_height_gt(self.bm.global_height_gt_batch)
         return inputs, None, heights_gt
 
-    def reset_image(self):
-        self.free_voxel = self.free_voxel_empty
-        trainer.draw_debug()
 
     def train(self):
         self.iterations += 1
@@ -380,46 +376,56 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         self.bm.global_prediction_map = height_pred.swapaxes(1, 3)
 
         if self.iterations % self.observation_counter == 0:
-            trainer.draw_debug()
+            trainer.draw_debug(reset=True)
 
         loss_train, individual_loss, _ = self.loss_train_f(inputs, heights)
+        loss_no_reg = np.mean(individual_loss)
 
         if self.iterations % 100 == 0:
             self.save_net()
 
         # update parameters once
         self.update_history.append(self.iterations)
-        self.loss_history.append(loss_train)
+        self.loss_history[0].append(loss_train)
+        self.loss_history[1].append(loss_no_reg)
         u.plot_train_val_errors(
-            [self.loss_history],
+            [self.loss_history[0], self.loss_history[1]],
             self.update_history,
             self.save_net_path + '/training.png',
-            names=['loss'])
+            names=['loss', 'loss no reg'])
         return loss_train
 
-    def draw_debug(self):
+    def draw_debug(self, reset=False, image_path=None):
+        if reset:
+            image_path = self.image_path_reset
+        elif image_path is None:
+            image_path = self.image_path
+
         for b in range(1):
             self.bm.draw_debug_image(
                 "train_b_%03i_i_%08i_f_%i" %
                 (b, self.iterations, self.free_voxel),
-                path=self.image_path, b=b, plot_height_pred=True)
+                path=image_path, b=b, plot_height_pred=True)
+
+
+
 
 if __name__ == '__main__':
     options = get_options()
-
-
-    options = get_options()
     # pret
-    # trainer = GottaCatchemAllTrainer(options)
-    # while not trainer.converged():
-    #     print "\r pretrain %0.4f iteration %i free voxel %i" \
-    #           %(trainer.train(), trainer.iterations, trainer.free_voxel),
-    # trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
+    if options.net_arch == 'v8_hydra_dilated':
+        trainer = GottaCatchemAllTrainer(options)
+        while not trainer.converged():
+            print "\r pretrain %0.4f iteration %i free voxel %i" \
+                  %(trainer.train(), trainer.iterations, trainer.free_voxel),
+        trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
 
-    trainer = FCFinePokemonTrainer(options)
-    while not trainer.converged():
-        print "prertrain", trainer.train()
-    trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
+    elif options.net_arch == 'v8_hydra_dilated_ft':
+
+        trainer = FCFinePokemonTrainer(options)
+        while not trainer.converged():
+            trainer.train()
+        trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
 
     # finetrainer = FinePokemonTrainer(options)
     # finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')

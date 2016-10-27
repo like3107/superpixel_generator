@@ -414,7 +414,7 @@ class NetBuilder:
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
             self.build_v8_hydra_dilated()
 
-        u.load_network('./../data/nets/voronoi3/nets/net_100', l_out_old)
+        u.load_network('./../data/nets/voronoi_small_dashes/nets/net_100', l_out_old)
         # get pointer to last conv layer
         l_out_precomp = l_out_old
         while 'conv' not in l_out_precomp.name:
@@ -438,7 +438,6 @@ class NetBuilder:
         l_in = L.InputLayer((None, n_channels, fov, fov))
         l_prev = l_in
         for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
-            print 'opts', filt, dil, n_filt, name
             l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
                                                        dilation=(dil, dil)),
                                   name=name)
@@ -447,9 +446,8 @@ class NetBuilder:
 
         l_in_dense = las.layers.InputLayer((None, 256, 1, 1))
         l_merge = las.layers.ConcatLayer([l_in_dense, l_claims_out])
-        print 'merge output', l_merge.output_shape
 
-        W = np.random.random((2048, 320, 1, 1)).astype('float32') / 100.
+        W = np.random.random((2048, 320, 1, 1)).astype('float32') / 10000.
         W[:, :-64, 0, 0] = np.array(first_fc.W.eval()).swapaxes(0, 1)[:, :, 0, 0]
         W = theano.shared(W)
 
@@ -819,11 +817,9 @@ class NetBuilder:
 
         # typeII - typeI + m
         individual_batch = (l_out_train[bs/2:] - l_out_train[:bs/2] + margin)
-        loss_train = T.mean(individual_batch)
-        if L1_weight > 0:
-            loss_train += L1_weight * L1_norm
-
         loss_valid = T.mean(individual_batch)
+        if L1_weight > 0:
+            loss_train = loss_valid + L1_weight * L1_norm
 
         updates = las.updates.adam(loss_train, all_params)
 
@@ -851,7 +847,7 @@ class NetBuilder:
         claim_out = las.layers.get_output(layers['l_claims_out'])
         debug_f = theano.function([layers['l_in_claims'].input_var],
                                   claim_out)
-        return probs_f, fc_prec_conv_body, debug_f
+        return probs_f, fc_prec_conv_body, loss_train_f, debug_f
 
     def loss_updates_probs_v1_hybrid(self, l_in, target, last_layer, L1_weight=10**-5):
 
