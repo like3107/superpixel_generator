@@ -6,6 +6,7 @@ import utils as u
 from os.path import exists
 import cairo
 import math
+import sys
 from scipy import ndimage
 from scipy import stats
 from scipy.ndimage import convolve, gaussian_filter
@@ -14,7 +15,7 @@ from skimage.feature import peak_local_max
 from skimage.morphology import label, watershed
 from scipy.spatial import Voronoi as voronoi
 from voronoi_polygon import voronoi_finite_polygons_2d
-
+import png
 
 def segmenation_to_membrane_core(label_image):
     gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -37,6 +38,10 @@ def generate_gt_height(label_image, max_height, clip_method='clip'):
         np.exp(height, out=height)
     return height
 
+
+def get_dataset_provider(datasetname):
+    print 'using dataset: ', datasetname
+    return getattr(sys.modules[__name__], datasetname+"DataProvider")
 
 class DataProvider(object):
     def __init__(self, options):
@@ -252,7 +257,7 @@ class PolygonDataProvider(DataProvider):
                         data_border, cairo.FORMAT_ARGB32, self.size, self.size)
             cr_b = cairo.Context(surface_border)
             cr_b.set_source_rgb(1.0, 1.0, 1.0)
-            cr_b.set_dash(self.get_dashes())
+            # cr_b.set_dash(self.get_dashes())
             coord_pairs = []
 
             for i, region in enumerate(regions):
@@ -274,7 +279,7 @@ class PolygonDataProvider(DataProvider):
                         cr_b.line_to(p[0],p[1])
                         coord_pairs.append((lcoord[0],lcoord[1],p[0],p[1]))
                         coord_pairs.append((p[0],p[1],lcoord[0],lcoord[1]))
-                        cr_b.set_dash(self.get_dashes())
+                        # cr_b.set_dash(self.get_dashes())
                     lcoord = (p[0],p[1])
                 cr.close_path()
                 cr_b.stroke()
@@ -412,6 +417,45 @@ class PolygonDataProvider(DataProvider):
                 self.load_data(options)
             else:
                 exit()
+
+    def load_test_data(self, options):
+        np.random.seed(1337)
+        orig_bs = self.bs
+        self.bs = 1
+        try:
+            self.draw_voronoi()
+
+        except KeyError, e:
+            print "Error during batch creation, retry ... Key Error %s" % str(e)
+            self.exception_counter += 1
+            if self.exception_counter < 20:
+                self.load_data(options)
+            else:
+                exit()
+
+
+    def save_data(self, options):
+        # export as h5 and png
+        save_h5(self.options.save_net_path+"voronoi_test_labels.h5",
+                            'data', data=self.label, overwrite='w')
+        save_h5(self.options.save_net_path+"voronoi_test_height.h5",
+                            'data', data=self.height_gt, overwrite='w')
+        save_h5(self.options.save_net_path+"voronoi_test_input.h5",
+                            'data', data=self.full_input, overwrite='w')
+
+        from skimage import io
+        inshape = self.full_input.shape
+        print inshape
+        k = np.zeros((inshape[2],inshape[3],3))
+        k[:,:,2] = self.full_input[0,0]/256.
+
+        # png.from_array(k, 'L')\
+        #         .save(self.options.save_net_path+"voronoi_test_image.png")
+
+
+        io.imsave(self.options.save_net_path+"test.png",k)
+
+        self.bs = orig_bs
 
 def cut_reprs(path):
     label_path = path + 'label_first_repr_big_zstack_cut.h5'
@@ -890,7 +934,9 @@ def random_lines2(n_lines, bs=None, edge_len=None, input_array=None):
 
     return input_array
 
-
+class TestPolygonDataProvider(PolygonDataProvider):
+    def load_data(self, options):
+        self.load_test_data(options)
 
 if __name__ == '__main__':
     class opt():
@@ -901,13 +947,17 @@ if __name__ == '__main__':
             self.global_edge_len = 0
             self.clip_method='clip'
             self.padding_b=False
+            self.net_name = "data_provider_test"
+            self.save_net_path = './../data/nets/' + self.net_name
+            if not exists(self.save_net_path):
+                makedirs(self.save_net_path)
     options = opt()
     p = PolygonDataProvider(options)
     inputx = np.zeros(p.get_batch_shape())
     # print p.prepare_input_batch(inputx)
-    for i in range(1000000):
-        print i
-        p.prepare_input_batch(inputx)
-    # p.draw_passage()
+    # for i in range(1000000):
+    #     print i
+    #     p.prepare_input_batch(inputx)
+    p.load_test_data(options)
     # p.draw_circle()
 

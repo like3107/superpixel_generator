@@ -21,14 +21,14 @@ from trainer_config_parser import get_options
 
 class PokemonTrainer(object):
     def __init__(self, options):
-        self.options = copy(options)
+        self.options = options
         self.prepare_paths()
-        self.builder = nets.NetBuilder(options.network_channels)
+        self.builder = nets.NetBuilder(self.options.network_channels)
         self.define_loss()
         self.network_i_choose_you()
         # options.patch_len = 68
         self.init_BM()
-        self.bm = self.BM(options)
+        self.bm = self.BM(self.options)
         self.bm.init_batch()
 
         self.iterations = -1
@@ -40,21 +40,21 @@ class PokemonTrainer(object):
         self.loss_history = []
 
     def network_i_choose_you(self):
-        network = self.builder.get_net(options.net_arch)
-        c.use(options.gpu)
+        network = self.builder.get_net(self.options.net_arch)
+        c.use(self.options.gpu)
         l_in, l_in_direction, l_out, l_out_direction,\
-                 options.patch_len, l_eat = network()
+                 self.options.patch_len, l_eat = network()
         self.l_out = l_out
-        options.network_channels = l_in.shape[1]
+        self.options.network_channels = l_in.shape[1]
         target_t = T.ftensor4()
         self.loss_train_f, loss_valid_f, self.prediction_f = \
-            self.loss(l_in, target_t, l_out, L1_weight=options.regularization)
+            self.loss(l_in, target_t, l_out, L1_weight=self.options.regularization)
 
-        if options.load_net_b:
+        if self.options.load_net_b:
             np.random.seed(np.random.seed(int(time.time())))
             # change seed so different images for retrain
-            print "loading network parameters from ", options.load_net_path
-            u.load_network(options.load_net_path, l_out)
+            print "loading network parameters from ", self.options.load_net_path
+            u.load_network(self.options.load_net_path, l_out)
 
     def init_BM(self):
         self.BM = du.HoneyBatcherPath
@@ -63,7 +63,7 @@ class PokemonTrainer(object):
         self.loss = self.builder.get_loss('updates_probs_v0')
 
     def prepare_paths(self):
-        self.save_net_path = './../data/nets/' + options.net_name + '/'
+        self.save_net_path = './../data/nets/' + self.options.net_name + '/'
         self.debug_path = self.save_net_path + "/debug"
         self.image_path = self.save_net_path + '/images/pretrain/'
         self.image_path_reset = self.save_net_path + '/images/reset/'
@@ -137,30 +137,30 @@ class PokemonTrainer(object):
         if name is None:
             name = 'net_%i' % self.iterations
         u.save_network(path, self.l_out,
-                   name, add=options._get_kwargs())
+                   name, add=self.options._get_kwargs())
 
     def load_net(self, file_path=None):
         if file_path is None:
-            file_path = options.load_net_path
-        print "loading network parameters from ", options.load_net_path
-        u.load_network(options.load_net_path, self.l_out)
+            file_path = self.options.load_net_path
+        print "loading network parameters from ", self.options.load_net_path
+        u.load_network(self.options.load_net_path, self.l_out)
 
 class Membertrainer(PokemonTrainer):
     def init_BM(self):
         self.BM = du.HoneyBatcherPath
         self.Memento = exp.BatcherBatcherBatcher(
-                    scale_height_factor=options.scale_height_factor, 
-                    max_mem_size=options.exp_mem_size,
-                    pl=options.patch_len,
-                    warmstart=options.exp_warmstart,
+                    scale_height_factor=self.options.scale_height_factor, 
+                    max_mem_size=self.options.exp_mem_size,
+                    pl=self.options.patch_len,
+                    warmstart=self.options.exp_warmstart,
                     n_channels=n_channels,
-                    accept_rate=options.exp_acceptance_rate,
-                    use_loss=options.exp_loss,
-                    weight_last=options.exp_wlast)
-        if options.exp_load != "None":
-            # np.random.seed(len(options.net_name))
-            print "loading Memento from ", options.exp_load
-            Memento.load(options.exp_load)
+                    accept_rate=self.options.exp_acceptance_rate,
+                    use_loss=self.options.exp_loss,
+                    weight_last=self.options.exp_wlast)
+        if self.options.exp_load != "None":
+            # np.random.seed(len(self.options.net_name))
+            print "loading Memento from ", self.options.exp_load
+            Memento.load(self.options.exp_load)
 
 class FusionPokemonTrainer(PokemonTrainer):
     def init_BM(self):
@@ -170,23 +170,23 @@ class FusionPokemonTrainer(PokemonTrainer):
         self.loss = self.builder.get_loss('updates_v7_EAT')
 
     def network_i_choose_you(self):
-        network = self.builder.get_net(options.net_arch)
-        c.use(options.gpu)
+        network = self.builder.get_net(self.options.net_arch)
+        c.use(self.options.gpu)
         l_in, l_in_direction, l_out, l_out_direction,\
-                 options.patch_len, l_eat = network()
-        options.network_channels = l_in.shape[1]
+                 self.options.patch_len, l_eat = network()
+        self.options.network_channels = l_in.shape[1]
         target_t = T.ftensor4()
         target_eat = T.ftensor4()
         target_eat_factor = T.ftensor4()
         loss_train_f, loss_valid_f, self.prediction_f, loss_merge_f, eat_f = \
             loss(l_in, target_t, l_out, l_eat, target_eat, target_eat_factor,\
-            L1_weight=options.regularization)
+            L1_weight=self.options.regularization)
 
-        if options.load_net_b:
+        if self.options.load_net_b:
             np.random.seed(np.random.seed(int(time.time())))
             # change seed so different images for retrain
-            print "loading network parameters from ", options.load_net_path
-            u.load_network(options.load_net_path, l_out)
+            print "loading network parameters from ", self.options.load_net_path
+            u.load_network(self.options.load_net_path, l_out)
 
     def update_BM(self):
         inputs, gt, seeds, ids, merging_gt, merging_factor, merging_ids =\
@@ -208,16 +208,16 @@ class FinePokemonTrainer(PokemonTrainer):
         self.loss = self.builder.get_loss('updates_hydra_v5')
 
     def network_i_choose_you(self):
-        network = self.builder.get_net(options.net_arch)
-        c.use(options.gpu)
+        network = self.builder.get_net(self.options.net_arch)
+        c.use(self.options.gpu)
         l_in, l_in_direction, self.l_out, l_out_direction,\
-                 options.patch_len, _ = network()
-        options.network_channels = l_in.shape[1]
+                 self.options.patch_len, _ = network()
+        self.options.network_channels = l_in.shape[1]
         target_t = T.ftensor4()
 
         self.loss_train_fine_f, self.loss_valid_fine_f, self.prediction_f  = \
             self.loss(l_in, l_in_direction, l_out_direction, self.l_out,
-                          L1_weight=options.regularization)
+                          L1_weight=self.options.regularization)
 
     def train(self):
         while (self.free_voxel > 0):
@@ -266,15 +266,15 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         self.loss = self.builder.get_loss('updates_hydra_v8')
 
     def network_i_choose_you(self):
-        network = self.builder.get_net(options.net_arch)
-        c.use(options.gpu)
-        layers, options.patch_len, _ = network()
-        options.network_channels = layers['l_in_claims'].shape[1]
+        network = self.builder.get_net(self.options.net_arch)
+        c.use(self.options.gpu)
+        layers, self.options.patch_len, _ = network()
+        self.options.network_channels = layers['l_in_claims'].shape[1]
         target_t = T.ftensor4()
 
         self.prediction_f,  self.fc_prec_conv_body, self.loss_train_fine_f, \
             self.debug_f = \
-             self.loss(layers, L1_weight=options.regularization)
+             self.loss(layers, L1_weight=self.options.regularization)
 
     def update_BM_FC(self):
         # self.bm.batch_data_provider.load_data(options)
@@ -342,6 +342,12 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             self.bm.init_batch()
             self.free_voxel = self.free_voxel_empty
 
+class Pokedex(PokemonTrainer):
+    """
+    prediction of images only
+    """
+    def init_BM(self):
+        self.BM = du.HoneyBatcherPredict
 
 class GottaCatchemAllTrainer(PokemonTrainer):
     """
@@ -358,8 +364,8 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         self.BM = du.HoneyBatcherPath
 
     def update_BM(self):
-        # self.bm.batch_data_provider.load_data(options)
-        # self.bm.batch_data_provider = PolygonDataProvider(options)
+        # self.bm.batch_data_provider.load_data(self.options)
+        # self.bm.batch_data_provider = PolygonDataProvider(self.options)
         self.bm.init_batch()
         self.bm.prepare_global_batch()
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
@@ -451,7 +457,7 @@ if __name__ == '__main__':
 
 
     # ft
-    # finetrainer = FinePokemonTrainer(options)
+    # finetrainer = FinePokemonTrainer(self.options)
     # finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')
     #
     # while not finetrainer.converged():

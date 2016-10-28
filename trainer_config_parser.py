@@ -23,6 +23,8 @@ def get_options():
 
     # train data paths
     def_train_version = 'second_repr'       # def change me
+    p.add('--dataset', default="Polygon")
+
     p.add('--train_version', default=def_train_version)
     p.add('--seed_method', type=str, default="timo",
           help='available metods: gt, timo, grid',

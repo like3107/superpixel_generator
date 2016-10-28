@@ -41,7 +41,9 @@ class HoneyBatcherPredict(object):
         self.pad = options.patch_len / 2
         self.seed_method = options.seed_method
         self.bs = options.batch_size
-        self.batch_data_provider = data_provider.PolygonDataProvider(options)
+
+        self.batch_data_provider = data_provider.\
+                get_dataset_provider(options.dataset)(options)
 
         self.batch_shape = self.batch_data_provider.get_batch_shape()
         self.image_shape = self.batch_data_provider.get_image_shape()
@@ -162,6 +164,23 @@ class HoneyBatcherPredict(object):
         self.get_seed_coords()
         self.get_seed_ids()
         self.initialize_priority_queue()
+
+    def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
+        """
+        Seeds by minima of dist trf of thresh of memb prob
+        :return:
+        """
+        if self.seed_method == "gt":
+            self.get_seed_coords_gt()
+        elif self.seed_method == "over":
+            self.get_seed_coords_grid()
+        elif self.seed_method == "timo":
+            self.get_seed_coords_timo()
+        elif self.seed_method == "file":
+            self.batch_data_provider.get_seed_coords_from_file(self.global_seeds)
+        else:
+            raise Exception("no valid seeding method defined")
+
 
     def get_seed_coords_timo(self, sigma=1.0, min_dist=4, thresh=0.2):
         """
@@ -448,23 +467,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.global_error_dict = {}
         self.global_directionmap_batch = \
             np.zeros_like(self.global_label_batch) - 1
-
-    def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
-        """
-        Seeds by minima of dist trf of thresh of memb prob
-        :return:
-        """
-        if self.seed_method == "gt":
-            self.get_seed_coords_gt()
-        elif self.seed_method == "over":
-            self.get_seed_coords_grid()
-        elif self.seed_method == "timo":
-            self.get_seed_coords_timo()
-        elif self.seed_method == "file":
-            self.batch_data_provider.get_seed_coords_from_file(self.global_seeds)
-        else:
-            raise Exception("no valid seeding method defined")
-
 
     def get_batches(self):
         raw_batch, centers, ids = super(HoneyBatcherPath, self).get_batches()
