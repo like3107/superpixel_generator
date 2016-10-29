@@ -23,6 +23,8 @@ def get_options():
 
     # train data paths
     def_train_version = 'second_repr'       # def change me
+    p.add('--dataset', default="Polygon")
+
     p.add('--train_version', default=def_train_version)
     p.add('--seed_method', type=str, default="timo",
           help='available metods: gt, timo, grid',
@@ -83,12 +85,24 @@ def get_options():
     p.add('--no_bash_backup', action='store_true')
     p.add('--lowercomplete_e', default=0., type=float)
 
+    p.add('--raw_path', default="None", type=str)
+    p.add('--membrane_path', default="None", type=str)
+    p.add('--label_path', default="None", type=str)
+    p.add('--height_gt_path', default="None", type=str)
+
     options = p.parse_args()
 
-    options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
-    options.membrane_path ='./../data/volumes/membranes_%s.h5' % options.train_version
-    options.label_path ='./../data/volumes/label_%s.h5' % options.train_version
-    options.height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version
+    if options.raw_path == "None":
+        options.raw_path ='./../data/volumes/input_%s.h5' % options.train_version
+
+    if options.raw_path == "None":
+        options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
+    if options.membrane_path == "None":
+        options.membrane_path ='./../data/volumes/membranes_%s.h5' % options.train_version
+    if options.label_path == "None":
+        options.label_path ='./../data/volumes/label_%s.h5' % options.train_version
+    if options.height_gt_path == "None":
+        options.height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version
     print 'saving files to ', options.net_name
     return options
 
