@@ -261,6 +261,7 @@ class FinePokemonTrainer(PokemonTrainer):
 class FCFinePokemonTrainer(FinePokemonTrainer):
     def init_BM(self):
         self.BM = du.HoneyBatcherPatchFast
+        self.images_counter = -1
 
     def define_loss(self):
         self.loss = self.builder.get_loss('updates_hydra_v8')
@@ -269,6 +270,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         network = self.builder.get_net(options.net_arch)
         c.use(options.gpu)
         layers, options.patch_len, _ = network()
+        self.l_out = layers["l_out_cross"]
         options.network_channels = layers['l_in_claims'].shape[1]
         target_t = T.ftensor4()
 
@@ -279,11 +281,8 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
     def update_BM_FC(self):
         # self.bm.batch_data_provider.load_data(options)
         # self.bm.batch_data_provider = PolygonDataProvider(options)
-        self.bm.prepare_global_batch()
-        self.bm.init_batch()
+        # self.bm.prepare_global_batch()
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
-        heights_gt = du.height_to_fc_height_gt(
-            self.bm.global_height_gt_batch)
         return inputs
 
     def update_BM(self):
@@ -293,15 +292,18 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                                            seeds[:, 0] - self.bm.pad,
                                            seeds[:, 1] - self.bm.pad]
         precomp_input = precomp_input[:, :, None, None]
+        # debug
+        inputs[...] = 0.
         heights = self.prediction_f(inputs, precomp_input)
         self.bm.update_priority_queue(heights, seeds, ids)
         return inputs, heights, gt
 
     def train(self):
-        # precompute fc part
+        self.bm.init_batch()
         inputs = self.update_BM_FC()
+        # precompute fc part
         self.precomp_input = self.fc_prec_conv_body(inputs)
-
+        self.images_counter += 1
         while (self.free_voxel > 0):
             self.iterations += 1
             self.free_voxel -= 1
@@ -318,6 +320,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             precomp_input = self.precomp_input[batches, :,
                                                e_pos[:, 0] - self.bm.pad,
                                                e_pos[:, 1] - self.bm.pad]
+
             precomp_input = precomp_input[:, :, None, None]
 
             batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
@@ -326,8 +329,18 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             batch_ft = exp.flatten_stack(batch_ft).astype(np.float32)
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
 
-            ft_loss_train, individual_loss_fine, _ = \
+            # heights = self.prediction_f(batch_ft, precomp_input, batch_dir_ft)
+            batch_ft[...] = 0.
+
+            ft_loss_train, individual_loss_fine, _, heights = \
                 self.loss_train_fine_f(batch_ft, precomp_input, batch_dir_ft)
+            print
+            print 'loss ft', ft_loss_train
+            print 'ind ft', individual_loss_fine
+            print 'error type II ', self.bm.error_II_type
+            print 'heights predictied', zip(heights, self.bm.e1heights + self.bm.e2heights)
+            print 'heigts should', self.bm.e1heights + self.bm.e2heights
+
             self.update_history.append(self.iterations)
             self.loss_history.append(ft_loss_train)
             u.plot_train_val_errors(
@@ -336,10 +349,14 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                 self.save_net_path + '/training_finetuning.png',
                 names=['loss finetuning'], log_scale=False)
 
+        if self.images_counter % 1 == 0:
+            # self.save_net()
+            trainer.draw_debug(reset=True)
+
 
         if self.free_voxel == 0:
-            trainer.draw_debug(reset=True)
-            self.bm.init_batch()
+            print 'init batch'
+            # self.bm.draw_error_reconst('err_rec%i' %self.iterations)
             self.free_voxel = self.free_voxel_empty
 
 

@@ -309,7 +309,7 @@ class PolygonDataProvider(DataProvider):
 
         b = 0
         self.full_input[:, 0, self.size /2 , :] = 1
-        self.full_input[:, 0, self.size /2-5:self.size /2+5 , :] = 1
+        self.full_input[:, 0, self.size /2-6:self.size /2+6 , :] = 1
         self.label[:, self.size /2:, :] = 1
         self.make_height_gt()
         # with h.File("voronoi.h5","w") as out:
@@ -405,6 +405,7 @@ class PolygonDataProvider(DataProvider):
     def load_data(self, options):
         try:
             self.draw_voronoi()
+            # self.draw_debug()
         except KeyError, e:
             print "Error during batch creation, retry ... Key Error %s" % str(e)
             self.exception_counter += 1

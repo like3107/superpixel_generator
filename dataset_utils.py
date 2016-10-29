@@ -256,7 +256,7 @@ class HoneyBatcherPredict(object):
     def get_network_input(self, center, b, Id, out):
         out[0:2] = self.crop_mask_claimed(center, b, Id)
         out[2:] = self.crop_input(center, b)
-
+        return out
 
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
@@ -266,7 +266,8 @@ class HoneyBatcherPredict(object):
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
             assert (self.global_claims[b, center[0], center[1]] == 0)
             self.global_claims[b, center[0], center[1]] = Id
-            self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
+            raw_batch[b, :, :, :] = \
+                self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
             # check whether already pulled
             self.global_heightmap_batch[b,
                                         center[0] - self.pad,
@@ -274,7 +275,7 @@ class HoneyBatcherPredict(object):
         return raw_batch, centers, ids
 
     def update_priority_queue(self, heights_batch, centers, ids):
-        for b, center, Id, heights in zip(range(self.bs), centers, ids,
+        for b, center, Id, height in zip(range(self.bs), centers, ids,
                                           heights_batch[:, :, 0, 0]):
             # if possibly wrong
             cross_x, cross_y, cross_d = self.get_cross_coords(center)
@@ -284,9 +285,9 @@ class HoneyBatcherPredict(object):
                                                       self.lowercomplete_e
             if lower_bound == np.inf:
                 print "encountered inf for prediction center !!!!", \
-                    b, center, Id, heights, lower_bound
+                    b, center, Id, height, lower_bound
                 raise Exception('encountered inf for prediction center')
-            self.max_new_old_pq_update(b, cross_x, cross_y, heights, lower_bound,
+            self.max_new_old_pq_update(b, cross_x, cross_y, height, lower_bound,
                                        Id, cross_d,
                                        input_time=self.global_time)
 
@@ -298,6 +299,9 @@ class HoneyBatcherPredict(object):
                                                    x - self.pad,
                                                    y - self.pad]) | add_all )\
                     & (self.global_claims[b, x, y] == 0)
+        # debug
+        self.global_prediction_map_nq[b, x - self.pad, y - self.pad, direction] = \
+            height
         height[height < lower_bound] = lower_bound
         self.global_heightmap_batch[b, x  - self.pad, y - self.pad][is_lowest] \
             = height[is_lowest]
@@ -444,6 +448,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                self.label_shape[1],
                                                self.label_shape[2], 4))
         self.global_prediction_map.fill(np.inf)
+        # debug
+        self.global_prediction_map_nq = np.empty((self.bs,
+                                               self.label_shape[1],
+                                               self.label_shape[2], 4))
+        self.global_prediction_map_nq.fill(np.inf)
 
         self.global_error_dict = {}
         self.global_directionmap_batch = \
@@ -465,6 +474,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         else:
             raise Exception("no valid seeding method defined")
 
+    def reverse_direction(self, direction):
+        return (direction + 2) % 4
 
     def get_batches(self):
         raw_batch, centers, ids = super(HoneyBatcherPath, self).get_batches()
@@ -671,9 +682,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
             wrong_path_ends = np.transpose(np.where(path_fin_map)) + self.pad
             for center_x, center_y in wrong_path_ends:
-                # print "path for ", center_x, center_y
-
-
                 # check around intruder, claim pred = large pred = intruder
                 claim_height = self.global_heightmap_batch[b,
                                                          center_x - self.pad,
@@ -694,7 +702,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     # only penalize on on lowest prediction
                     if claim_projection[x, y] != \
                             claim_projection[center_x, center_y]:
-                        reverse_direction = (direction + 2) % 4
+                        reverse_direction = self.reverse_direction(direction)
                         prediction = \
                             self.global_prediction_map[b,
                                                        center_x - self.pad,
@@ -714,7 +722,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                       False,
                                                       center_x, center_y)
                         # slow intruder
-                        elif not fast_intruder_found:   # prioritized
+                        elif not fast_intruder_found:   # other is prioritized
                             small_height = \
                                 self.global_heightmap_batch[b,
                                                             x - self.pad,
@@ -766,10 +774,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 else:
                     print "no match found for path end"
                     not_found[center_x-self.pad, center_y-self.pad] = 1
-                    for x, y, direction in self.walk_cross_coords([center_x,center_y]):
+                    for x, y, direction in self.walk_cross_coords([center_x,
+                                                                   center_y]):
                         print  claim_projection[x, y] ," should not be ", \
                             claim_projection[center_x, center_y]
-                        reverse_direction = (direction + 2) % 4
+                        reverse_direction = self.reverse_direction(direction)
                         print "prediction = ", \
                             self.global_prediction_map[b,
                                                        x-self.pad,
@@ -821,6 +830,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                                  pos[1]]
                         error_I["e1_direction"] = current_direction
                         error_I["e1_length"] = e1_length
+                        assert (error_I["large_id"] ==\
+                                self.global_claims[batch, pos[0], pos[1]])
+                        assert (error_I["large_gtid"] ==
+                                self.global_label_batch[batch,
+                                                        pos[0]-self.pad,
+                                                        pos[1]-self.pad])
                         assert(current_direction >= 0)
                     current_direction = d
                     prev_in_other_region = in_other_region
@@ -829,25 +844,24 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 e1_length = error_I["e1_length"]
                 self.counter += 1
 
-    def find_end_of_plateau(self, start_position, start_direction, batch):
-        current_height = self.global_heightmap_batch[batch,
-                                                     start_position[0]-self.pad,
-                                                     start_position[1]-self.pad]
+    def find_end_of_plateau(self, start_position, start_direction, batch,
+                            start_height):
+        current_height = start_height
         current_height -= self.lowercomplete_e
         current_direction = start_direction
         for pos, d in self.get_path_to_root(start_position, batch):
-            # check if the slope is smaller than  zero
-            if self.global_heightmap_batch[batch, pos[0]-self.pad, \
+            # check if the slope is smaller than zero
+            if self.global_heightmap_batch[batch,
+                                           pos[0]-self.pad,
                                            pos[1]-self.pad] \
                                     < current_height:
-                return pos,current_direction
+                return pos, current_direction
             if d >= 0:
                 # not at the end of the path
                 current_height -= self.lowercomplete_e
                 current_direction = d
 
         return pos, start_direction
-
 
     def find_source_of_II_error(self):
         for error in self.global_error_dict.values():
@@ -856,21 +870,26 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 start_position = error["small_pos"]
                 start_direction = error["small_direction"]
                 if error["slow_intruder"]:
+                    small_height = \
+                        self.global_heightmap_batch[batch,
+                                                    start_position[0]-self.pad,
+                                                    start_position[1]-self.pad]
                     start_direction = \
                         self.global_directionmap_batch[
                             batch,
                             start_position[0] - self.pad,
                             start_position[1] - self.pad]
+                    # go one step back
                     start_position = self.update_position(start_position,
                                                           start_direction)
 
                     error["e2_pos"], error["e2_direction"] = \
                                     self.find_end_of_plateau(start_position,
                                     start_direction,
-                                    batch)
+                                    batch, small_height)
                 else:
                     error["e2_pos"], error["e2_direction"] = \
-                        start_position,  start_direction
+                        start_position, start_direction
                 assert (error["e2_direction"] >= 0)
                 error["e2_time"] = self.global_timemap[batch,
                                                        error["e2_pos"][0],
@@ -938,7 +957,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         raw_batch = np.zeros((len(batches), self.n_channels, self.pl, self.pl),
                              dtype='float32')
         for i, (b, center, Id) in enumerate(zip(batches, centers, ids)):
-            self.get_network_input(center, b, Id, raw_batch[i, :, :, :])
+            raw_batch[i, :, :, :] = self.get_network_input(center, b, Id, raw_batch[i, :, :, :])
 
         mask = self.crop_time_mask(centers, timepoint, batches)
         raw_batch[:, 1, :, :][mask] = 0
@@ -965,6 +984,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_II_id_list = []
         error_I_direction = []
         error_II_direction = []
+        # debug
+        self.error_II_type = []
+        self.e1heights = []
+        self.e2heights = []
 
         for error in self.global_error_dict.values():
             # print "errorlength",error['e1_length']
@@ -979,6 +1002,25 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 error_II_direction.append(error["e2_direction"])
                 error_II_time_list.append(error["e2_time"])
                 error_II_id_list.append(error["small_id"])
+                error_II_id_list.append(error["small_id"])
+                # debug
+                self.error_II_type.append(error["slow_intruder"])
+                e_height_pos = self.update_position(error["e2_pos"],
+                                                    error["e2_direction"])
+                self.e1heights.append(
+                    self.global_prediction_map_nq[error["batch"],
+                                               e_height_pos[0]-self.pad,
+                                               e_height_pos[1]-self.pad,
+                                               error["e2_direction"]])
+
+                e_height_pos = self.update_position(error["e1_pos"],
+                                                    error["e1_direction"])
+                self.e2heights.append(
+                    self.global_prediction_map_nq[error["batch"],
+                                               e_height_pos[0]-self.pad,
+                                               e_height_pos[1]-self.pad,
+                                               error["e1_direction"]])
+
 
         reconst_e1 = self.reconstruct_input_at_timepoint(error_I_timelist,
                                                          error_I_pos_list,
@@ -988,6 +1030,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                          error_II_pos_list,
                                                          error_II_id_list,
                                                          error_batch_list)
+
         if fc:
             assert (isinstance(error_I_pos_list, list))
             assert (isinstance(error_batch_list, list))
@@ -1075,16 +1118,16 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         for e_idx, error in self.global_error_dict.items():
             plot_images = []
             if not "draw_file" in error:
-                reconst_e1 = self.reconstruct_input_at_timepoint([error["e1_time"]],
-                                                                 [error["e1_pos"]],
-                                                                 [error[
-                                                                      "large_id"]],
-                                                                 [error["batch"]])
-                reconst_e2 = self.reconstruct_input_at_timepoint([error["e2_time"]],
-                                                                 [error["e2_pos"]],
-                                                                 [error[
-                                                                      "small_id"]],
-                                                                 [error["batch"]])
+                reconst_e1 = \
+                    self.reconstruct_input_at_timepoint([error["e1_time"]],
+                                                        [error["e1_pos"]],
+                                                        [error["large_id"]],
+                                                        [error["batch"]])
+                reconst_e2 = \
+                    self.reconstruct_input_at_timepoint([error["e2_time"]],
+                                                        [error["e2_pos"]],
+                                                        [error["small_id"]],
+                                                        [error["batch"]])
 
                 plot_images.append({"title": "Ground Truth Label",
                                     "cmap": "rand",
@@ -1338,18 +1381,22 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
 
+
 class HoneyBatcherPatchFast(HoneyBatcherPath):
     def get_network_input(self, center, b, Id, out):
         out[0:2] = self.crop_mask_claimed(center, b, Id)
-
+        return out
 
     def reconstruct_input_at_timepoint(self, timepoint, centers, ids, batches):
         raw_batch = np.zeros((len(batches), self.n_channels, self.pl, self.pl),
                              dtype='float32')
         for i, (b, center, Id) in enumerate(zip(batches, centers, ids)):
-            self.get_network_input(center, b, Id, raw_batch[i, :, :, :])
+            raw_batch[i, :, :, :] = \
+                self.get_network_input(center, b, Id, raw_batch[i, :, :, :])
 
         mask = self.crop_time_mask(centers, timepoint, batches)
+        raw_batch[:, 0, :, :][mask] = 0
+        raw_batch[:, 1, :, :][mask] = 0
         return raw_batch
 
 

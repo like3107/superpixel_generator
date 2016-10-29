@@ -414,7 +414,8 @@ class NetBuilder:
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
             self.build_v8_hydra_dilated()
 
-        u.load_network('./../data/nets/voronoi_small_dashes/nets/net_100', l_out_old)
+        u.load_network('./../data/nets/voronoi_small_dashes/nets/net_5700',
+                       l_out_old)
         # get pointer to last conv layer
         l_out_precomp = l_out_old
         while 'conv' not in l_out_precomp.name:
@@ -452,11 +453,14 @@ class NetBuilder:
         W = theano.shared(W)
 
         fc_1 = las.layers.Conv2DLayer(l_merge, 2048, filter_size=1,
-                                       name='fc', W=W, b=first_fc.b)
-        l_out_cross = las.layers.Conv2DLayer(fc_1, 4, filter_size=1,
-                                             name='fc',
-                                             W=l_out_old.W.dimshuffle(1,0,2,3),
-                                             b=l_out_old.b)
+                                       name='fc', W=W, b=first_fc.b,
+                                      nonlinearity=las.nonlinearities.rectify)
+        l_out_cross = las.layers.Conv2DLayer(
+                                fc_1, 4, filter_size=1,
+                                name='fc',
+                                W=l_out_old.W.dimshuffle(1,0,2,3),
+                                b=l_out_old.b,
+                                nonlinearity = las.nonlinearities.rectify)
         layers = {}
         layers['l_in_claims'] = l_in
         layers['l_in_precomp'] = l_in_old
@@ -835,7 +839,7 @@ class NetBuilder:
                                         layers['l_in_dense'].input_var,
                                         layers['l_in_direction'].input_var],
                                        [loss_train, individual_batch,
-                                        l_out_prediciton],
+                                        l_out_prediciton, l_out_train],
                                        updates=updates)
         loss_valid_f = theano.function([layers['l_in_claims'].input_var,
                                         layers['l_in_dense'].input_var,
