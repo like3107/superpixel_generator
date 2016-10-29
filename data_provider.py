@@ -16,6 +16,7 @@ from skimage.morphology import label, watershed
 from scipy.spatial import Voronoi as voronoi
 from voronoi_polygon import voronoi_finite_polygons_2d
 import png
+from trainer_config_parser import get_options
 
 def segmenation_to_membrane_core(label_image):
     gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -165,7 +166,7 @@ class DataProvider(object):
         # self.full_input = load_h5(self.options.input_data_path,
         self.full_input = load_h5(str(self.options.input_data_path),
                                     h5_key=None,
-                                    slices=self.slices)[0][:,np.newaxis,:,:]
+                                    slices=self.slices)[0]
         self.height_gt = load_h5(self.options.height_gt_path,
                                     h5_key=None,
                                     slices=self.slices)[0]
@@ -175,15 +176,10 @@ class DataProvider(object):
 
 
 class CremiDataProvider(DataProvider):
-    def load_data(self, options):
-        membrane = load_h5(self.options.membrane_path,
-                                    h5_key=None,
-                                    slices=self.slices)[0]
-        raw = load_h5(options.raw_path,
-                                    h5_key=None,
-                                    slices=self.slices)[0]
-        raw /= 256. - 0.5
-        self.full_input = np.dstack((raw, membrane), axis=1)
+    def load_data(self):
+        self.full_input = load_h5(str(self.options.input_data_path),
+                                h5_key=None,
+                                slices=self.slices)[0]
         self.height_gt = load_h5(self.options.height_gt_path,
                                     h5_key=None,
                                     slices=self.slices)[0]
@@ -939,25 +935,31 @@ class TestPolygonDataProvider(PolygonDataProvider):
         self.load_test_data(options)
 
 if __name__ == '__main__':
-    class opt():
-        def __init__(self):
-            self.batch_size = 10
-            self.patch_len = 40
-            self.network_channels = 1
-            self.global_edge_len = 0
-            self.clip_method='clip'
-            self.padding_b=False
-            self.net_name = "data_provider_test"
-            self.save_net_path = './../data/nets/' + self.net_name
-            if not exists(self.save_net_path):
-                makedirs(self.save_net_path)
-    options = opt()
-    p = PolygonDataProvider(options)
-    inputx = np.zeros(p.get_batch_shape())
-    # print p.prepare_input_batch(inputx)
-    # for i in range(1000000):
-    #     print i
-    #     p.prepare_input_batch(inputx)
-    p.load_test_data(options)
-    # p.draw_circle()
+    # class opt():
+    #     def __init__(self):
+    #         self.batch_size = 10
+    #         self.patch_len = 40
+    #         self.network_channels = 1
+    #         self.global_edge_len = 0
+    #         self.clip_method='clip'
+    #         self.padding_b=False
+    #         self.net_name = "data_provider_test"
+    #         self.save_net_path = './../data/nets/' + self.net_name
+    #         if not exists(self.save_net_path):
+    #             makedirs(self.save_net_path)
+    # options = opt()
+    # p = PolygonDataProvider(options)
+    # inputx = np.zeros(p.get_batch_shape())
+    # # print p.prepare_input_batch(inputx)
+    # # for i in range(1000000):
+    # #     print i
+    # #     p.prepare_input_batch(inputx)
+    # p.load_test_data(options)
+    # # p.draw_circle()
 
+    options = get_options()
+    cdp = CremiDataProvider(options)
+    cdp.load_data()
+    print cdp.full_input.shape
+    print cdp.label.shape
+    print cdp.height_gt.shape
