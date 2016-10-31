@@ -762,8 +762,8 @@ def segmentation_to_membrane(input_path,output_path):
     output_path: path to output h5 file (will be created) 
     Uses threshold of edge filter maps
     """
-    with h5py.File(input_path, 'r') as label_h5:
-        with h5py.File(output_path, 'w') as height_h5:
+    with h.File(input_path, 'r') as label_h5:
+        with h.File(output_path, 'w') as height_h5:
             boundary_stack = np.empty_like(label_h5['data']).astype(np.float32)
             height_stack = np.empty_like(label_h5['data']).astype(np.float32)
             for i in range(height_stack.shape[0]):

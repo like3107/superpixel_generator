@@ -23,7 +23,7 @@ if __name__ == '__main__':
     """
 
     options = get_options()
-    datasets = ["a","b"]
+    datasets = ["a","b","c"]
     # define slices here if you want to reduce the size of the dataset
     # None means all slices
     dic_slices = {"test":{"a":slice(50),"b":slice(50),"c":slice(50)},
@@ -62,7 +62,7 @@ if __name__ == '__main__':
             membrane = dp.load_h5(mp)[0]
             raw = dp.load_h5(rp)[0]
             raw /= 256. - 0.5
-            height = dp.load_h5(hp)[0]
+            height = dp.load_h5(hp, h5_key='height')[0]
             label = dp.load_h5(lp)[0]
             z_lenght_in = raw.shape[0]
      
