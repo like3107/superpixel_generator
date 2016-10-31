@@ -376,43 +376,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def __init__(self,  options):
         super(HoneyBatcherPath, self).__init__(options)
 
-        if isinstance(options.label_path, str):
-            self.labels = data_provider.load_h5(options.label_path)[0]
-        else:
-            self.labels = options.label
-            if self.slices is not None:
-                self.labels = self.labels[self.slices]
-
-        if "height_gt_path" in options:
-            self.height_gt = data_provider.load_h5(options.height_gt_path)[0]
-        else:
-            self.height_gt = options.height_gt
-            if self.slices is not None:
-                self.height_gt = self.height_gt[self.slices]
-
-        if self.height_gt is not None:
-            if options.clip_method=='clip':
-                np.clip(self.height_gt, 0, options.patch_len / 2, out=self.height_gt)
-            elif options.clip_method=='exp':
-                dist = options.patch_len / 2
-                self.height_gt = \
-                    np.exp(np.square(self.height_gt) / (-2) / dist ** 2)
-            maximum = np.max(self.height_gt)
-            self.height_gt *= -1.
-            self.height_gt += maximum
-            if options.scale_height_factor is not None:
-                self.height_gt *= options.scale_height_factor
-                self.scaling = options.scale_height_factor
-            else:
-                self.scaling = 1.
-
-        if not self.padding_b:
-            # crop label
-            self.labels = self.labels[:, self.pad:-self.pad, self.pad:-self.pad]
-            self.height_gt = self.height_gt[:,
-                                            self.pad:-self.pad,
-                                            self.pad:-self.pad]
-
         # private
         self.add_height_b = False
         # All no padding
