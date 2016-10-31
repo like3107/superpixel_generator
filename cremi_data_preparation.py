@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
 
         dp.save_h5(options.input_data_path+"label_CREMI_%s.h5"%name,'data',
-                         data=label, overwrite='w')
+                         data=label_data, overwrite='w')
 
         dp.save_h5(options.input_data_path+"input_CREMI_%s.h5"%name,'data',
                          data=input_data, overwrite='w')

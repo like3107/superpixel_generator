@@ -15,7 +15,6 @@ from skimage.feature import peak_local_max
 from skimage.morphology import label, watershed
 from scipy.spatial import Voronoi as voronoi
 from voronoi_polygon import voronoi_finite_polygons_2d
-import png
 from trainer_config_parser import get_options
 
 def segmenation_to_membrane_core(label_image):
@@ -176,7 +175,10 @@ class DataProvider(object):
 
 
 class CremiDataProvider(DataProvider):
-    def load_data(self):
+    def load_data(self, options):
+        print "self.options.input_data_path",self.options.input_data_path
+        print "self.options.height_gt_path",self.options.height_gt_path
+        print "self.options.label_path",self.options.label_path
         self.full_input = load_h5(str(self.options.input_data_path),
                                 h5_key=None,
                                 slices=self.slices)[0]
@@ -472,8 +474,6 @@ def cut_reprs(path):
 
 
 def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
-    print exists("raw_honeycomb.h5")
-    print  path,exists(str(path))
     if not exists(path):
         error = 'path: %s does not exist, check' % path
         raise Exception(error)

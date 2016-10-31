@@ -30,7 +30,7 @@ def get_options():
     p.add('--seed_method', type=str, default="timo",
           help='available metods: gt, timo, grid',
           dest='seed_method')
-    p.add('--input_data_path',type=str, default="../data/volumes/raw_honeycomb.h5")
+    p.add('--input_data_path',type=str, default="None")
 
     # valid data paths
     def_valid_version = 'first_repr'
@@ -100,8 +100,8 @@ def get_options():
 
     options = p.parse_args()
 
-    if options.raw_path == "None":
-        options.raw_path ='./../data/volumes/input_%s.h5' % options.train_version
+    if options.input_data_path == "None":
+        options.input_data_path ='./../data/volumes/input_%s.h5' % options.train_version
 
     if options.raw_path == "None":
         options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
