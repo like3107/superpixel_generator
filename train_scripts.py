@@ -23,7 +23,7 @@ class PokemonTrainer(object):
     def __init__(self, options):
         self.options = options
         self.prepare_paths()
-        self.builder = nets.NetBuilder(self.options.network_channels)
+        self.builder = nets.NetBuilder(options)
         self.define_loss()
         self.network_i_choose_you()
         # options.patch_len = 68
@@ -275,28 +275,26 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         target_t = T.ftensor4()
 
         self.prediction_f,  self.fc_prec_conv_body, self.loss_train_fine_f, \
-            self.debug_f = \
+            self.debug_f, self.debug_singe_out = \
              self.loss(layers, L1_weight=self.options.regularization)
 
     def update_BM_FC(self):
-        # self.bm.batch_data_provider.load_data(options)
-        # self.bm.batch_data_provider = PolygonDataProvider(options)
-        # self.bm.prepare_global_batch()
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
         return inputs
 
     def update_BM(self):
-        inputs, gt, seeds, ids = self.bm.get_batches()
+
+        claims, gt, seeds, ids = self.bm.get_batches()
         seeds = np.array(seeds, dtype=np.int)
         precomp_input = self.precomp_input[range(self.bm.bs), :,
                                            seeds[:, 0] - self.bm.pad,
                                            seeds[:, 1] - self.bm.pad]
         precomp_input = precomp_input[:, :, None, None]
         # debug
-        inputs[...] = 0.
-        heights = self.prediction_f(inputs, precomp_input)
+        # claims[...] = 0.
+        heights = self.prediction_f(claims, precomp_input)
         self.bm.update_priority_queue(heights, seeds, ids)
-        return inputs, heights, gt
+        return
 
     def train(self):
         self.bm.init_batch()
@@ -330,16 +328,33 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
 
             # heights = self.prediction_f(batch_ft, precomp_input, batch_dir_ft)
-            batch_ft[...] = 0.
+            # batch_ft[...] = 0.
 
+            single_heights, cross_heighst = self.debug_singe_out(batch_ft,
+                                                                 precomp_input,
+                                                                 batch_dir_ft)
             ft_loss_train, individual_loss_fine, _, heights = \
                 self.loss_train_fine_f(batch_ft, precomp_input, batch_dir_ft)
-            print
+
+
             print 'loss ft', ft_loss_train
-            print 'ind ft', individual_loss_fine
-            print 'error type II ', self.bm.error_II_type
-            print 'heights predictied', zip(heights, self.bm.e1heights + self.bm.e2heights)
-            print 'heigts should', self.bm.e1heights + self.bm.e2heights
+            # print 'error type II ', self.bm.error_II_type
+
+            zip(heights, self.bm.e1heights + self.bm.e2heights)
+            bs = len(heights) / 2
+            for err, heightpreve1, heightpreve2, heightrec1, heightrec2, \
+                ind_loss, errt in \
+                    zip(self.bm.all_errorsq, self.bm.e1heights,
+                        self.bm.e2heights, heights[:bs], heights[bs:],
+                        individual_loss_fine, self.bm.error_II_type):
+
+                print 'error', err["batch"], 'e1 pos', err["e1_pos"], \
+                    err['e2_pos'], 'loss', ind_loss[0, 0, 0],\
+                    heightpreve1 - heightrec1[0, 0, 0], heightpreve2 - heightrec2[0, 0, 0], errt, \
+                    'plateau', err["plateau"]
+            # print 'cross heights', cross_heighst
+            print 'where', np.where(self.bm.global_prediction_map_nq[:] == \
+                                    single_heights[-1, 0, 0, 0])
 
             self.update_history.append(self.iterations)
             self.loss_history.append(ft_loss_train)
@@ -350,7 +365,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                 names=['loss finetuning'], log_scale=False)
 
         if self.images_counter % 1 == 0:
-            # self.save_net()
+            self.save_net()
             trainer.draw_debug(reset=True)
 
 

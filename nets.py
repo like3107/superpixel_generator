@@ -8,9 +8,10 @@ import utils as u
 
 
 class NetBuilder:
-    def __init__(self, n_channels=None):
+    def __init__(self, options=None):
         self.net_name = None
-        self.n_channels = n_channels
+        self.options = options
+
         self.build_methods = \
             dict( (method,getattr(self, method)) \
                 for method in dir(self) \
@@ -376,7 +377,7 @@ class NetBuilder:
         return l_in, l_in_direction, l_9, l_10, fov, None
 
     def build_net_v8_dilated(self):
-        n_channels = self.n_channels
+        n_channels = self.options.network_channels
         if n_channels is None:
             n_channels = 1
         fov = None
@@ -384,7 +385,9 @@ class NetBuilder:
         filts =         [4,     3,      3,      3,      3,      3,      3,      1,      1]
         dils  =         [1,     1,      2,      4,      8,      16,     1,      1,      1]
         n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048, n_classes]
+        # debug
         batch_norms =   [True, True,   True,   True,   True,   True,   True,   False,   False]
+        # batch_norms = [False] * len(n_filt)
         ELU = las.nonlinearities.elu
         ReLU = las.nonlinearities.rectify
         act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU,   ReLU]
@@ -414,8 +417,7 @@ class NetBuilder:
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
             self.build_v8_hydra_dilated()
 
-        u.load_network('./../data/nets/voronoi_small_dashes/nets/net_5700',
-                       l_out_old)
+        u.load_network(self.options.load_init_net_path, l_out_old)
         # get pointer to last conv layer
         l_out_precomp = l_out_old
         while 'conv' not in l_out_precomp.name:
@@ -439,9 +441,12 @@ class NetBuilder:
         l_in = L.InputLayer((None, n_channels, fov, fov))
         l_prev = l_in
         for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
+            # debug
             l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
                                                        dilation=(dil, dil)),
                                   name=name)
+            # l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
+            #                                            dilation=(dil, dil))
             l_prev = l_next
         l_claims_out = l_prev
 
@@ -810,9 +815,11 @@ class NetBuilder:
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
         bs = layers['l_in_claims'].input_var.shape[0]
-
-        l_out_train = L.get_output(layers['l_single_out'], deterministic=False)
+        # debug
+        l_out_train = L.get_output(layers['l_single_out'], deterministic=True)
         l_out_prediciton = L.get_output(layers['l_out_cross'],
+                                        deterministic=True)
+        l_out_single_debug = L.get_output(layers['l_single_out'],
                                         deterministic=True)
 
         L1_norm = \
@@ -851,7 +858,13 @@ class NetBuilder:
         claim_out = las.layers.get_output(layers['l_claims_out'])
         debug_f = theano.function([layers['l_in_claims'].input_var],
                                   claim_out)
-        return probs_f, fc_prec_conv_body, loss_train_f, debug_f
+        debug_singe_out = theano.function([layers['l_in_claims'].input_var,
+                                           layers['l_in_dense'].input_var,
+                                           layers['l_in_direction'].input_var],
+                                          [l_out_single_debug,
+                                           l_out_prediciton])
+
+        return probs_f, fc_prec_conv_body, loss_train_f, debug_f, debug_singe_out
 
     def loss_updates_probs_v1_hybrid(self, l_in, target, last_layer, L1_weight=10**-5):
 

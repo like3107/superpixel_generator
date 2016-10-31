@@ -198,7 +198,8 @@ class PolygonDataProvider(DataProvider):
     def get_dashes(self):
         # return np.random.randint(10, 60, size=40)
         # 1st dash length 2nd hole
-        return [5,5]
+
+        return [self.options.dash_len, self.options.hole_length]
 
     def prepare_input_batch(self, input):
         # load_data creates a new batch
@@ -253,7 +254,8 @@ class PolygonDataProvider(DataProvider):
                         data_border, cairo.FORMAT_ARGB32, self.size, self.size)
             cr_b = cairo.Context(surface_border)
             cr_b.set_source_rgb(1.0, 1.0, 1.0)
-            # cr_b.set_dash(self.get_dashes())
+            if self.options.dashes_on_b:
+                cr_b.set_dash(self.get_dashes())
             coord_pairs = []
 
             for i, region in enumerate(regions):
@@ -275,7 +277,8 @@ class PolygonDataProvider(DataProvider):
                         cr_b.line_to(p[0],p[1])
                         coord_pairs.append((lcoord[0],lcoord[1],p[0],p[1]))
                         coord_pairs.append((p[0],p[1],lcoord[0],lcoord[1]))
-                        # cr_b.set_dash(self.get_dashes())
+                        if self.options.dashes_on_b:
+                            cr_b.set_dash(self.get_dashes())
                     lcoord = (p[0],p[1])
                 cr.close_path()
                 cr_b.stroke()

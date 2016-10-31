@@ -18,6 +18,7 @@ def get_options():
     # reload existing net
     p.add('--load_net', dest='load_net_b', action='store_true')
     p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
+    p.add('--load_init_net_path', default='./data/nets/')
 
     p.add('--gpu', default='gpu0')
 
@@ -89,6 +90,13 @@ def get_options():
     p.add('--membrane_path', default="None", type=str)
     p.add('--label_path', default="None", type=str)
     p.add('--height_gt_path', default="None", type=str)
+
+    # dataprovider
+
+    # polygon
+    p.add('--dashes_on_b', action='store_true')
+    p.add('--dash_len', default=5, type=int)
+    p.add('--hole_length', default=5, type=int)
 
     options = p.parse_args()
 
