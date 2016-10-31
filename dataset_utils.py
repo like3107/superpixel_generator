@@ -27,6 +27,7 @@ import h5py
 import data_provider
 import time
 
+
 class HoneyBatcherPredict(object):
     def __init__(self, options):
         """
@@ -73,6 +74,7 @@ class HoneyBatcherPredict(object):
         self.direction_array = np.arange(4)
         self.error_indicator_pass = np.zeros((self.bs))
         self.global_time = 0
+        self.global_prediction_map_FC = None
 
         self.timo_min_len = 5
         self.timo_sigma = 0.3
@@ -354,9 +356,12 @@ class HoneyBatcherPredict(object):
                             'im': self.global_claims[b, self.pad:-self.pad,
                                   self.pad:-self.pad],
                             'interpolation': 'none'})
-        plot_images.append({"title": "Heightmap Prediciton",
-                            'im': self.global_heightmap_batch[b, :, :],
-                            'interpolation': 'none'})
+        if self.global_prediction_map_FC is not None:
+            for i in range(4):
+                plot_images.append({"title": "Heightmap Prediciton %i" %i,
+                                'im': self.global_prediction_map_FC[b, i, :, :],
+                                'interpolation': 'none',
+                                'cmap':'gray'})
         if not inherite_code:
             if save:
                 u.save_images(plot_images, path=path, name=image_name)
@@ -601,6 +606,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             yield current_position, current_direction
 
     def locate_global_error_path_intersections(self):
+        self.err_counter = -1
+
         def error_index(b, id1, id2, time=None):
             if time is None:
                 return b, min(id1, id2), max(id1, id2)
@@ -609,8 +616,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         def get_error_dict(b, x, y, center_x, center_y,
                            reverse_direction, slow_intruder,
                            touch_x, touch_y):
+            self.err_counter += 1
             new_error = \
-                {"batch": b,
+                {"Id":self.err_counter,
+                 "batch": b,
                  # get time from center it was predicted from
                  "touch_time": self.global_timemap[b,
                                                    touch_x, touch_y],
@@ -656,7 +665,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             #                     'im': claim_projection[self.pad:-self.pad,
             #                                            self.pad:-self.pad]})
             # plot_images.append({"title": "overflow",
-            #                         'cmap': "grey",
+            #                         'cmap': "gray",
             #                         'im': self.global_errormap[b, 1]})
 
             # find where path crosses region
@@ -670,7 +679,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
 
             # plot_images.append({"title": "path_fin_0",
-            #             'cmap': "grey",
+            #             'cmap': "gray",
             #             'im': path_fin_map})
             np.logical_and(path_fin_map,
                            (self.global_claims[b,
@@ -678,10 +687,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                self.pad:-self.pad] > 0),
                            out=path_fin_map)
             # plot_images.append({"title": "path_fin_1",
-            #                         'cmap': "grey",
+            #                         'cmap': "gray",
             #                         'im': path_fin_map})
             # plot_images.append({"title": "boundary",
-            #                     'cmap': "grey",
+            #                     'cmap': "gray",
             #                     'im': boundary[self.pad:-self.pad,
             #                                    self.pad:-self.pad]})
             # u.save_images(plot_images, path="./../data/debug/",
@@ -800,6 +809,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     raise Exception("no match found for path end")
 
     def find_global_error_paths(self):
+        self.all_error_lens = {}
         self.locate_global_error_path_intersections()
         # now errors have been found so start and end of paths shall be found
         self.find_type_I_error()
@@ -843,6 +853,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                                  pos[1]]
                         error_I["e1_direction"] = current_direction
                         error_I["e1_length"] = e1_length
+                        self.all_error_lens[e1_length] = error_I["Id"]
                         assert (error_I["large_id"] ==\
                                 self.global_claims[batch, pos[0], pos[1]])
                         assert (error_I["large_gtid"] ==
@@ -1003,15 +1014,23 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_II_id_list = []
         error_I_direction = []
         error_II_direction = []
+        # take approx this many errors or all
+        n_batch_errors = 100
+        min_err_lens = \
+            sorted(self.all_error_lens, reverse=True)[:n_batch_errors]
+        ids_to_use = [self.all_error_lens[mel] for mel in min_err_lens]
+
         # debug
         self.error_II_type = []
         self.e1heights = []
         self.e2heights = []
         self.all_errorsq = []
+        # take only top 100 errors
+
 
         for error in self.global_error_dict.values():
             # print "errorlength",error['e1_length']
-            if self.check_error(error):
+            if self.check_error(error) and error["Id"] in ids_to_use:
                 # debug
                 self.all_errorsq.append(error)
 
@@ -1251,11 +1270,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         timemap[timemap < 0] = 0
         plot_images.insert(11,{"title": "Time Map ",
                                 'im': timemap})
-        if plot_height_pred:
-            for i in range(4):
-                plot_images.append({"title": "Heightmap Prediciton %i" %i,
-                                    'im': self.global_prediction_map[b, :, :, i],
-                                    'interpolation': 'none'})
 
         if save:
             u.save_images(plot_images, path=path, name=image_name)

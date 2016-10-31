@@ -1,6 +1,7 @@
 import matplotlib
-# matplotlib.use('Agg')
+matplotlib.use('Agg')
 # matplotlib.use('Qt4Agg')
+from matplotlib import pyplot as plt
 import os
 from theano import tensor as T
 import theano
@@ -353,8 +354,8 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                     heightpreve1 - heightrec1[0, 0, 0], heightpreve2 - heightrec2[0, 0, 0], errt, \
                     'plateau', err["plateau"]
             # print 'cross heights', cross_heighst
-            print 'where', np.where(self.bm.global_prediction_map_nq[:] == \
-                                    single_heights[-1, 0, 0, 0])
+            # print 'where', np.where(self.bm.glokbal_prediction_map_nq[:] == \
+            #                         single_heights[-1, 0, 0, 0])
 
             self.update_history.append(self.iterations)
             self.loss_history.append(ft_loss_train)
@@ -388,7 +389,7 @@ class GottaCatchemAllTrainer(PokemonTrainer):
     def __init__(self,  options):
         super(GottaCatchemAllTrainer, self).__init__(options)
         self.update_steps = 1
-        self.observation_counter = 10
+        self.observation_counter = 100
         self.loss_history = [[], []]
 
 
@@ -411,7 +412,8 @@ class GottaCatchemAllTrainer(PokemonTrainer):
 
         height_pred = self.prediction_f(inputs)
         # this is intensive surgery to the BM
-        self.bm.global_prediction_map = height_pred.swapaxes(1, 3)
+
+        self.bm.global_prediction_map_FC = height_pred
 
         if self.iterations % self.observation_counter == 0:
             trainer.draw_debug(reset=True)
