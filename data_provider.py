@@ -185,6 +185,17 @@ class CremiDataProvider(DataProvider):
         self.height_gt = load_h5(self.options.height_gt_path,
                                     h5_key=None,
                                     slices=self.slices)[0]
+        # generate height with clipping method from distance transform
+        if self.options.clip_method=='clip':
+            np.clip(self.height_gt, 0, max_height, out=self.height_gt)
+            maximum = np.max(self.height_gt)
+            self.height_gt *= -1.
+            self.height_gt += maximum
+        elif self.options.clip_method=='exp':
+            np.square(self.height_gt, out=self.height_gt)
+            self.height_gt /= (-2 * (max_height/10) ** 2)
+            np.exp(self.height_gt, out=self.height_gt)
+
         self.label = load_h5(self.options.label_path,
                                     h5_key=None,
                                     slices=self.slices)[0]
