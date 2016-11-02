@@ -373,9 +373,6 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             self.save_net()
             trainer.draw_debug(reset=True)
 
-        if np.any(individual_loss_fine < 0):
-            print 'debug'
-
         if self.free_voxel == 0:
             print 'init batch'
             # self.bm.draw_error_reconst('err_rec%i' %self.iterations)

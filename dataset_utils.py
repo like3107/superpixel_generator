@@ -1192,7 +1192,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                              save=False,
                              b=b,
                              inherite_code=True)
-du:        plot_images.append({"title": "Error Map",
+        plot_images.append({"title": "Error Map",
                             'im': self.global_errormap[b, 0, :, :],
                              'interpolation': 'none'})
 
