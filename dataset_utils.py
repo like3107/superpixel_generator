@@ -457,7 +457,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                         dtype=np.bool)
         self.global_error_dict = {}
         self.global_directionmap_batch = \
-            np.zeros_like(self.global_label_batch) - 1
+            np.zeros_like(self.global_label_batch, dtype=np.int) - 1
 
     def get_batches(self):
         raw_batch, centers, ids = super(HoneyBatcherPath, self).get_batches()
