@@ -387,6 +387,7 @@ class NetBuilder:
         n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048, n_classes]
         # debug
         batch_norms =   [True, True,   True,   True,   True,   True,   True,   False,   False]
+        regs        =   [True, True,   True,   True,   True,   True,   True,   True,   False]
         # batch_norms = [False] * len(n_filt)
         ELU = las.nonlinearities.elu
         ReLU = las.nonlinearities.rectify
@@ -395,9 +396,11 @@ class NetBuilder:
         l_in = L.InputLayer((None, n_channels, fov, fov))
         l_prev = l_in
         i = 0
-        for filt, dil, n_filt, batch_norm, act_fct, name in \
-                zip(filts, dils, n_filts, batch_norms, act_fcts, names):
+        l_seconds_last = None
+        for filt, dil, n_filt, batch_norm, act_fct, reg, name in \
+                zip(filts, dils, n_filts, batch_norms, act_fcts, regs, names):
             i += 1
+            l_seconds_last = l_prev
             if batch_norm:
                 l_next = L.batch_norm(
                     L.DilatedConv2DLayer(l_prev, n_filt, filt,
@@ -407,10 +410,12 @@ class NetBuilder:
                 l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
                                               dilation=(dil, dil), name=name,
                                               nonlinearity=act_fct)
+            if not reg:
+                l_next.params[l_next.W].remove('regularizable')
             l_prev = l_next
         fov = 68
 
-        return l_in, l_prev, fov
+        return l_in, (l_prev, l_seconds_last), fov
 
     def build_net_v8_dilated_ft(self):
 
@@ -434,10 +439,10 @@ class NetBuilder:
 
         n_classes = 4
         fov = None
-        filts = [4, 3, 3, 8]
-        dils = [4, 8, 16, 1]
-        n_filts = [32, 32, 64, 64]
-        names = ['ft', 'ft', 'ft', 'ft']
+        filts =     [4, 3, 3, 8]
+        dils =      [4, 8, 16, 1]
+        n_filts =   [32, 32, 64, 64]
+        names =     ['ft', 'ft', 'ft', 'ft']
         l_in = L.InputLayer((None, n_channels, fov, fov))
         l_prev = l_in
         for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
@@ -466,6 +471,7 @@ class NetBuilder:
                                 W=l_out_old.W.dimshuffle(1,0,2,3),
                                 b=l_out_old.b,
                                 nonlinearity = las.nonlinearities.rectify)
+        l_out_cross.params[l_out_cross.W].remove('regularizable')
         layers = {}
         layers['l_in_claims'] = l_in
         layers['l_in_precomp'] = l_in_old
@@ -547,7 +553,7 @@ class NetBuilder:
         return l_in, l_in_direction, l_9, l_10, fov, None
 
     def build_v8_hydra_dilated(self):
-        l_in, l_9, fov = self.build_net_v8_dilated()
+        l_in, (l_9, l_seconds_last), fov = self.build_net_v8_dilated()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None

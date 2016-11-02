@@ -163,6 +163,7 @@ class Membertrainer(PokemonTrainer):
             print "loading Memento from ", self.options.exp_load
             Memento.load(self.options.exp_load)
 
+
 class FusionPokemonTrainer(PokemonTrainer):
     def init_BM(self):
         self.BM = du.HungryHoneyBatcher
@@ -290,15 +291,12 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         return inputs
 
     def update_BM(self):
-
         claims, gt, seeds, ids = self.bm.get_batches()
         seeds = np.array(seeds, dtype=np.int)
         precomp_input = self.precomp_input[range(self.bm.bs), :,
                                            seeds[:, 0] - self.bm.pad,
                                            seeds[:, 1] - self.bm.pad]
         precomp_input = precomp_input[:, :, None, None]
-        # debug
-        # claims[...] = 0.
         heights = self.prediction_f(claims, precomp_input)
         self.bm.update_priority_queue(heights, seeds, ids)
         return
@@ -408,7 +406,6 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         # self.bm.batch_data_provider.load_data(self.options)
         # self.bm.batch_data_provider = PolygonDataProvider(self.options)
         self.bm.init_batch()
-        self.bm.prepare_global_batch()
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
         heights_gt = du.height_to_fc_height_gt(self.bm.global_height_gt_batch)
         return inputs, None, heights_gt

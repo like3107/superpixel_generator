@@ -167,6 +167,17 @@ class HoneyBatcherPredict(object):
         self.get_seed_ids()
         self.initialize_priority_queue()
 
+        self.global_prediction_map = np.empty((self.bs,
+                                               self.label_shape[1],
+                                               self.label_shape[2], 4))
+        self.global_prediction_map.fill(np.inf)
+        # debug
+        self.global_prediction_map_nq = np.empty((self.bs,
+                                                  self.label_shape[1],
+                                                  self.label_shape[2], 4))
+        self.global_prediction_map_nq.fill(np.inf)
+
+
     def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
         """
         Seeds by minima of dist trf of thresh of memb prob
@@ -325,7 +336,7 @@ class HoneyBatcherPredict(object):
                                                    y - self.pad]) | add_all )\
                     & (self.global_claims[b, x, y] == 0)
         heights[heights < lower_bound] = lower_bound
-        self.global_heightmap_batch[b, x  - self.pad, y - self.pad][is_lowest] \
+        self.global_heightmap_batch[b, x - self.pad, y - self.pad][is_lowest] \
             = heights[is_lowest]
         self.global_prediction_map[b,
                                    center[0] - self.pad,
@@ -339,7 +350,7 @@ class HoneyBatcherPredict(object):
                                             input_time))
 
     def get_num_free_voxel(self):
-        return np.sum(self.global_claims[0] == 0)
+        return np.sum([self.global_claims[0] == 0])
 
     def draw_debug_image(self, image_name,
                          path='./../data/debug/images/',
@@ -356,6 +367,11 @@ class HoneyBatcherPredict(object):
                             'im': self.global_claims[b, self.pad:-self.pad,
                                   self.pad:-self.pad],
                             'interpolation': 'none'})
+        if np.min(self.global_heightmap_batch) != np.inf:
+            plot_images.append({"title": "Min Heightmap",
+                                'cmap': "gray",
+                                'im': self.global_heightmap_batch[b, :, :],
+                                'interpolation': 'none'})
         if self.global_prediction_map_FC is not None:
             for i in range(4):
                 plot_images.append({"title": "Heightmap Prediciton %i" %i,
@@ -434,16 +450,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                          self.label_shape[1],
                                          self.label_shape[2]),
                                         dtype=np.bool)
-        self.global_prediction_map = np.empty((self.bs,
-                                               self.label_shape[1],
-                                               self.label_shape[2], 4))
-        self.global_prediction_map.fill(np.inf)
-        # debug
-        self.global_prediction_map_nq = np.empty((self.bs,
-                                               self.label_shape[1],
-                                               self.label_shape[2], 4))
-        self.global_prediction_map_nq.fill(np.inf)
-
         self.global_error_dict = {}
         self.global_directionmap_batch = \
             np.zeros_like(self.global_label_batch) - 1
@@ -1186,38 +1192,38 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                              save=False,
                              b=b,
                              inherite_code=True)
-        plot_images.insert(2,{"title": "Error Map",
+du:        plot_images.append({"title": "Error Map",
                             'im': self.global_errormap[b, 0, :, :],
                              'interpolation': 'none'})
 
-        plot_images.insert(3,{"title": "Ground Truth Label",
+        plot_images.append({"title": "Ground Truth Label",
                             'scatter': np.array(
                                 [np.array(e["e1_pos"]) - self.pad for e in
                                  self.global_error_dict.values() if
-                                 "e1_pos" in e and e["batch"] == 4]),
+                                 "e1_pos" in e and e["batch"] == 0]),
                             "cmap": "rand",
                             'im': self.global_label_batch[b, :, :],
                             'interpolation': 'none'})
 
-        plot_images.insert(5,{"title": "Overflow Map",
+        plot_images.append({"title": "Overflow Map",
                             'im': self.global_errormap[b, 1, :, :],
                             'interpolation': 'none'})
 
-        plot_images.insert(6,{"title": "Heightmap GT",
+        plot_images.append({"title": "Heightmap GT",
                             'im': self.global_height_gt_batch[b, :, :],
                             'scatter': np.array(self.global_seeds[b]) - self.pad,
                             'interpolation': 'none'})
 
-        plot_images.insert(8,{"title": "Height Differences",
+        plot_images.append({"title": "Height Differences",
                             'im': self.global_heightmap_batch[b, :, :] -
                                   self.global_height_gt_batch[b, :, :],
                             'interpolation': 'none'})
 
-        plot_images.insert(9,{"title": "Direction Map",
+        plot_images.append({"title": "Direction Map",
                             'im': self.global_directionmap_batch[b, :, :],
                             'interpolation': 'none'})
 
-        plot_images.insert(10,{"title": "Path Map",
+        plot_images.append({"title": "Path Map",
                             'scatter': np.array(
                                 [np.array(e["large_pos"]) - self.pad for e in
                                  self.global_error_dict.values() if
@@ -1228,7 +1234,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         timemap = np.array(self.global_timemap[b, self.pad:-self.pad,
                                                self.pad:-self.pad])
         timemap[timemap < 0] = 0
-        plot_images.insert(11,{"title": "Time Map ",
+        plot_images.append({"title": "Time Map ",
                                 'im': timemap})
 
         if save:
