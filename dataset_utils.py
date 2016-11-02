@@ -10,6 +10,7 @@ import random
 from os import makedirs
 from os.path import exists
 from ws_timo import wsDtseeds
+from vigra import analysis
 from matplotlib import pyplot as plt
 from Queue import PriorityQueue
 from scipy.ndimage.measurements import watershed_ift
@@ -230,7 +231,11 @@ class HoneyBatcherPredict(object):
         self.global_seeds = []
         seed_ids = []
         dist_trf = np.zeros_like(self.global_label_batch)
+        self.global_label_batch = self.global_label_batch.astype(np.uint32)
         for b in range(self.bs):
+        # perform connected components to remove disconnected (same id) regions
+            analysis.labelImage(self.global_label_batch[b],\
+                out=self.global_label_batch[b])
             seed_ids.append(np.unique(
                 self.global_label_batch[b, :, :]).astype(int))
 
