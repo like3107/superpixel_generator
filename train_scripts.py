@@ -275,6 +275,12 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         self.options.network_channels = layers['l_in_claims'].shape[1]
         target_t = T.ftensor4()
 
+        if self.options.load_net_b:
+            np.random.seed(np.random.seed(int(time.time())))
+            # change seed so different images for retrain
+            print "loading network parameters from ", self.options.load_net_path
+            u.load_network(self.options.load_net_path, self.l_out)
+
         self.prediction_f,  self.fc_prec_conv_body, self.loss_train_fine_f, \
             self.debug_f, self.debug_singe_out = \
              self.loss(layers, L1_weight=self.options.regularization)
@@ -369,6 +375,8 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             self.save_net()
             trainer.draw_debug(reset=True)
 
+        if np.any(individual_loss_fine < 0):
+            print 'debug'
 
         if self.free_voxel == 0:
             print 'init batch'

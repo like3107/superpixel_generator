@@ -517,11 +517,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                         center_y - self.pad]:
                 self.error_indicator_pass[b] = 0.
             else:   # remember to pass on
-                self.error_indicator_pass[b] = \
-                    min(error_indicator + self.scaling,
-                        (self.pad + self.max_penalty_pixel) *
-                        self.scaling +       # don't go to high
-                        np.random.randint(self.scaling) / 5.)
+                self.error_indicator_pass[b] = 1
             self.global_errormap[b, 1,
                                  center_x - self.pad,
                                  center_y - self.pad] = 1
@@ -531,7 +527,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                         center_y - self.pad]:
             self.global_errormap[b, :2, center_x - self.pad,
                                  center_y - self.pad] = 1
-            self.error_indicator_pass[b] = self.scaling * (self.pad + 1)
+            self.error_indicator_pass[b] = 1
 
         # check for errors in neighbor regions, type II
         # TODO: remove find_errors_b
@@ -678,9 +674,19 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     assert (y - self.pad >= 0)
                     assert (center_y - self.pad >= 0)
 
+                    label_large = self.global_label_batch[b,
+                                                           center_x - self.pad,
+                                                           center_y - self.pad]
+                    claim_projection_large = claim_projection[center_x,
+                                                              center_y]
+                    label_small = self.global_label_batch[b,
+                                                          x - self.pad,
+                                                          y - self.pad]
+                    claim_projection_small = claim_projection[x, y]
+                    type_3_error = (label_small != claim_projection_small)
                     # only penalize on on lowest prediction
-                    if claim_projection[x, y] != \
-                            claim_projection[center_x, center_y]:
+                    if claim_projection_small != claim_projection_large \
+                            and not type_3_error:
                         reverse_direction = self.reverse_direction(direction)
                         # on center pixel of intruder
                         prediction = \
@@ -703,7 +709,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                       False,
                                                       center_x, center_y)
                         # slow intruder find lowest claimed height
-                        elif not fast_intruder_found:   # other is prioritized
+                        # a) fast intuder prioritized,
+                        # b) ignore type 3#  other is prioritized
+                        elif not fast_intruder_found:
+
                             small_height = \
                                 self.global_heightmap_batch[b,
                                                             x - self.pad,
@@ -717,25 +726,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                            reverse_direction,
                                                            True,
                                                            x, y)
-                # self.global_errormap[b, 2, x-self.pad,y-self.pad] = -1
-                if new_error != {}:
-                    # print new_error
-                    # e_index = error_index(b, new_error["small_gtid"],
-                    #                       new_error["large_gtid"], )
 
+                if new_error != {}:
                     e_index = error_index(b, new_error["small_gtid"],
                                           new_error["large_gtid"],
                                           time=time.time())
-                    # only one error per ID pair (the earliest one)
-                    save_error = False
-                    if not e_index in self.global_error_dict:
-                        save_error = True
-                    else:
-                        if self.global_error_dict[e_index]["touch_time"] > \
-                                new_error["touch_time"]:
-                            save_error = True
-                    if save_error:
-                        self.global_error_dict[e_index] = new_error
+                    self.global_error_dict[e_index] = new_error
                         # plot_images[-2] = \
                         #     {"title": "Path Map",
                         #      'scatter': np.array(
@@ -756,20 +752,21 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                         # u.save_images(plot_images, path="./../data/debug/",
                         #               name="path_test_"+str(b)+"_"+str(e_index[1])+
                         #                    str(e_index[2])+".png")
-                else:
-                    print "no match found for path end"
-                    not_found[center_x-self.pad, center_y-self.pad] = 1
-                    for x, y, direction in self.walk_cross_coords([center_x,
-                                                                   center_y]):
-                        print  claim_projection[x, y] ," should not be ", \
-                            claim_projection[center_x, center_y]
-                        reverse_direction = self.reverse_direction(direction)
-                        print "prediction = ", \
-                            self.global_prediction_map[b,
-                                                       x-self.pad,
-                                                       y-self.pad,
-                                                       reverse_direction]
-                    raise Exception("no match found for path end")
+                # else:
+                #     print "no match found for path end type 3"
+
+                    # not_found[center_x-self.pad, center_y-self.pad] = 1
+                    # for x, y, direction in self.walk_cross_coords([center_x,
+                    #                                                center_y]):
+                    #     print  claim_projection[x, y] ," should not be ", \
+                    #         claim_projection[center_x, center_y]
+                    #     reverse_direction = self.reverse_direction(direction)
+                    #     print "prediction = ", \
+                    #         self.global_prediction_map[b,
+                    #                                    x-self.pad,
+                    #                                    y-self.pad,
+                    #                                    reverse_direction]
+                    # raise Exception("no match found for path end")
 
     def find_global_error_paths(self):
         self.all_error_lens = {}
