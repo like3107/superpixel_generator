@@ -367,12 +367,12 @@ class HoneyBatcherPredict(object):
                                 'im': self.global_input_batch[b, channel,
                                      self.pad:-self.pad, self.pad:-self.pad],
                                 'interpolation': 'none'})
-
-        plot_images.append({"title": "Claims",
-                            'cmap': "rand",
-                            'im': self.global_claims[b, self.pad:-self.pad,
-                                  self.pad:-self.pad],
-                            'interpolation': 'none'})
+        if not inherite_code:
+            plot_images.append({"title": "Claims",
+                                'cmap': "rand",
+                                'im': self.global_claims[b, self.pad:-self.pad,
+                                      self.pad:-self.pad],
+                                'interpolation': 'none'})
         if np.min(self.global_heightmap_batch) != np.inf:
             plot_images.append({"title": "Min Heightmap",
                                 'cmap': "gray",
@@ -1007,7 +1007,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         for error in self.global_error_dict.values():
             # print "errorlength",error['e1_length']
-            if self.check_error(error) and error["Id"] in ids_to_use:
+            error["used"] = False
+
+            if error["Id"] in ids_to_use:
                 # debug
                 self.all_errorsq.append(error)
 
@@ -1209,11 +1211,21 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_errormap[b, 0, :, :],
                              'interpolation': 'none'})
 
+        e2_pos = np.array([np.array(e["e2_pos"]) - self.pad
+                  for e in self.global_error_dict.values()
+                  if e["batch"] == 0 and e["used"]])
+        plot_images.append({"title": "Claims",
+                            'cmap': "rand",
+                            'scatter':e2_pos,
+                            'im': self.global_claims[b, self.pad:-self.pad,
+                                  self.pad:-self.pad],
+                            'interpolation': 'none'})
+
+        e1_pos = np.array([np.array(e["e1_pos"]) - self.pad
+                  for e in self.global_error_dict.values()
+                  if e["batch"] == 0 and e["used"]])
         plot_images.append({"title": "Ground Truth Label",
-                            'scatter': np.array(
-                                [np.array(e["e1_pos"]) - self.pad for e in
-                                 self.global_error_dict.values() if
-                                 "e1_pos" in e and e["batch"] == 0]),
+                            'scatter': e1_pos,
                             "cmap": "rand",
                             'im': self.global_label_batch[b, :, :],
                             'interpolation': 'none'})
