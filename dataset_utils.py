@@ -689,6 +689,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                           x - self.pad,
                                                           y - self.pad]
                     claim_projection_small = claim_projection[x, y]
+                    # if type3 true: A and B meet in C --> no penalty
                     type_3_error = (label_small != claim_projection_small)
                     # only penalize on on lowest prediction
                     if claim_projection_small != claim_projection_large \
@@ -778,6 +779,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.all_error_lens = {}
         self.locate_global_error_path_intersections()
         # now errors have been found so start and end of paths shall be found
+        self.global_plateau_indicator = \
+            self.global_prediction_map_nq  < self.global_prediction_map
         self.find_type_I_error()
         self.find_source_of_II_error()
 
@@ -834,29 +837,26 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 e1_length = error_I["e1_length"]
                 self.counter += 1
 
-    # debug error dcit
-    def find_end_of_plateau(self, start_position, start_direction, batch,
-                            start_height, error_dict):
-        current_height = start_height
-        current_height -= self.lowercomplete_e
-        current_direction = start_direction
-        for pos, d in self.get_path_to_root(start_position, batch):
-            # check if the slope is smaller than zero
-            if self.global_heightmap_batch[batch,
-                                           pos[0]-self.pad,
-                                           pos[1]-self.pad] \
-                                    < current_height:
-                return pos, current_direction
-            if d >= 0:
-                # debug
+    # debug
+    def find_end_of_plateau(self, start_position, prediction_direction,
+                            batch, error_dict=None):
+        if not self.global_plateau_indicator[batch,
+                                              start_position[0]- self.pad,
+                                              start_position[1]- self.pad,
+                                              prediction_direction]:
+            return start_position, prediction_direction
+        else:
+            # debug
+            if error_dict is not None:
                 error_dict["plateau"] = True
 
-                # not at the end of the path
-                current_height -= self.lowercomplete_e
-                current_direction = d
-
-        return pos, start_direction
-
+            node_direction = \
+                self.global_directionmap_batch[batch,
+                                               start_position[0]- self.pad,
+                                               start_position[1]- self.pad]
+            step_back_pos = self.update_position(start_position, node_direction)
+            return self.find_end_of_plateau(step_back_pos, node_direction,
+                                            batch, error_dict=None)
     def find_source_of_II_error(self):
         for error in self.global_error_dict.values():
             if "e2_pos" not in error:
@@ -880,7 +880,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     error["e2_pos"], error["e2_direction"] = \
                                     self.find_end_of_plateau(start_position,
                                     start_direction,
-                                    batch, small_height, error)
+                                    batch, error) # debug
+                    # slow intruder never reaches root
+                    assert(self.global_directionmap_batch[
+                               error["batch"],
+                               error["small_pos"][0] - self.pad,
+                               error["small_pos"][1] - self.pad] != -1)
                 else:
                     error["e2_pos"], error["e2_direction"] = \
                         start_position, start_direction
