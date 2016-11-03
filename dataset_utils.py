@@ -10,7 +10,7 @@ import random
 from os import makedirs
 from os.path import exists
 from ws_timo import wsDtseeds
-from vigra import analysis
+from skimage import measure
 from matplotlib import pyplot as plt
 from Queue import PriorityQueue
 from scipy.ndimage.measurements import watershed_ift
@@ -230,12 +230,13 @@ class HoneyBatcherPredict(object):
     def get_seed_coords_gt(self):
         self.global_seeds = []
         seed_ids = []
-        dist_trf = np.zeros_like(self.global_label_batch)
-        self.global_label_batch = self.global_label_batch.astype(np.uint32)
+        dist_trf = np.zeros(self.batch_data_provider.get_label_shape())
+        # self.global_label_batch = self.global_label_batch.astype(np.uint32)
         for b in range(self.bs):
         # perform connected components to remove disconnected (same id) regions
-            analysis.labelImage(self.global_label_batch[b],\
-                out=self.global_label_batch[b])
+            # analysis.labelImage(self.global_label_batch[b],\
+                # out=self.global_label_batch[b])
+            self.global_label_batch[b] = measure.label(self.global_label_batch[b])
             seed_ids.append(np.unique(
                 self.global_label_batch[b, :, :]).astype(int))
 
@@ -457,7 +458,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                         dtype=np.bool)
         self.global_error_dict = {}
         self.global_directionmap_batch = \
-            np.zeros_like(self.global_label_batch, dtype=np.int) - 1
+            np.zeros(self.batch_data_provider.get_label_shape(), dtype=np.int) - 1
 
     def get_batches(self):
         raw_batch, centers, ids = super(HoneyBatcherPath, self).get_batches()
@@ -1075,6 +1076,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                         data=self.global_height_gt_batch ,compression="gzip")
             out_h5.create_dataset("global_prediction_map",
                         data=self.global_prediction_map ,compression="gzip")
+            out_h5.create_dataset("global_prediction_map_nq",
+                        data=self.global_prediction_map_nq ,compression="gzip")
             out_h5.create_dataset("global_directionmap_batch",
                         data=self.global_directionmap_batch ,compression="gzip")
 
