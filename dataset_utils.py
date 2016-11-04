@@ -61,7 +61,7 @@ class HoneyBatcherPredict(object):
         self.pl = options.patch_len
 
         # private
-        self.n_channels = options.network_channels
+        self.n_channels = options.network_channels + 2
 
         self.lowercomplete_e = options.lowercomplete_e 
         self.max_penalty_pixel = options.max_penalty_pixel
@@ -967,13 +967,31 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         raw_batch = np.zeros((len(batches), self.n_channels, self.pl, self.pl),
                              dtype='float32')
         for i, (b, center, Id) in enumerate(zip(batches, centers, ids)):
-            raw_batch[i, :, :, :] = self.get_network_input(center, b, Id, raw_batch[i, :, :, :])
-
+            raw_batch[i, :, :, :] = self.get_network_input(center, b, Id,
+                                                           raw_batch[i, :, :, :])
+            assert (self.global_timemap[b, center[0], center[1]] ==
+                    timepoints[i])
         mask = self.crop_time_mask(centers, timepoint, batches)
+        raw_batch[:, 0, :, :][mask] = 0
         raw_batch[:, 1, :, :][mask] = 0
-        raw_batch[:, 2, :, :][mask] = 0
 
         return raw_batch
+
+
+
+    def reconstruct_input_at_timepoint(self, timepoints, centers, ids, batches):
+        raw_batch = np.zeros((len(batches), self.n_channels, self.pl, self.pl),
+                             dtype='float32')
+        for i, (b, center, Id) in enumerate(zip(batches, centers, ids)):
+            raw_batch[i, :, :, :] = \
+                self.get_network_input(center, b, Id, raw_batch[i, :, :, :])
+            assert (self.global_timemap[b, center[0], center[1]] ==
+                    timepoints[i])
+        mask = self.crop_time_mask(centers, timepoints, batches)
+        raw_batch[:, 0, :, :][mask] = 0
+        raw_batch[:, 1, :, :][mask] = 0
+        return raw_batch
+
 
     def check_error(self, error):
         return not 'used' in error
@@ -1015,7 +1033,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             # print "errorlength",error['e1_length']
             error["used"] = False
 
-            if error["Id"] in ids_to_use:
+            if True:
                 # debug
                 self.all_errorsq.append(error)
 
@@ -1419,6 +1437,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
 
 class HoneyBatcherPatchFast(HoneyBatcherPath):
+    def __init__(self, options):
+        super(HoneyBatcherPatchFast, self).__init__(options)
+        self.n_channels = 2
     def get_network_input(self, center, b, Id, out):
         out[0:2] = self.crop_mask_claimed(center, b, Id)
         return out

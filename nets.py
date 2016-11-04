@@ -505,9 +505,109 @@ class NetBuilder:
         return layers, fov
 
 
+    def build_net_v8_hydra_dilated_ft_joint(self):
+
+        l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
+            self.build_v8_hydra_dilated()
+
+        u.load_network(self.options.load_init_net_path, l_out_old)
+        # get pointer to last conv layer
+        l_out_precomp = l_out_old
+        while 'conv' not in l_out_precomp.name:
+            l_out_precomp = l_out_precomp.input_layer
+
+        # pointer to first fc layer
+        first_fc = l_out_old
+        while 'fc' in first_fc.name:
+            previous = first_fc
+            first_fc = first_fc.input_layer
+        first_fc = previous
+
+        n_channels = 2
+
+        n_classes = 4
+        fov = None
+        filts =     [4, 3, 3, 8]
+        dils =      [4, 8, 16, 1]
+        n_filts =   [32, 32, 64, 64]
+        names =     ['ft', 'ft', 'ft', 'ft']
+        l_in = L.InputLayer((None, n_channels, fov, fov))
+        l_prev = l_in
+        for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
+            # debug
+            l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
+                                                       dilation=(dil, dil)),
+                                  name=name)
+            # l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
+            #                                            dilation=(dil, dil))
+            l_prev = l_next
+        l_claims_out = l_prev
+
+        # l_in_dense = las.layers.InputLayer((None, 256, 1, 1))
+        l_merge = las.layers.ConcatLayer([l_out_precomp, l_claims_out])
+
+        W = np.random.random((2048, 320, 1, 1)).astype('float32') / 10000.
+        W[:, :-64, 0, 0] = np.array(first_fc.W.eval()).swapaxes(0, 1)[:, :, 0, 0]
+        W = theano.shared(W)
+
+        fc_1 = las.layers.Conv2DLayer(l_merge, 2048, filter_size=1,
+                                       name='fc', W=W, b=first_fc.b,
+                                      nonlinearity=las.nonlinearities.rectify)
+        l_out_cross = las.layers.Conv2DLayer(
+                                fc_1, 4, filter_size=1,
+                                name='fc',
+                                W=l_out_old.W.dimshuffle(1,0,2,3),
+                                b=l_out_old.b,
+                                nonlinearity = las.nonlinearities.rectify)
+
+        l_out_cross.params[l_out_cross.W].remove('regularizable')
+        layers = {}
+        layers['l_in_claims'] = l_in
+        layers['l_in_precomp'] = l_in_old
+        # layers['l_in_dense'] = l_in_dense
+        layers['l_in_old'] = l_in_old
+        layers['l_out_cross'] = l_out_cross
+        layers['l_out_precomp'] = l_out_precomp
+        layers['l_claims_out'] = l_claims_out
+
+        # print 'b new', l_out_cross.b.shape.eval()
+        # print 'W new', l_out_cross.W.shape.eval()
+        #
+        # print 'b old', first_fc.b.eval()
+        # print 'old out', first_fc.W.shape.eval()
+        # print 'old out', first_fc.output_shape
+        #
+        # print 'lout', l_out_old.W.shape.eval()
+        # print 'lout', l_out_old.b.shape.eval()
+        # print 'lout', l_out_old.output_shape
+
+        # print 'l_prev', l_prev.output_shape
+        # print 'l_prev', l_prev.input_layer.input_layer.W.shape.eval()
+        # print 'l_prev', l_prev.input_layer.beta.shape.eval()
+        #
+        # print 'last_conv', last_conv.output_shape
+        # print 'last_conv', last_conv.input_layer.input_layer.W.shape.eval()
+        #
+        # print 'BN beta', last_conv.input_layer.beta.shape.eval()
+        # print 'BN gamma', last_conv.input_layer.gamma.shape.eval()
+        fov = 68
+        return layers, fov
+
+
     def build_v8_hydra_dilated_ft(self):
         layers, fov = \
             self.build_net_v8_dilated_ft()
+        l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
+        l_single_out = cs.BatchChannelSlicer([layers['l_out_cross'],
+                                              l_in_direction])
+        layers['l_in_direction'] = l_in_direction
+        layers['l_single_out'] = l_single_out
+        return layers, fov, None
+
+
+    def build_v8_hydra_dilated_ft_joint(self):
+        layers, fov = \
+            self.build_net_v8_hydra_dilated_ft_joint()
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_single_out = cs.BatchChannelSlicer([layers['l_out_cross'],
                                               l_in_direction])
@@ -847,28 +947,42 @@ class NetBuilder:
             theano.function([layers['l_in_precomp'].input_var],
                             out_precomp)
 
-        # l_in_dense is output of precomputed fc_prec_conv_body
-        loss_train_f = theano.function([layers['l_in_claims'].input_var,
-                                        layers['l_in_dense'].input_var,
-                                        layers['l_in_direction'].input_var],
-                                       [loss_train, individual_batch,
-                                        l_out_prediciton, l_out_train],
-                                       updates=updates)
-        loss_valid_f = theano.function([layers['l_in_claims'].input_var,
-                                        layers['l_in_dense'].input_var,
-                                        layers['l_in_direction'].input_var],
-                                       loss_valid)
-        probs_f = theano.function([layers['l_in_claims'].input_var,
-                                   layers['l_in_dense'].input_var],
-                                  l_out_prediciton)
-        claim_out = las.layers.get_output(layers['l_claims_out'])
-        debug_f = theano.function([layers['l_in_claims'].input_var],
-                                  claim_out)
-        debug_singe_out = theano.function([layers['l_in_claims'].input_var,
-                                           layers['l_in_dense'].input_var,
-                                           layers['l_in_direction'].input_var],
-                                          [l_out_single_debug,
-                                           l_out_prediciton])
+
+        if self.options.net_arch == 'v8_hydra_dilated_ft_joint':
+            print 'joint loss used'
+            loss_train_f = theano.function([layers['l_in_claims'].input_var,
+                                                layers['l_in_old'].input_var,
+                                                layers['l_in_direction'].input_var],
+                                               [loss_train, individual_batch,
+                                                l_out_prediciton, l_out_train],
+                                               updates=updates)
+            probs_f = theano.function([layers['l_in_claims'].input_var,
+                                       layers['l_in_old'].input_var],
+                                      l_out_prediciton)
+            claim_out, debug_f, debug_singe_out = (None, None, None)
+        else:
+            # l_in_dense is output of precomputed fc_prec_conv_body
+            loss_train_f = theano.function([layers['l_in_claims'].input_var,
+                                            layers['l_in_dense'].input_var,
+                                            layers['l_in_direction'].input_var],
+                                           [loss_train, individual_batch,
+                                            l_out_prediciton, l_out_train],
+                                           updates=updates)
+            loss_valid_f = theano.function([layers['l_in_claims'].input_var,
+                                            layers['l_in_dense'].input_var,
+                                            layers['l_in_direction'].input_var],
+                                           loss_valid)
+            probs_f = theano.function([layers['l_in_claims'].input_var,
+                                       layers['l_in_dense'].input_var],
+                                      l_out_prediciton)
+            claim_out = las.layers.get_output(layers['l_claims_out'])
+            debug_f = theano.function([layers['l_in_claims'].input_var],
+                                      claim_out)
+            debug_singe_out = theano.function([layers['l_in_claims'].input_var,
+                                               layers['l_in_dense'].input_var,
+                                               layers['l_in_direction'].input_var],
+                                              [l_out_single_debug,
+                                               l_out_prediciton])
 
         return probs_f, fc_prec_conv_body, loss_train_f, debug_f, debug_singe_out
 
