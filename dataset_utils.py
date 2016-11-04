@@ -555,6 +555,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         update position by following the minimal spanning tree backwards
         for this reason: subtract direction for direction offset
         """
+        assert(direction >= 0)
         offsets = self.coordinate_offset[int(direction)]
         new_pos = [pos[0] - offsets[0], pos[1] - offsets[1]]
         return new_pos
@@ -846,6 +847,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     # debug
     def find_end_of_plateau(self, start_position, prediction_direction,
                             batch, error_dict=None):
+        assert(prediction_direction >= 0)
         if not self.global_plateau_indicator[batch,
                                               start_position[0]- self.pad,
                                               start_position[1]- self.pad,
@@ -860,6 +862,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 self.global_directionmap_batch[batch,
                                                start_position[0]- self.pad,
                                                start_position[1]- self.pad]
+            if node_direction == -1:
+                return start_position, prediction_direction
+
             step_back_pos = self.update_position(start_position, node_direction)
             return self.find_end_of_plateau(step_back_pos, node_direction,
                                             batch, error_dict=None)
@@ -929,7 +934,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                  "large_id": Id,
                                  "large_gtid": gtId,
                                  "small_pos": [x, y],
-                                 "small_direction": (direction + 2) % 4,
+                                 "small_direction": self.reverse_direction(direction),
                                  "small_gtid": claimId,
                                  "small_id": c}
                             self.find_type_I_error()
@@ -942,7 +947,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                  "touch_time": self.global_timemap[b, x, y],
                                  "large_pos": [x, y],
                                  # turns direction by 180 degrees
-                                 "large_direction": (direction + 2) % 4,
+                                 "large_direction": self.reverse_direction(direction),
                                  "large_id": c,
                                  "large_gtid": claimId,
                                  "small_direction": direction,
@@ -975,6 +980,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # return not 'used' in error and error['e1_length'] > 5
 
     def reverse_direction(self, direction):
+        assert(direction >= 0)
         return (direction + 2) % 4
 
     def count_new_path_errors(self):
