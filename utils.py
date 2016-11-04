@@ -64,9 +64,12 @@ def draw_image(image_info, target):
         target.set_title(image_info["title"])
     if 'scatter' in image_info:
         if len(image_info['scatter']) > 0:
+            sc_color = 'r'
+            if 'scatter_color' in image_info:
+                sc_color = image_info['scatter_color']
             centers = np.array(image_info['scatter'])
             target.scatter(centers[:, 1], centers[:, 0], s=1, marker='.',
-                           color='r')
+                           color=sc_color)
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
     target.axis('off')
 

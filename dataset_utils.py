@@ -1242,6 +1242,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
                             'scatter':e2_pos,
+                            'scatter_color': ["g" if e["used"] else 'r'\
+                                     for e in self.global_error_dict.values()],
                             'im': self.global_claims[b, self.pad:-self.pad,
                                   self.pad:-self.pad],
                             'interpolation': 'none'})
@@ -1251,6 +1253,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                   if e["batch"] == 0 and e["used"]])
         plot_images.append({"title": "Ground Truth Label",
                             'scatter': e1_pos,
+                            'scatter_color': ["g" if e["used"] else 'r'\
+                                     for e in self.global_error_dict.values()],
                             "cmap": "rand",
                             'im': self.global_label_batch[b, :, :],
                             'interpolation': 'none'})
