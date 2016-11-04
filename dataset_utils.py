@@ -1033,7 +1033,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             # print "errorlength",error['e1_length']
             error["used"] = False
 
-            if True:
+            if error["Id"] in ids_to_use:
                 # debug
                 self.all_errorsq.append(error)
 
