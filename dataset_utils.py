@@ -1017,57 +1017,58 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_II_direction = []
         # take approx this many errors or all
         n_batch_errors = 100
-        min_err_lens = \
-            sorted(self.all_error_lens, reverse=True)[:n_batch_errors]
-        ids_to_use = [self.all_error_lens[mel] for mel in min_err_lens]
+        # filter error by length
+        len_sorted = sorted(self.global_error_dict,\
+                    key=lambda k: self.global_error_dict[k]['e1_length'])
+
+        for k in self.global_error_dict:
+            self.global_error_dict[k]['used'] = False
 
         # debug
         self.error_II_type = []
         self.e1heights = []
         self.e2heights = []
         self.all_errorsq = []
-        # take only top 100 errors
 
+        for k in len_sorted[-n_batch_errors:]:
 
-        for error in self.global_error_dict.values():
-            # print "errorlength",error['e1_length']
-            error["used"] = False
+            error = self.global_error_dict[k]
+            self.global_error_dict[k]['used'] = True
 
-            if error["Id"] in ids_to_use:
-                # debug
-                self.all_errorsq.append(error)
+            print "errorlength",error['e1_length']
 
-                error["used"] = True
-                error_batch_list.append(error["batch"])
-                error_I_timelist.append(error["e1_time"])
-                error_I_direction.append(error["e1_direction"])
-                error_I_pos_list.append(error["e1_pos"])
-                error_I_id_list.append(error["large_id"])
-                error_II_pos_list.append(error["e2_pos"])
-                error_II_direction.append(error["e2_direction"])
-                error_II_time_list.append(error["e2_time"])
-                error_II_id_list.append(error["small_id"])
-                # debug
-                self.error_II_type.append(error["slow_intruder"])
+            # debug
+            self.all_errorsq.append(error)
+            error_batch_list.append(error["batch"])
+            error_I_timelist.append(error["e1_time"])
+            error_I_direction.append(error["e1_direction"])
+            error_I_pos_list.append(error["e1_pos"])
+            error_I_id_list.append(error["large_id"])
+            error_II_pos_list.append(error["e2_pos"])
+            error_II_direction.append(error["e2_direction"])
+            error_II_time_list.append(error["e2_time"])
+            error_II_id_list.append(error["small_id"])
+            # debug
+            self.error_II_type.append(error["slow_intruder"])
 
-                # debug
-                e_height_pos = error["e1_pos"]
-                posx = e_height_pos[0]-self.pad
-                posy = e_height_pos[1]-self.pad
-                self.e1heights.append(
-                    self.global_prediction_map_nq[error["batch"],
-                                               posx,
-                                               posy,
-                                               error["e1_direction"]])
+            # debug
+            e_height_pos = error["e1_pos"]
+            posx = e_height_pos[0]-self.pad
+            posy = e_height_pos[1]-self.pad
+            self.e1heights.append(
+                self.global_prediction_map_nq[error["batch"],
+                                           posx,
+                                           posy,
+                                           error["e1_direction"]])
 
-                e_height_pos = error["e2_pos"]
-                posx = e_height_pos[0] - self.pad
-                posy = e_height_pos[1] - self.pad
-                self.e2heights.append(
-                    self.global_prediction_map_nq[error["batch"],
-                                                  posx,
-                                                  posy,
-                                                  error["e2_direction"]])
+            e_height_pos = error["e2_pos"]
+            posx = e_height_pos[0] - self.pad
+            posy = e_height_pos[1] - self.pad
+            self.e2heights.append(
+                self.global_prediction_map_nq[error["batch"],
+                                              posx,
+                                              posy,
+                                              error["e2_direction"]])
 
         reconst_e1 = self.reconstruct_input_at_timepoint(error_I_timelist,
                                                          error_I_pos_list,
