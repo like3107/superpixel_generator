@@ -43,13 +43,13 @@ class PokemonTrainer(object):
     def network_i_choose_you(self):
         network = self.builder.get_net(self.options.net_arch)
         c.use(self.options.gpu)
-        l_in, l_in_direction, l_out, l_out_direction,\
+        l_in, l_in_direction, self.l_out, l_out_direction,\
                  self.options.patch_len, l_eat = network()
         self.l_out = l_out
         self.options.network_channels = l_in.shape[1]
         target_t = T.ftensor4()
         self.loss_train_f, loss_valid_f, self.prediction_f = \
-            self.loss(l_in, target_t, l_out, L1_weight=self.options.regularization)
+            self.loss(l_in, target_t, self.l_out, L1_weight=self.options.regularization)
 
         if self.options.load_net_b:
             np.random.seed(np.random.seed(int(time.time())))
@@ -175,14 +175,14 @@ class FusionPokemonTrainer(PokemonTrainer):
     def network_i_choose_you(self):
         network = self.builder.get_net(self.options.net_arch)
         c.use(self.options.gpu)
-        l_in, l_in_direction, l_out, l_out_direction,\
+        l_in, l_in_direction, self.l_out, l_out_direction,\
                  self.options.patch_len, l_eat = network()
         self.options.network_channels = l_in.shape[1]
         target_t = T.ftensor4()
         target_eat = T.ftensor4()
         target_eat_factor = T.ftensor4()
         loss_train_f, loss_valid_f, self.prediction_f, loss_merge_f, eat_f = \
-            loss(l_in, target_t, l_out, l_eat, target_eat, target_eat_factor,\
+            loss(l_in, target_t, self.l_out, l_eat, target_eat, target_eat_factor,\
             L1_weight=self.options.regularization)
 
         if self.options.load_net_b:
@@ -214,6 +214,7 @@ class FinePokemonTrainer(PokemonTrainer):
         network = self.builder.get_net(self.options.net_arch)
         c.use(self.options.gpu)
         layers, self.options.patch_len, _ = network()
+        self.l_out = layers['l_out_cross']
 
         target_t = T.ftensor4()
 
@@ -237,6 +238,7 @@ class FinePokemonTrainer(PokemonTrainer):
 
         self.bm.find_global_error_paths()
         print 'image done'
+        self.save_net()
         if self.bm.count_new_path_errors() > 0:
             error_b_type1, error_b_type2, dir1, dir2 = \
                         self.bm.reconstruct_path_error_inputs()

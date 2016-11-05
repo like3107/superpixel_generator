@@ -1020,6 +1020,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         len_sorted = sorted(self.global_error_dict,\
                     key=lambda k: self.global_error_dict[k]['e1_length'])
 
+        probs = np.array([self.global_error_dict[k]['e1_length']\
+                         for k in self.global_error_dict.keys()],dtype=float)
+        probs /= np.sum(probs)
+        selection = np.random.choice(self.global_error_dict.keys(),
+                                         size=min(n_batch_errors,
+                                                len(probs)),
+                                         p=probs,
+                                         replace=False)
+
         for k in self.global_error_dict:
             self.global_error_dict[k]['used'] = False
 
@@ -1029,7 +1038,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.e2heights = []
         self.all_errorsq = []
 
-        for k in len_sorted[-n_batch_errors:]:
+        for k in selection:
 
             error = self.global_error_dict[k]
             self.global_error_dict[k]['used'] = True
