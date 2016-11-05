@@ -584,6 +584,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             if time is None:
                 return b, min(id1, id2), max(id1, id2)
             else:
+                return len(self.global_error_dict.keys())
                 return b, min(id1, id2), max(id1, id2), time
         def get_error_dict(b, x, y, center_x, center_y,
                            reverse_direction, slow_intruder,
@@ -783,7 +784,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     # raise Exception("no match found for path end")
 
     def find_global_error_paths(self):
-        self.all_error_lens = {}
         self.locate_global_error_path_intersections()
         # now errors have been found so start and end of paths shall be found
         self.global_plateau_indicator = \
@@ -829,7 +829,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                                  pos[1]]
                         error_I["e1_direction"] = current_direction
                         error_I["e1_length"] = e1_length
-                        self.all_error_lens[e1_length] = error_I["Id"]
                         assert (error_I["large_id"] ==\
                                 self.global_claims[batch, pos[0], pos[1]])
                         assert (error_I["large_gtid"] ==
@@ -1016,7 +1015,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_I_direction = []
         error_II_direction = []
         # take approx this many errors or all
-        n_batch_errors = 100
+        n_batch_errors = 200
         # filter error by length
         len_sorted = sorted(self.global_error_dict,\
                     key=lambda k: self.global_error_dict[k]['e1_length'])
@@ -1035,7 +1034,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             error = self.global_error_dict[k]
             self.global_error_dict[k]['used'] = True
 
-            print "errorlength",error['e1_length']
+            # print "errorlength",error['e1_length']
 
             # debug
             self.all_errorsq.append(error)
@@ -1238,23 +1237,25 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         e2_pos = np.array([np.array(e["e2_pos"]) - self.pad
                   for e in self.global_error_dict.values()
-                  if e["batch"] == 0 and e["used"]])
+                  if e["batch"] == 0])
+        e2_color = ["g" if e["used"] else 'r'\
+                 for e in self.global_error_dict.values() if e["batch"] == 0]
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
                             'scatter':e2_pos,
-                            'scatter_color': ["g" if e["used"] else 'r'\
-                                     for e in self.global_error_dict.values()],
+                            'scatter_color': e2_color,
                             'im': self.global_claims[b, self.pad:-self.pad,
                                   self.pad:-self.pad],
                             'interpolation': 'none'})
 
         e1_pos = np.array([np.array(e["e1_pos"]) - self.pad
                   for e in self.global_error_dict.values()
-                  if e["batch"] == 0 and e["used"]])
+                  if e["batch"] == 0])
+        e1_color = ["g" if e["used"] else 'r'\
+                 for e in self.global_error_dict.values() if e["batch"] == 0]
         plot_images.append({"title": "Ground Truth Label",
                             'scatter': e1_pos,
-                            'scatter_color': ["g" if e["used"] else 'r'\
-                                     for e in self.global_error_dict.values()],
+                            'scatter_color': e1_color,
                             "cmap": "rand",
                             'im': self.global_label_batch[b, :, :],
                             'interpolation': 'none'})

@@ -259,16 +259,16 @@ class FinePokemonTrainer(PokemonTrainer):
                 names=['loss finetuning'], log_scale=False)
             zip(heights, self.bm.e1heights + self.bm.e2heights)
             bs = len(heights) / 2
-            for err, heightpreve1, heightpreve2, heightrec1, heightrec2, \
-                ind_loss, errt in \
-                    zip(self.bm.all_errorsq, self.bm.e1heights,
-                        self.bm.e2heights, heights[:bs], heights[bs:],
-                        individual_loss_fine, self.bm.error_II_type):
+            # for err, heightpreve1, heightpreve2, heightrec1, heightrec2, \
+            #     ind_loss, errt in \
+            #         zip(self.bm.all_errorsq, self.bm.e1heights,
+            #             self.bm.e2heights, heights[:bs], heights[bs:],
+            #             individual_loss_fine, self.bm.error_II_type):
 
-                print 'error', err["batch"], 'e1 pos', err["e1_pos"], \
-                    err['e2_pos'], 'loss', ind_loss[0, 0, 0],\
-                    heightpreve1 - heightrec1[0, 0, 0], heightpreve2 - heightrec2[0, 0, 0], errt, \
-                    'plateau', err["plateau"]
+            #     print 'error', err["batch"], 'e1 pos', err["e1_pos"], \
+            #         err['e2_pos'], 'loss', ind_loss[0, 0, 0],\
+            #         heightpreve1 - heightrec1[0, 0, 0], heightpreve2 - heightrec2[0, 0, 0], errt, \
+            #         'plateau', err["plateau"]
         if self.free_voxel == 0:
             trainer.draw_debug(reset=True)
             self.bm.init_batch()
@@ -364,18 +364,18 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             print 'loss ft', ft_loss_train
             # print 'error type II ', self.bm.error_II_type
 
-            zip(heights, self.bm.e1heights + self.bm.e2heights)
-            bs = len(heights) / 2
-            for err, heightpreve1, heightpreve2, heightrec1, heightrec2, \
-                ind_loss, errt in \
-                    zip(self.bm.all_errorsq, self.bm.e1heights,
-                        self.bm.e2heights, heights[:bs], heights[bs:],
-                        individual_loss_fine, self.bm.error_II_type):
+            # zip(heights, self.bm.e1heights + self.bm.e2heights)
+            # bs = len(heights) / 2
+            # for err, heightpreve1, heightpreve2, heightrec1, heightrec2, \
+            #     ind_loss, errt in \
+            #         zip(self.bm.all_errorsq, self.bm.e1heights,
+            #             self.bm.e2heights, heights[:bs], heights[bs:],
+            #             individual_loss_fine, self.bm.error_II_type):
 
-                print 'error', err["batch"], 'e1 pos', err["e1_pos"], \
-                    err['e2_pos'], 'loss', ind_loss[0, 0, 0],\
-                    heightpreve1 - heightrec1[0, 0, 0], heightpreve2 - heightrec2[0, 0, 0], errt, \
-                    'plateau', err["plateau"]
+                # print 'error', err["batch"], 'e1 pos', err["e1_pos"], \
+                #     err['e2_pos'], 'loss', ind_loss[0, 0, 0],\
+                #     heightpreve1 - heightrec1[0, 0, 0], heightpreve2 - heightrec2[0, 0, 0], errt, \
+                #     'plateau', err["plateau"]
             # print 'cross heights', cross_heighst
             # print 'where', np.where(self.bm.glokbal_prediction_map_nq[:] == \
             #                         single_heights[-1, 0, 0, 0])
@@ -470,7 +470,6 @@ class GottaCatchemAllTrainer(PokemonTrainer):
 
 
 
-
 if __name__ == '__main__':
     options = get_options()
     # pret
@@ -486,6 +485,7 @@ if __name__ == '__main__':
         trainer = FCFinePokemonTrainer(options)
         while not trainer.converged():
             trainer.train()
+            trainer.save_net()
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
         trainer = FinePokemonTrainer(options)
