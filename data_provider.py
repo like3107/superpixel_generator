@@ -48,7 +48,7 @@ class DataProvider(object):
     def __init__(self, options):
         self.options = options
         self.bs = options.batch_size
-        self.slices = None
+        self.set_slices(options)
         self.pad = options.patch_len /2
         self.pl = options.patch_len
         self.load_data(options)
@@ -68,6 +68,14 @@ class DataProvider(object):
         # assert (patch_len <= global_edge_len)
         assert (options.global_input_len <= self.rl_x)
         assert (options.global_input_len <=  self.rl_y)
+
+    def set_slices(self, o):
+        print o
+        if "slices" in o:
+            self.slices = o.slices
+        else:
+            self.slices = None
+            print "no slices selected"
 
     def get_batch_shape(self):
         data_shape = list(self.full_input.shape)
@@ -98,11 +106,16 @@ class DataProvider(object):
 
         return data_shape
 
-    def prepare_input_batch(self, input):
+    def prepare_input_batch(self, input, preselect_batches=None):
         # initialize two global batches = region where CNNs compete
         # against each other
         # get indices for global batches in raw/ label cubes
-        ind_b = np.random.permutation(self.n_slices)[:self.bs]
+        if preselect_batches is None:
+            ind_b = np.random.permutation(self.n_slices)[:self.bs]
+        else:
+            print self.bs, preselect_batches
+            assert(self.bs == len(preselect_batches))
+            ind_b = preselect_batches
 
         # indices to raw, correct for label which edge len is -self.pl shorter
         if self.options.global_edge_len > 0:
@@ -119,8 +132,8 @@ class DataProvider(object):
                              ind_y[b]:ind_y[b] + self.options.global_input_len]
             return [ind_b, ind_x, ind_y]
         else:
-            for b in range(self.bs):
-                input[b] = self.full_input[ind_b[b]]
+            print input.shape, self.full_input.shape
+            input[range(self.bs)] = self.full_input[ind_b]
             return [ind_b, None, None]
 
     def prepare_label_batch(self, label, height, rois):
@@ -177,7 +190,6 @@ class DataProvider(object):
 
 class CremiDataProvider(DataProvider):
     def load_data(self, options):
-
         self.full_input = load_h5(str(self.options.input_data_path),
                                 h5_key=None,
                                 slices=self.slices)[0]

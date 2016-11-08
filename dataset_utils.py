@@ -67,6 +67,8 @@ class HoneyBatcherPredict(object):
         self.max_penalty_pixel = options.max_penalty_pixel
 
         self.global_claims = np.empty(self.image_shape)
+        self.global_claims.fill(-1.)
+        self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
         self.global_heightmap_batch = np.empty(self.label_shape)
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
@@ -76,6 +78,7 @@ class HoneyBatcherPredict(object):
         self.error_indicator_pass = np.zeros((self.bs))
         self.global_time = 0
         self.global_prediction_map_FC = None
+        self.preselect_batches = None
 
         self.timo_min_len = 5
         self.timo_sigma = 0.3
@@ -131,20 +134,29 @@ class HoneyBatcherPredict(object):
             self.label_shape[2] - 1, out=coords[:,1])
         return coords[:,0], coords[:,1], self.direction_array
 
-    def crop_input(self, seed, b):
-        return self.global_input_batch[b, :,
+    def crop_input(self, seed, b, out=None):
+        if out is None:
+            return self.global_input_batch[b, :,
                                      seed[0] - self.pad:seed[0] + self.pad,
                                      seed[1] - self.pad:seed[1] + self.pad]
+        else:
+            out = self.global_input_batch[b, :,
+                         seed[0] - self.pad:seed[0] + self.pad,
+                         seed[1] - self.pad:seed[1] + self.pad]
 
-    def crop_mask_claimed(self, seed, b, Id):
+    def crop_mask_claimed(self, seed, b, Id, out=None):
         labels = self.global_claims[b,
                  seed[0] - self.pad:seed[0] + self.pad,
                  seed[1] - self.pad:seed[1] + self.pad]
-        claimed = np.zeros((2, self.pl, self.pl), dtype='float32')
-        claimed[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
-        claimed[0, :, :][labels == -1] = 0  # the others
-        claimed[1, :, :][labels == Id] = 1  # me
-        return claimed
+        if out is None:
+            out = np.zeros((2, self.pl, self.pl), dtype='float32')
+        else:
+            out[:2].fill(0)
+
+        out[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
+        out[0, :, :][labels == -1] = 0  # the others
+        out[1, :, :][labels == Id] = 1  # me
+        return out
 
     def crop_height_map(self, seed, b):
         height = self.global_heightmap_batch[b,
@@ -154,10 +166,14 @@ class HoneyBatcherPredict(object):
 
     def prepare_global_batch(self):
         return self.batch_data_provider.prepare_input_batch(\
-                                            self.global_input_batch)
+                                    self.global_input_batch,
+                                    preselect_batches=self.preselect_batches)
+
+    def set_preselect_batches(self, batches):
+        assert(self.bs == len(batches))
+        self.preselect_batches = batches
 
     def init_batch(self, start=None, allowed_slices = None):
-
         # remember where territory has been claimed before. !=0 claimed, 0 free
         self.global_claims.fill(-1.)
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
@@ -292,8 +308,8 @@ class HoneyBatcherPredict(object):
                 time_put
 
     def get_network_input(self, center, b, Id, out):
-        out[0:2] = self.crop_mask_claimed(center, b, Id)
-        out[2:] = self.crop_input(center, b)
+        self.crop_mask_claimed(center, b, Id, out=out[0:2])
+        self.crop_input(center, b, out=out[2:])
         return out
 
     def get_batches(self):
@@ -1015,7 +1031,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_I_direction = []
         error_II_direction = []
         # take approx this many errors or all
-        n_batch_errors = 200
+        n_batch_errors = 300
         # filter error by length
         len_sorted = sorted(self.global_error_dict,\
                     key=lambda k: self.global_error_dict[k]['e1_length'])
@@ -1456,7 +1472,7 @@ class HoneyBatcherPatchFast(HoneyBatcherPath):
         super(HoneyBatcherPatchFast, self).__init__(options)
         self.n_channels = 2
     def get_network_input(self, center, b, Id, out):
-        out[0:2] = self.crop_mask_claimed(center, b, Id)
+        self.crop_mask_claimed(center, b, Id, out=out[0:2])
         return out
 
     def reconstruct_input_at_timepoint(self, timepoints, centers, ids, batches):

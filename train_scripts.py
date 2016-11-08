@@ -237,7 +237,6 @@ class FinePokemonTrainer(PokemonTrainer):
 
 
         self.bm.find_global_error_paths()
-        print 'image done'
         self.save_net()
         if self.bm.count_new_path_errors() > 0:
             error_b_type1, error_b_type2, dir1, dir2 = \
@@ -259,7 +258,8 @@ class FinePokemonTrainer(PokemonTrainer):
                 self.update_history,
                 self.save_net_path + '/training_finetuning.png',
                 names=['loss finetuning'], log_scale=False)
-            zip(heights, self.bm.e1heights + self.bm.e2heights)
+            print "ft_loss_train",ft_loss_train,  
+            # zip(heights, self.bm.e1heights + self.bm.e2heights)
             bs = len(heights) / 2
             # for err, heightpreve1, heightpreve2, heightrec1, heightrec2, \
             #     ind_loss, errt in \
@@ -290,7 +290,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         self.loss = self.builder.get_loss('updates_hydra_v8')
 
     def network_i_choose_you(self):
-        network = self.builder.get_net(options.net_arch)
+        network = self.builder.get_net(self.options.net_arch)
         c.use(self.options.gpu)
         layers, self.options.patch_len, _ = network()
         self.l_out = layers["l_out_cross"]
