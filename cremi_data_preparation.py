@@ -78,8 +78,8 @@ if __name__ == '__main__':
                     input_data[i,1+j] = raw[gz(z,j)]
                     input_data[i,4+j] = membrane[gz(z,j)]
 
-                    label_data[i] = label[gz(z,j)]
-                    height_data[i] = height[gz(z,j)]
+                label_data[i] = label[gz(z,0)]
+                height_data[i] = height[gz(z,0)]
                 i += 1
 
 
