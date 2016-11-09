@@ -217,6 +217,11 @@ class FinePokemonTrainer(PokemonTrainer):
         self.l_out = layers['l_out_cross']
 
         target_t = T.ftensor4()
+        if self.options.load_net_b:
+            np.random.seed(np.random.seed(int(time.time())))
+            # change seed so different images for retrain
+            print "loading network parameters from ", self.options.load_net_path
+            u.load_network(self.options.load_net_path, layers["l_out_cross"])
 
         self.prediction_f,  self.fc_prec_conv_body, self.loss_train_fine_f, \
             self.debug_f, self.debug_singe_out = \
@@ -234,7 +239,6 @@ class FinePokemonTrainer(PokemonTrainer):
             self.iterations += 1
             self.free_voxel -= 1
             self.update_BM()
-
 
         self.bm.find_global_error_paths()
         self.save_net()
@@ -474,6 +478,7 @@ class GottaCatchemAllTrainer(PokemonTrainer):
 
 if __name__ == '__main__':
     options = get_options()
+
     # pret
     if options.net_arch == 'v8_hydra_dilated':
         trainer = GottaCatchemAllTrainer(options)
@@ -493,7 +498,8 @@ if __name__ == '__main__':
         trainer = FinePokemonTrainer(options)
         while not trainer.converged():
             trainer.train()
-
+    print 'net arch',options.net_arch
+    print 'ended'
     # finetrainer = FinePokemonTrainer(options)
     # finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')
     # while not finetrainer.converged():

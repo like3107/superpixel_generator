@@ -53,6 +53,7 @@ def get_options():
     p.add('--regularization', default=10. ** 1, type=float)
     p.add('--network_channels', default=0, type=int)
     p.add('--batch_size', default=16, type=int)
+    p.add('--quick_eval', action='store_true')
     p.add('--no-augment_pretraining', dest='augment_pretraining',
                                       action='store_false')
     p.add('--create_holes', action='store_true', default=False)

@@ -37,10 +37,12 @@ class Predictor(train_scripts.FinePokemonTrainer):
         self.options.label_path ='./../data/volumes/label_%s.h5' % options.train_version
         self.options.height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version 
         self.options.batch_size = len(options.slices)
+        self.options.load_net_b = options.load_net_b
         self.options.load_net_path = net_path
         self.options.save_net_path = options.save_net_path
         self.options.global_edge_len = options.global_edge_len
-        
+        self.options.quick_eval = options.quick_eval
+        self.options.net_name = options.net_name
 
     def set_prediction_options(self, options):
         self.options.load_net=True
@@ -58,11 +60,12 @@ class Predictor(train_scripts.FinePokemonTrainer):
         while (self.free_voxel > 0):
             self.free_voxel -= 1
             self.update_BM()
-            if self.free_voxel % self.free_voxel_empty /10 == 0:
+            if self.free_voxel % ((self.free_voxel_empty-1) / 20) == 0:
                 self.draw_debug(image_path=self.options.save_net_path+\
                                     'slice_%04i'%self.options.slices[0])
             if self.free_voxel % 100 == 0:
                 bar.update(self.free_voxel_empty - self.free_voxel)
+
 
         # save to h5
 

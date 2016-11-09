@@ -35,11 +35,9 @@ if __name__ == '__main__':
     options = get_options()
 
     if options.global_edge_len > 0:
-        for x in range(20):
+        for x in range(10):
             print "WARNING edge length is not set to 0. Are you sure ?"
-            time.sleep(1)
-
-
+            time.sleep(0.1)
 
     time.sleep(1)
 
@@ -53,9 +51,10 @@ if __name__ == '__main__':
     for i, start in enumerate(range(0,total_z_lenght,options.batch_size)):
         g = gpus[i%4]
         processes.append(Process(
-        target=pred_wrapper,
-        args=(q, options, range(start,start+options.batch_size), g)))
-
+            target=pred_wrapper,
+            args=(q, options, range(start,start+options.batch_size), g)))
+        # debug
+        # pred_wrapper(q, options, range(start, start + options.batch_size), g)
 
     for p in processes:
         time.sleep(8)           # for GPU claim

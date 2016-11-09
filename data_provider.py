@@ -119,12 +119,18 @@ class DataProvider(object):
 
         # indices to raw, correct for label which edge len is -self.pl shorter
         if self.options.global_edge_len > 0:
-            ind_x = np.random.randint(0,
-                                      self.rl_x - self.options.global_input_len + 1,
-                                      size=self.bs)
-            ind_y = np.random.randint(0,
-                                      self.rl_y - self.options.global_input_len + 1,
-                                      size=self.bs)
+            if self.options.quick_eval:
+                ind_x = np.empty(self.bs, dtype=int)
+                ind_x.fill(int(self.pad))
+                ind_y = np.empty(self.bs, dtype=int)
+                ind_y.fill(int(self.pad))
+            else:
+                ind_x = np.random.randint(0,
+                                          self.rl_x - self.options.global_input_len + 1,
+                                          size=self.bs)
+                ind_y = np.random.randint(0,
+                                          self.rl_y - self.options.global_input_len + 1,
+                                          size=self.bs)
             for b in range(self.bs):
                 input[b, :, :, :] = \
                     self.full_input[ind_b[b], :,
