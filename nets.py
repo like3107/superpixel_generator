@@ -28,6 +28,9 @@ class NetBuilder:
         print 'building net: ', netname
         return self.build_methods["build_"+netname]
 
+    def get_fov(self, netname):
+        return self.build_methods["build_"+netname]()[1]
+
     def get_loss(self, lossname):
         return self.loss_methods["loss_"+lossname]
 
@@ -376,7 +379,7 @@ class NetBuilder:
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
 
-    def build_net_v8_dilated(self):
+    def build_net_v8_dilated(self, l_image_in=None):
         n_channels = self.options.network_channels
         if n_channels is None:
             n_channels = 1
@@ -393,7 +396,11 @@ class NetBuilder:
         ReLU = las.nonlinearities.rectify
         act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU,   ReLU]
         names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc','fc']
-        l_in = L.InputLayer((None, n_channels, fov, fov))
+
+        if l_image_in is None:
+            l_in = L.InputLayer((None, n_channels, fov, fov))
+        else:
+            l_in = L.InputLayer((None, n_channels, fov, fov), input_var=l_image_in)
         l_prev = l_in
         i = 0
         l_seconds_last = None
@@ -505,10 +512,10 @@ class NetBuilder:
         return layers, fov
 
 
-    def build_net_v8_hydra_dilated_ft_joint(self):
+    def build_net_v8_hydra_dilated_ft_joint(self, l_image_in = None, l_claims_in = None):
 
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
-            self.build_v8_hydra_dilated()
+            self.build_v8_hydra_dilated(l_image_in = l_image_in)
 
         u.load_network(self.options.load_init_net_path, l_out_old)
         # get pointer to last conv layer
@@ -531,7 +538,11 @@ class NetBuilder:
         dils =      [4, 8, 16, 1]
         n_filts =   [32, 32, 64, 64]
         names =     ['ft', 'ft', 'ft', 'ft']
-        l_in = L.InputLayer((None, n_channels, fov, fov))
+        if l_claims_in is None:
+            l_in = L.InputLayer((None, n_channels, fov, fov))
+            print "this should not happen"
+        else:
+            l_in = L.InputLayer(shape=(None, n_channels, fov, fov), input_var = l_claims_in)
         l_prev = l_in
         for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
             # debug
@@ -605,9 +616,9 @@ class NetBuilder:
         return layers, fov, None
 
 
-    def build_v8_hydra_dilated_ft_joint(self):
+    def build_v8_hydra_dilated_ft_joint(self, l_image_in = None, l_claims_in = None):
         layers, fov = \
-            self.build_net_v8_hydra_dilated_ft_joint()
+            self.build_net_v8_hydra_dilated_ft_joint(l_image_in = l_image_in, l_claims_in = l_claims_in)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_single_out = cs.BatchChannelSlicer([layers['l_out_cross'],
                                               l_in_direction])
@@ -652,8 +663,8 @@ class NetBuilder:
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
 
-    def build_v8_hydra_dilated(self):
-        l_in, (l_9, l_seconds_last), fov = self.build_net_v8_dilated()
+    def build_v8_hydra_dilated(self, l_image_in=None):
+        l_in, (l_9, l_seconds_last), fov = self.build_net_v8_dilated(l_image_in=l_image_in)
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
@@ -986,6 +997,64 @@ class NetBuilder:
 
         return probs_f, fc_prec_conv_body, loss_train_f, debug_f, debug_singe_out
 
+
+    def loss_updates_hydra_coldwar(self, layers,
+                              L1_weight=10**-5, margin=0):
+
+        all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
+
+        bs = layers['l_in_claims'].input_var.shape[0]
+        # debug
+        l_out_train = L.get_output(layers['l_single_out'], deterministic=True)
+        l_out_prediciton = L.get_output(layers['l_out_cross'],
+                                        deterministic=True)
+        l_out_single_debug = L.get_output(layers['l_single_out'],
+                                        deterministic=True)
+
+        L1_norm = \
+            las.regularization.regularize_network_params(layers['l_out_cross'],
+                                                         las.regularization.l1)
+
+        # typeII - typeI + m
+        individual_batch = -l_out_train[:bs/2]
+        loss_valid = T.mean(individual_batch)
+        if L1_weight > 0:
+            loss_train = loss_valid + L1_weight * L1_norm
+
+        updates = las.updates.adam(loss_train, all_params)
+
+        # theano funcs
+        # precompute convs on raw till dense layer
+        out_precomp = las.layers.get_output(layers['l_out_precomp'])
+        fc_prec_conv_body = \
+            theano.function([layers['l_in_precomp'].input_var],
+                            out_precomp)
+
+        # l_in_dense is output of precomputed fc_prec_conv_body
+        loss_train_f = theano.function([layers['l_in_claims'].input_var,
+                                        layers['l_in_dense'].input_var,
+                                        layers['l_in_direction'].input_var],
+                                       [loss_train, individual_batch,
+                                        l_out_prediciton, l_out_train],
+                                       updates=updates)
+        loss_valid_f = theano.function([layers['l_in_claims'].input_var,
+                                        layers['l_in_dense'].input_var,
+                                        layers['l_in_direction'].input_var],
+                                       loss_valid)
+        probs_f = theano.function([layers['l_in_claims'].input_var,
+                                   layers['l_in_dense'].input_var],
+                                  l_out_prediciton)
+        claim_out = las.layers.get_output(layers['l_claims_out'])
+        debug_f = theano.function([layers['l_in_claims'].input_var],
+                                  claim_out)
+        debug_singe_out = theano.function([layers['l_in_claims'].input_var,
+                                           layers['l_in_dense'].input_var,
+                                           layers['l_in_direction'].input_var],
+                                          [l_out_single_debug,
+                                           l_out_prediciton])
+
+        return probs_f, fc_prec_conv_body, loss_train_f, debug_f, debug_singe_out
+
     def loss_updates_probs_v1_hybrid(self, l_in, target, last_layer, L1_weight=10**-5):
 
         all_params = L.get_all_params(last_layer)
@@ -1075,10 +1144,75 @@ def prob_funcs_hybrid(l_in, last_layers):
     return probs_f
 
 
-
-
 if __name__ == '__main__':
 
-    l_in, l_in_direction, l_9, l_10, fov = self.build_ID_v0_hydra()
-    las.layers.CustomRecurrentLayer()
+    # l_in, l_in_direction, l_9, l_10, fov = self.build_ID_v0_hydra()
+    # las.layers.CustomRecurrentLayer()
 
+    from theano.sandbox import cuda
+    cuda.use('gpu0')
+
+
+    real_global_claims = np.ones((3,1,4,4), dtype='float32')
+
+    gobal_raw = theano.shared(np.zeros((3,6,4,4),dtype='float32'), borrow=False)
+    gobal_claims = theano.shared(real_global_claims, borrow=False)
+
+    gobal_claims_t = T.ftensor4()
+    # gloabl_input = theano.shared(np.zeros((3,8,100,100),dtype='float32'))
+    input_batch = np.zeros((3,8,40,40),dtype='float32')
+    input_batch_t = theano.shared(input_batch)
+
+    batches = [0,1,2,3]
+
+    coords = T.ivector()
+    b = T.iscalar()
+    set_val_t = T.fscalar()
+    # define graph for slice raw > input
+    pad = 1
+
+    # real_global_claims[1,0,1,1] += 17
+
+    set_f = theano.function([b, coords, set_val_t], updates=[(gobal_claims,
+                                T.set_subtensor(gobal_claims[b, 0, coords[0],
+                                  coords[1]], set_val_t))]) 
+    # set_f = theano.function([b, coords, gobal_claims_t], T.set_subtensor(gobal_claims_t[b, 0, coords[0],
+                                  # coords[1]], 17))
+
+
+    set_f(1, np.array((1, 0), dtype='int32'), 17)
+    print 'global claims after set', np.where(gobal_claims.get_value() == 17)
+    print "set", gobal_claims.get_value() 
+
+
+    crop_raw_f = theano.function([b, coords], gobal_raw[None, b, :,
+                                         coords[0]-pad:coords[0]+pad,
+                                         coords[1]-pad:coords[1]+pad])
+
+    claim_c = gobal_claims_t[None, b, :, coords[0]-pad:coords[0]+pad,
+                                  coords[1]-pad:coords[1]+pad]
+    me_id = T.fscalar()
+    claim_me = T.eq(claim_c, me_id)
+    claim_them_with_bg = T.neq(claim_c, me_id)
+    claim_not_bg = T.neq(claim_c, 0)
+    claim_them = claim_them_with_bg & claim_not_bg
+
+    get_calims_f = theano.function([b, gobal_claims_t, coords, me_id], [claim_me, claim_them])
+
+    raw_list = []
+    claim_list = []
+    me_idx = 1
+    for b in [0,1,2]:
+        # crop_f(1,np.array([20,20],dtype='int32'))
+        raw_list.append(crop_raw_f(b,np.array([1,1], dtype='int32')))
+        me, them = get_calims_f(b,gobal_claims.eval(),np.array([1,1], dtype='int32'), me_idx)
+        claim_list.append(T.cast(T.concatenate((me,them),axis=1),dtype='float32'))
+
+    print [x.dtype for x in raw_list]
+    print [x.dtype for x in claim_list]
+
+    raw_batch = T.concatenate(raw_list, axis=0)
+    claim_batch = T.concatenate(claim_list, axis=0)
+    input_batch = T.concatenate((raw_batch, claim_batch), axis=1)
+ 
+    print input_batch.shape.eval()

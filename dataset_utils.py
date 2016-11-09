@@ -27,6 +27,7 @@ import h5py
 # from cv2 import dilate, erode
 import data_provider
 import time
+from theano import tensor as T
 
 
 class HoneyBatcherPredict(object):
@@ -173,10 +174,14 @@ class HoneyBatcherPredict(object):
         assert(self.bs == len(batches))
         self.preselect_batches = batches
 
-    def init_batch(self, start=None, allowed_slices = None):
-        # remember where territory has been claimed before. !=0 claimed, 0 free
+    def reset_claims(self):
         self.global_claims.fill(-1.)
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
+
+    def init_batch(self, start=None, allowed_slices = None):
+        # remember where territory has been claimed before. !=0 claimed, 0 free
+        self.reset_claims()
+
         self.global_heightmap_batch.fill(np.inf)
 
         self.prepare_global_batch()
@@ -200,6 +205,7 @@ class HoneyBatcherPredict(object):
         Seeds by minima of dist trf of thresh of memb prob
         :return:
         """
+        print "using seed method:", self.seed_method
         if self.seed_method == "gt":
             self.get_seed_coords_gt()
         elif self.seed_method == "over":
@@ -234,7 +240,6 @@ class HoneyBatcherPredict(object):
         """
         self.global_seeds = []
         shape = self.label_shape[1:3]
-        print shape
         offset_x = ((shape[0]) % gridsize) /2
         offset_y = ((shape[1]) % gridsize) /2
         for b in range(self.bs):
@@ -279,15 +284,17 @@ class HoneyBatcherPredict(object):
 
 
     def get_centers_from_queue(self):
-        heights = []
-        centers = []
+        centers = np.empty((self.bs, 2),dtype='int32')
         ids = []
+        heights = []
+
         for b in range(self.bs):
             height, _, center_x, center_y, Id, direction, error_indicator, \
                             time_put = self.get_center_i_from_queue(b)
-            centers.append((center_x, center_y))
+            centers[b, :] = [center_x, center_y]
             ids.append(Id)
             heights.append(height)
+
         return centers, ids, heights
 
     def get_center_i_from_queue(self, b):
@@ -319,7 +326,7 @@ class HoneyBatcherPredict(object):
                              dtype='float32')
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
             assert (self.global_claims[b, center[0], center[1]] == 0)
-            self.global_claims[b, center[0], center[1]] = Id
+            self.set_claims(b, center, Id)
             raw_batch[b, :, :, :] = \
                 self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
             # check whether already pulled
@@ -327,6 +334,9 @@ class HoneyBatcherPredict(object):
                                         center[0] - self.pad,
                                         center[1] - self.pad] = height
         return raw_batch, centers, ids
+
+    def set_claims(self, b, center, idx):
+        self.global_claims[b, center[0], center[1]] = idx
 
     def update_priority_queue(self, heights_batch, centers, ids):
         for b, center, Id, height in zip(range(self.bs), centers, ids,
@@ -352,11 +362,8 @@ class HoneyBatcherPredict(object):
     def max_new_old_pq_update(self, b, x, y, heights, lower_bound, Id,
                                direction, center, input_time=0, add_all=False):
         # check if there is no other lower prediction
-        is_lowest = \
-            ((heights < self.global_heightmap_batch[b,
-                                                   x - self.pad,
-                                                   y - self.pad]) | add_all )\
-                    & (self.global_claims[b, x, y] == 0)
+        is_lowest = self.check_is_lowest(b, heights, x, y, add_all)
+            
         heights[heights < lower_bound] = lower_bound
         self.global_heightmap_batch[b, x - self.pad, y - self.pad][is_lowest] \
             = heights[is_lowest]
@@ -370,24 +377,34 @@ class HoneyBatcherPredict(object):
                                             Id, cd,
                                             self.error_indicator_pass[b],
                                             input_time))
+    def check_is_lowest(self, b, heights, x, y, add_all):
+        return ((heights < self.global_heightmap_batch[b,
+                                           x - self.pad,
+                                           y - self.pad]) | add_all )\
+                        & (self.global_claims[b, x, y] == 0)
 
     def get_num_free_voxel(self):
         return np.sum([self.global_claims[0] == 0])
 
+    def get_image_crops(self, b):
+        return self.global_input_batch[b, :, self.pad:-self.pad, self.pad:-self.pad], self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad]
+
+
     def draw_debug_image(self, image_name,
                          path='./../data/debug/images/',
                          save=True, b=0, inherite_code=False):
+
+        batch, claims = self.get_image_crops(b)
+
         plot_images = []
         for channel in range(self.batch_shape[1]):
             plot_images.append({"title": "Input %d" % channel,
-                                'im': self.global_input_batch[b, channel,
-                                     self.pad:-self.pad, self.pad:-self.pad],
+                                'im': batch[channel],
                                 'interpolation': 'none'})
         if not inherite_code:
             plot_images.append({"title": "Claims",
                                 'cmap': "rand",
-                                'im': self.global_claims[b, self.pad:-self.pad,
-                                      self.pad:-self.pad],
+                                'im': batch[0],
                                 'interpolation': 'none'})
         if np.min(self.global_heightmap_batch) != np.inf:
             plot_images.append({"title": "Min Heightmap",
@@ -1031,7 +1048,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_I_direction = []
         error_II_direction = []
         # take approx this many errors or all
-        n_batch_errors = 300
+        n_batch_errors = 20
         # filter error by length
         len_sorted = sorted(self.global_error_dict,\
                     key=lambda k: self.global_error_dict[k]['e1_length'])
@@ -1250,6 +1267,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def draw_debug_image(self, image_name, path='./../data/debug/',
                          save=True, b=0, inheritance=False,
                          plot_height_pred=False):
+
+        batch, claims = self.get_image_crops(b)
         plot_images = super(HoneyBatcherPath, self).\
             draw_debug_image(image_name=image_name,
                              path=path,
@@ -1267,10 +1286,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  for e in self.global_error_dict.values() if e["batch"] == 0]
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
-                            'scatter':e2_pos,
-                            'scatter_color': e2_color,
-                            'im': self.global_claims[b, self.pad:-self.pad,
-                                  self.pad:-self.pad],
+                            # 'scatter':e2_pos,
+                            # 'scatter_color': e2_color,
+                            'im': claims,
                             'interpolation': 'none'})
 
         e1_pos = np.array([np.array(e["e1_pos"]) - self.pad
@@ -1279,8 +1297,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         e1_color = ["g" if e["used"] else 'r'\
                  for e in self.global_error_dict.values() if e["batch"] == 0]
         plot_images.append({"title": "Ground Truth Label",
-                            'scatter': e1_pos,
-                            'scatter_color': e1_color,
+                            # 'scatter': e1_pos,
+                            # 'scatter_color': e1_color,
                             "cmap": "rand",
                             'im': self.global_label_batch[b, :, :],
                             'interpolation': 'none'})
@@ -1303,13 +1321,13 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_directionmap_batch[b, :, :],
                             'interpolation': 'none'})
 
-        plot_images.append({"title": "Path Map",
-                            'scatter': np.array(
-                                [np.array(e["large_pos"]) - self.pad for e in
-                                 self.global_error_dict.values() if
-                                 e["batch"] == b]),
-                            'im': self.global_errormap[b, 2, :, :],
-                            'interpolation': 'none'})
+        # plot_images.append({"title": "Path Map",
+        #                     'scatter': np.array(
+        #                         [np.array(e["large_pos"]) - self.pad for e in
+        #                          self.global_error_dict.values() if
+        #                          e["batch"] == b]),
+        #                     'im': self.global_errormap[b, 2, :, :],
+        #                     'interpolation': 'none'})
 
         timemap = np.array(self.global_timemap[b, self.pad:-self.pad,
                                                self.pad:-self.pad])
@@ -1671,6 +1689,124 @@ def height_to_fc_height_gt(height):
     fc_height[:, 3, :, :-1] = height[:, :, 1:]
     fc_height[:, 3, :, -1] = height[:, :, -1]
     return fc_height
+
+class HoneyBatcherGonzales(HoneyBatcherPath):
+    def __init__(self, options):
+        super(HoneyBatcherGonzales, self).__init__(options)
+        shape = list(self.batch_shape)
+        self.global_input_batch = options.theano.shared(np.ones(shape, dtype='float32'))
+        shape[1] = 1
+
+        self.global_claims = options.theano.shared(np.ones(shape, dtype='float32'))
+        coord = T.ivector()
+        batch = T.iscalar()
+        set_val_t = T.iscalar()
+
+        self.set_claim_f = options.theano.function([batch, coord, set_val_t], 
+            updates=[(self.global_claims,
+                      T.set_subtensor(self.global_claims[batch, 0, coord[0],
+                                                   coord[1]], set_val_t))])
+
+        check_val_t = T.iscalar()
+        cx = T.iscalar()
+        cy = T.iscalar()
+        self.check_claims = options.theano.function([batch, cx, cy, check_val_t], 
+                            T.eq(self.global_claims[batch, 0, cx, cy], check_val_t),
+                            allow_input_downcast=True)
+
+        self.cout_free_voxels = options.theano.function([],T.sum(T.eq(self.global_claims[0, 0],0)))
+
+        raw_list = []
+        claim_list = []
+        mes = T.ivector()
+        coords = T.imatrix()
+        self.shared_input_coord_list = [coords, mes]
+
+        for b in range(self.bs):
+            crop_raw = self.global_input_batch[None, b, :,
+                                             coords[b,0]-self.pad:coords[b,0]+self.pad,
+                                             coords[b,1]-self.pad:coords[b,1]+self.pad]
+
+            claim_c = self.global_claims[None, b, :, coords[b,0]-self.pad:coords[b,0]+self.pad,
+                                          coords[b,1]-self.pad:coords[b,1]+self.pad]
+
+            claim_me = T.eq(claim_c, mes[b])
+            claim_them_with_bg = T.neq(claim_c, mes[b])
+            claim_not_bg = T.neq(claim_c, 0)
+            claim_them = claim_them_with_bg & claim_not_bg
+            raw_list.append(crop_raw)
+            claim_list.append(T.cast(T.concatenate((claim_me,claim_them),axis=1),dtype='float32'))
+
+        self.shared_input_batch = T.concatenate(raw_list, axis=0)
+        self.shared_claims_batch = T.concatenate(claim_list, axis=0)
+
+
+    def prepare_global_batch(self):
+        input_x = np.empty(self.batch_shape, dtype='float32')
+        rois = self.batch_data_provider.prepare_input_batch(\
+                                            input_x)
+        self.global_input_batch.set_value(input_x)
+        self.batch_data_provider.prepare_label_batch(self.global_label_batch,
+                                                     self.global_height_gt_batch,
+                                                     rois)
+
+    def get_network_input(self, center, b, Id, out):
+        raise NotImplementedError
+
+    def set_claims(self, b, center, idx):
+        self.set_claim_f(b, np.array(center, dtype='int32'), idx)
+
+    def reset_claims(self):
+        shape = list(self.batch_shape)
+        shape[1] = 1
+        reset_c = np.empty(shape, dtype='float32')
+        reset_c.fill(-1)
+        reset_c[:, 0, self.pad:-self.pad, self.pad:-self.pad] = 0
+        self.global_claims.set_value(reset_c)
+
+    def get_center_i_from_queue(self, b):
+        already_claimed = True
+        while already_claimed:
+            if self.priority_queue[b].empty():
+                self.serialize_to_h5("empty_queue_state")
+                self.draw_debug_image("empty_queue")
+                raise Exception('priority queue empty. All pixels labeled')
+            height, _, center_x, center_y, Id, direction, error_indicator, \
+                time_put = self.priority_queue[b].get()
+            if self.check_claims(b, center_x, center_y, 0):
+                already_claimed = False
+
+        assert (self.check_claims(b, center_x, center_y, 0))
+        return height, _, center_x, center_y, Id, direction, error_indicator, \
+                time_put
+
+    def get_batches(self):
+        centers, ids, heights = self.get_centers_from_queue()
+        for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
+            assert (self.check_claims(b, center[0], center[1], 0))
+            self.set_claims(b, center, Id)
+            # check whether already pulled
+            self.global_heightmap_batch[b,
+                                        center[0] - self.pad,
+                                        center[1] - self.pad] = height
+
+        raw_batch = None
+        gts = None
+        return raw_batch, gts, centers, ids
+
+    def get_num_free_voxel(self):
+        return int(self.cout_free_voxels())
+
+    def get_image_crops(self, b):
+        claims = np.array(self.global_claims.get_value(borrow=False),dtype='float32')[b, 0, self.pad:-self.pad, self.pad:-self.pad]
+        return self.global_input_batch.get_value()[b, :, self.pad:-self.pad, self.pad:-self.pad], claims
+
+    def check_is_lowest(self, b, heights, x, y, add_all):
+        claim_c = np.array([self.check_claims(b, cx, cy, 0) for cx,cy in zip(x,y)],dtype=bool)
+        return ((heights < self.global_heightmap_batch[b,
+                                           x - self.pad,
+                                           y - self.pad]) | add_all )\
+                        & claim_c
 
 class MergeDict(dict):
     def __missing__(self, key):

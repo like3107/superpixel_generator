@@ -17,20 +17,28 @@ import configargparse
 from copy import copy
 import time
 from trainer_config_parser import get_options
+import progressbar
+from lasagne import layers as L
 
 # TODO: add allowed slices?
 
 class PokemonTrainer(object):
     def __init__(self, options):
         self.options = options
+        c.use(self.options.gpu)
+        self.options.theano = theano
         self.prepare_paths()
-        self.builder = nets.NetBuilder(options)
-        self.define_loss()
-        self.network_i_choose_you()
         # options.patch_len = 68
+        self.builder = nets.NetBuilder(options)
+        self.options.patch_len = self.builder.get_fov(self.options.net_arch)
+
         self.init_BM()
         self.bm = self.BM(self.options)
         self.bm.init_batch()
+
+
+        self.define_loss()
+        self.network_i_choose_you()
 
         self.iterations = -1
         self.update_steps = 10
@@ -42,7 +50,6 @@ class PokemonTrainer(object):
 
     def network_i_choose_you(self):
         network = self.builder.get_net(self.options.net_arch)
-        c.use(self.options.gpu)
         l_in, l_in_direction, self.l_out, l_out_direction,\
                  self.options.patch_len, l_eat = network()
         self.l_out = l_out
@@ -137,6 +144,7 @@ class PokemonTrainer(object):
             path = self.net_param_path
         if name is None:
             name = 'net_%i' % self.iterations
+
         u.save_network(path, self.l_out,
                    name, add=self.options._get_kwargs())
 
@@ -235,10 +243,16 @@ class FinePokemonTrainer(PokemonTrainer):
 
 
     def train(self):
+        self.free_voxel = self.free_voxel_empty
+        self.iterations = 0
+        bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         while (self.free_voxel > 0):
-            self.iterations += 1
-            self.free_voxel -= 1
             self.update_BM()
+            # if self.iterations % 100 == 0:
+            #     self.draw_debug()
+            bar.update(self.iterations)
+            self.free_voxel -= 1
+            self.iterations += 1
 
         self.bm.find_global_error_paths()
         self.save_net()
@@ -284,6 +298,56 @@ class FinePokemonTrainer(PokemonTrainer):
     def converged(self):
         return self.iterations >= self.options.max_iter
 
+
+class SpeedyPokemonTrainer(FinePokemonTrainer):
+    def init_BM(self):
+        self.BM = du.HoneyBatcherGonzales
+
+    def define_loss(self):
+        print "no loss defined yet"
+
+    def network_i_choose_you(self):
+        network = self.builder.get_net(self.options.net_arch)
+        c.use(self.options.gpu)
+        layers, self.options.patch_len, _ = network(l_image_in = self.bm.shared_input_batch,
+                                                    l_claims_in = self.bm.shared_claims_batch)
+        self.l_out = layers['l_out_cross']
+
+        l_out_valid = L.get_output(self.l_out, deterministic=True)
+        theano.config.exception_verbosity = 'high'
+        coords, mes = self.bm.shared_input_coord_list
+        self.t1 = theano.function([coords], self.bm.shared_input_batch)
+
+        l_out_claim = L.get_output(layers['l_in_claims'], deterministic=True)
+        self.t2 = theano.function([coords, mes], l_out_claim)
+        self.prediction_f = theano.function([coords, mes], l_out_valid)
+
+    def update_BM(self):
+        inputs, gt, seeds, ids = self.bm.get_batches()
+        # # seeds[:] = 70
+        heights = self.prediction_f(seeds, ids)
+        self.bm.update_priority_queue(heights, seeds, ids)
+        return inputs, heights, gt
+
+    def train(self):
+        print self.free_voxel_empty
+        self.free_voxel = self.free_voxel_empty
+        # while (self.free_voxel > 0):
+        #     self.iterations += 1
+        #     self.free_voxel -= 1
+        #     print self.free_voxel,"\t",self.iterations
+        #     self.update_BM()
+        self.iterations = 0
+        bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
+        while (self.free_voxel > 0):
+            self.update_BM()
+            bar.update(self.iterations)
+            self.free_voxel -= 1
+            self.iterations += 1
+
+        trainer.draw_debug(reset=True)
+        self.bm.init_batch()
+        self.free_voxel = self.free_voxel_empty
 
 class FCFinePokemonTrainer(FinePokemonTrainer):
     def init_BM(self):
@@ -403,6 +467,14 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             # self.bm.draw_error_reconst('err_rec%i' %self.iterations)
             self.free_voxel = self.free_voxel_empty
 
+class StalinTrainer(FCFinePokemonTrainer):
+    """
+    Cold war training: Only increase height
+    """
+    def define_loss(self):
+        self.loss = self.builder.get_loss('updates_hydra_coldwar')
+
+
 class Pokedex(PokemonTrainer):
     """
     prediction of images only
@@ -495,11 +567,27 @@ if __name__ == '__main__':
             trainer.save_net()
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
-        trainer = FinePokemonTrainer(options)
+        # from pycallgraph import PyCallGraph
+        # from pycallgraph.output import GraphvizOutput
+        # with PyCallGraph(output=GraphvizOutput()):
+        trainer = SpeedyPokemonTrainer(options)
+        # trainer = FinePokemonTrainer(options)
         while not trainer.converged():
             trainer.train()
-    print 'net arch',options.net_arch
-    print 'ended'
+            trainer.save_net()
+
+    # COLD WAR TEST 
+
+    # trainer = StalinTrainer(options)
+    # while not trainer.converged():
+    #     trainer.train()
+    #     trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
+ 
+
+
+    # COLD WAR TEST 
+
+
     # finetrainer = FinePokemonTrainer(options)
     # finetrainer.load_net(trainer.net_param_path + '/pretrain_final.h5')
     # while not finetrainer.converged():

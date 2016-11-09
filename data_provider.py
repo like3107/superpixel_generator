@@ -67,7 +67,7 @@ class DataProvider(object):
 
         # assert (patch_len <= global_edge_len)
         assert (options.global_input_len <= self.rl_x)
-        assert (options.global_input_len <=  self.rl_y)
+         (options.global_input_len <=  self.rl_y)
 
     def set_slices(self, o):
         print o
@@ -237,6 +237,7 @@ class PolygonDataProvider(DataProvider):
         # load_data creates a new batch
         self.exception_counter = 0
         self.load_data(self.options)
+        # TODO: check if this needs to be called every time
         if self.options.padding_b:
             self.full_input = mirror_cube(self.full_input, self.pad)
         return super(PolygonDataProvider, self).prepare_input_batch(input)
