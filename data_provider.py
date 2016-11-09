@@ -120,6 +120,7 @@ class DataProvider(object):
         # indices to raw, correct for label which edge len is -self.pl shorter
         if self.options.global_edge_len > 0:
             if self.options.quick_eval:
+                print 'using fixed indices '
                 ind_x = np.empty(self.bs, dtype=int)
                 ind_x.fill(int(self.pad))
                 ind_y = np.empty(self.bs, dtype=int)

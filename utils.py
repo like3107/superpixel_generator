@@ -343,7 +343,7 @@ def load_network(load_path, l_last=None):
     for param in all_params:
         i += 1
         h5_keys.append(str(param) + str(i))
-    # print 'load', load_path, 'keys', h5_keys
+    print 'lading network', load_path, 'keys', h5_keys
     all_param_values = dp.load_h5(load_path, h5_keys)
     if l_last is not None:
         las.layers.set_all_param_values(l_last, all_param_values)
@@ -351,6 +351,7 @@ def load_network(load_path, l_last=None):
         return all_param_values
 
 def load_options(load_path, options={}):
+    print 'loading options from', load_path
     with h5py.File(load_path, 'r') as net_file:
         for op_key, op_val in [(k, net_file['options/'+k].value)\
                                 for k in net_file['options'].keys()]:

@@ -108,7 +108,7 @@ class HoneyBatcherPredict(object):
                                              self.global_seed_ids)):
             q = PriorityQueue()
             for seed, Id in zip(seeds, ids):
-                q.put((0., 0., seed[0], seed[1], Id, -1, False, 0))
+                q.put((-np.inf, 0., seed[0], seed[1], Id, -1, False, 0))
             self.priority_queue.append(q)
 
     def walk_cross_coords(self, center):
@@ -140,7 +140,7 @@ class HoneyBatcherPredict(object):
                                      seed[0] - self.pad:seed[0] + self.pad,
                                      seed[1] - self.pad:seed[1] + self.pad]
         else:
-            out = self.global_input_batch[b, :,
+            out[:] = self.global_input_batch[b, :,
                          seed[0] - self.pad:seed[0] + self.pad,
                          seed[1] - self.pad:seed[1] + self.pad]
 
