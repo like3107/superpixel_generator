@@ -1764,6 +1764,11 @@ class HoneyBatcherGonzales(HoneyBatcherPath):
         reset_c[:, 0, self.pad:-self.pad, self.pad:-self.pad] = 0
         self.global_claims.set_value(reset_c)
 
+    def check_claims_c(self, b, center_x, center_y):
+        return not np.isfinite(self.global_heightmap_batch[b,
+                                        center_x - self.pad,
+                                        center_y - self.pad])
+
     def get_center_i_from_queue(self, b):
         already_claimed = True
         while already_claimed:
@@ -1773,17 +1778,16 @@ class HoneyBatcherGonzales(HoneyBatcherPath):
                 raise Exception('priority queue empty. All pixels labeled')
             height, _, center_x, center_y, Id, direction, error_indicator, \
                 time_put = self.priority_queue[b].get()
-            if self.check_claims(b, center_x, center_y, 0):
+
+            if self.check_claims_c(b, center_x, center_y):
                 already_claimed = False
 
-        assert (self.check_claims(b, center_x, center_y, 0))
         return height, _, center_x, center_y, Id, direction, error_indicator, \
                 time_put
 
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
-            assert (self.check_claims(b, center[0], center[1], 0))
             self.set_claims(b, center, Id)
             # check whether already pulled
             self.global_heightmap_batch[b,
@@ -1802,11 +1806,14 @@ class HoneyBatcherGonzales(HoneyBatcherPath):
         return self.global_input_batch.get_value()[b, :, self.pad:-self.pad, self.pad:-self.pad], claims
 
     def check_is_lowest(self, b, heights, x, y, add_all):
-        claim_c = np.array([self.check_claims(b, cx, cy, 0) for cx,cy in zip(x,y)],dtype=bool)
+        # claim_c = self.gen_calim_c(b, x, y)
         return ((heights < self.global_heightmap_batch[b,
                                            x - self.pad,
-                                           y - self.pad]) | add_all )\
-                        & claim_c
+                                           y - self.pad]))
+                        # & claim_c
+
+    def gen_calim_c(self, b, x, y):
+        return np.array([self.check_claims(b, cx, cy, 0) for cx,cy in zip(x,y)],dtype=bool)
 
 class MergeDict(dict):
     def __missing__(self, key):

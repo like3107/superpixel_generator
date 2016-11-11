@@ -316,7 +316,7 @@ class SpeedyPokemonTrainer(FinePokemonTrainer):
         l_out_valid = L.get_output(self.l_out, deterministic=True)
         theano.config.exception_verbosity = 'high'
         coords, mes = self.bm.shared_input_coord_list
-        self.t1 = theano.function([coords], self.bm.shared_input_batch)
+        # self.t1 = theano.function([coords], self.bm.shared_input_batch)
 
         l_out_claim = L.get_output(layers['l_in_claims'], deterministic=True)
         self.t2 = theano.function([coords, mes], l_out_claim)
