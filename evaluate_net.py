@@ -5,7 +5,8 @@ from trainer_config_parser import get_options
 from copy import copy
 import progressbar
 
-class Predictor(train_scripts.FinePokemonTrainer):
+
+class Predictor(train_scripts.FCFinePokemonTrainer):
     def __init__(self, options):
         self.get_options_from_net_file(options)
         self.set_prediction_options(options)
@@ -39,7 +40,6 @@ class Predictor(train_scripts.FinePokemonTrainer):
 
         self.options.gpu = options.gpu
         self.options.slices = options.slices
-`
         self.options.batch_size = len(options.slices)
         self.options.load_net_b = options.load_net_b
         self.options.load_net_path = options.load_net_path
@@ -51,11 +51,15 @@ class Predictor(train_scripts.FinePokemonTrainer):
         self.options.input_data_path = options.input_data_path
         self.options.height_gt_path = options.height_gt_path
         self.options.label_path = options.label_path
+        self.options.fc_prec = True
 
     def set_prediction_options(self, options):
         self.options.seed_method = options.seed_method
 
     def predict(self):
+        inputs = self.update_BM_FC()
+        # precompute fc part
+        self.precomp_input = self.fc_prec_conv_body(inputs)
         # select all sliced batches (in order)
         bar = progressbar.ProgressBar(max_value=self.free_voxel)
         print "predicting z-slices ", self.options.slices

@@ -514,7 +514,7 @@ class NetBuilder:
 
     def build_net_v8_hydra_dilated_ft_joint(self, l_image_in = None,
                                             l_claims_in = None):
-
+        print 'building joint net'
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
             self.build_v8_hydra_dilated(l_image_in = l_image_in)
 
@@ -541,9 +541,9 @@ class NetBuilder:
         names =     ['ft', 'ft', 'ft', 'ft']
         if l_claims_in is None:
             l_in = L.InputLayer((None, n_channels, fov, fov))
-            print "this should not happen"
         else:
-            l_in = L.InputLayer(shape=(None, n_channels, fov, fov), input_var = l_claims_in)
+            l_in = L.InputLayer(shape=(None, n_channels, fov, fov),
+                                input_var = l_claims_in)
         l_prev = l_in
         for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
             l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
@@ -581,6 +581,7 @@ class NetBuilder:
         layers['l_out_cross'] = l_out_cross
         layers['l_out_precomp'] = l_out_precomp
         layers['l_claims_out'] = l_claims_out
+        layers['l_merge'] = l_merge
 
         # print 'b new', l_out_cross.b.shape.eval()
         # print 'W new', l_out_cross.W.shape.eval()
@@ -954,7 +955,8 @@ class NetBuilder:
 
         # theano funcs
         # precompute convs on raw till dense layer
-        out_precomp = las.layers.get_output(layers['l_out_precomp'])
+        out_precomp = las.layers.get_output(layers['l_out_precomp'],
+                                            deterministic=True)
         fc_prec_conv_body = \
             theano.function([layers['l_in_precomp'].input_var],
                             out_precomp)
@@ -962,15 +964,17 @@ class NetBuilder:
 
         if self.options.net_arch == 'v8_hydra_dilated_ft_joint':
             print 'joint loss used'
-            loss_train_f = theano.function([layers['l_in_claims'].input_var,
-                                                layers['l_in_old'].input_var,
-                                                layers['l_in_direction'].input_var],
-                                               [loss_train, individual_batch,
-                                                l_out_prediciton, l_out_train],
-                                               updates=updates)
+            loss_train_f = None
+
+            l_in_from_prec = las.layers.InputLayer((None, 64, 1, 1))
+            layers['l_merge'].input_layers[0] = l_in_from_prec
+            layers['l_merge'].input_shapes[0] = l_in_from_prec.output_shape
+            l_out_prediciton_prec = L.get_output(layers['l_out_cross'],
+                                    deterministic=True)
             probs_f = theano.function([layers['l_in_claims'].input_var,
-                                       layers['l_in_old'].input_var],
-                                      l_out_prediciton)
+                                       l_in_from_prec.input_var],
+                                      l_out_prediciton_prec)
+
             claim_out, debug_f, debug_singe_out = (None, None, None)
         else:
             # l_in_dense is output of precomputed fc_prec_conv_body
