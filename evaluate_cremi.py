@@ -79,8 +79,8 @@ if __name__ == '__main__':
     total_z_lenght = options.slices_total
     start_z = options.start_slice_z
     assert(total_z_lenght % options.batch_size == 0)
-    if options.gpu == 'single':
-        gpus = ['gpu0'] * 4
+    if options.gpu != 'all':
+        gpus = [options.gpu] * 4
     else:
         gpus = ["gpu%i"%i for i in range(4)]
     if not os.path.exists(options.save_net_path):
