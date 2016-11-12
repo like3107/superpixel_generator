@@ -17,6 +17,7 @@ from scipy.spatial import Voronoi as voronoi
 from voronoi_polygon import voronoi_finite_polygons_2d
 # import png
 from trainer_config_parser import get_options
+import ws_timo_gtseeds
 
 def segmenation_to_membrane_core(label_image):
     gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -220,6 +221,43 @@ class CremiDataProvider(DataProvider):
                                     h5_key=None,
                                     slices=self.slices)[0]
 
+    def find_timo_errors(self, label_batch, input_batch, seeds):
+        alpha = 0.9
+        # timo parameters 
+        threshold_dist_trf = 0.3
+        thres_memb_cc = 15
+        thresh_seg_cc = 0
+        sigma_dist_trf = 2
+        somethingunimportant = 0
+        groupSeeds = False
+        segmentation = np.zeros_like(label_batch)
+
+        for b in range(self.bs):
+            seed_mat = np.zeros(label_batch[b, :, :].shape).astype(np.bool)
+            seed_plus_pad = np.array(seeds[b])
+            seed = seed_plus_pad - self.pad
+            # print 'init', seed[:, 0], seed[:, 1]
+            seed_mat[seed[:, 0], seed[:, 1]] = 1.
+            segmentation[b, :, :], _ = \
+            ws_timo_gtseeds.wsDtSegmentation(alpha*input_batch[b, 1, self.pad:-self.pad, self.pad:-self.pad]\
+                                    +(1-alpha)*input_batch[b, 0, self.pad:-self.pad, self.pad:-self.pad],
+                                  threshold_dist_trf, thres_memb_cc,
+                                  thresh_seg_cc, sigma_dist_trf,
+                                  somethingunimportant,
+                                  seed_mat=seed_mat,
+                                  groupSeeds=groupSeeds)
+
+            # note: this id translation requires that 
+            # self.global_claims[b, seed_plus_pad[:, 0], seed_plus_pad[:, 1]]
+            # is a range(1, #seeds_per_batch b)
+            # requires seed_method == "gt"
+            assert(self.options.seed_method == "gt")
+            # map to gt id
+            gt_id_map = np.zeros((len(seed)+1))
+            for i, s in enumerate(segmentation[b, seed[:, 0], seed[:, 1]]):
+                gt_id_map[s] = i+1
+            segmentation[b] = gt_id_map[segmentation[b]]
+        return segmentation != label_batch
 
 class PolygonDataProvider(DataProvider):
     def __init__(self, options):

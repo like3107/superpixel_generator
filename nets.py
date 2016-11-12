@@ -29,7 +29,7 @@ class NetBuilder:
         return self.build_methods["build_"+netname]
 
     def get_fov(self, netname):
-        return self.build_methods["build_"+netname]()[1]
+        return self.build_methods["build_"+netname]()[-2]
 
     def get_loss(self, lossname):
         return self.loss_methods["loss_"+lossname]

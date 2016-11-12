@@ -560,6 +560,7 @@ def wsDtseeds(pmap, pmin, minMembraneSize, sigmaMinima,
 
 
 if __name__ == '__main__':
+
     memb_path = ''
     version = 'a'
     # memb_path = './data/volumes/membranes_%s.h5' % version
@@ -583,6 +584,7 @@ if __name__ == '__main__':
     groupSeeds = False
     print 'TImos Waterhshed with gt seeds'
     segmentation = np.zeros((50, gel, gel))
+    import validation_scripts
 
 
     BM = Seeds(gt, pad)

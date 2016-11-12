@@ -80,6 +80,7 @@ class HoneyBatcherPredict(object):
         self.global_time = 0
         self.global_prediction_map_FC = None
         self.preselect_batches = None
+        self.hard_regions = None
 
         self.timo_min_len = 5
         self.timo_sigma = 0.3
@@ -282,6 +283,9 @@ class HoneyBatcherPredict(object):
                 seeds.append([seed[0], seed[1]])
             self.global_seeds.append(seeds)
 
+    def find_hard_regions(self):
+        self.hard_regions = self.batch_data_provider.find_timo_errors(\
+            self.global_label_batch, self.global_input_batch ,self.global_seeds)
 
     def get_centers_from_queue(self):
         centers = np.empty((self.bs, 2),dtype='int32')
@@ -412,7 +416,7 @@ class HoneyBatcherPredict(object):
                                 'im': self.global_heightmap_batch[b, :, :],
                                 'interpolation': 'none'})
         if self.global_prediction_map_FC is not None:
-            for i in range(4):
+            for i in range(self.bs):
                 plot_images.append({"title": "Heightmap Prediciton %i" %i,
                                 'im': self.global_prediction_map_FC[b, i, :, :],
                                 'interpolation': 'none',
@@ -636,6 +640,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                 center_y],
                  "large_gtid": claim_projection[center_x,
                                                 center_y],
+                 "importance": 1,
                  "small_pos": [x, y],
                  "small_direction": reverse_direction,
                  "small_gtid": claim_projection[x, y],
@@ -816,13 +821,28 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     #                                    reverse_direction]
                     # raise Exception("no match found for path end")
 
+    def weitght_importance_by_length(self):
+        for k in self.global_error_dict:
+            self.global_error_dict[k]['importance'] = self.global_error_dict[k]['e1_length']
+
+    def weitght_importance_by_hard_regions(self):
+        for k in self.global_error_dict:
+            self.global_error_dict[k]['importance'] = self.global_error_dict[k]['e1_length']
+            pos = np.array(self.global_error_dict[k]['e2_pos']) - self.pad
+            batch = self.global_error_dict[k]['batch']
+            if self.hard_regions[batch,pos[0],pos[1]]:
+                self.global_error_dict[k]['importance'] *= 1000
+
     def find_global_error_paths(self):
+        print 'searching for hard regions'
+        self.find_hard_regions()
         self.locate_global_error_path_intersections()
         # now errors have been found so start and end of paths shall be found
         self.global_plateau_indicator = \
             self.global_prediction_map_nq  < self.global_prediction_map
         self.find_type_I_error()
         self.find_source_of_II_error()
+        self.weitght_importance_by_hard_regions()
 
     # crossing from own gt ID into other ID
     def find_type_I_error(self):
@@ -1048,13 +1068,17 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_I_direction = []
         error_II_direction = []
         # take approx this many errors or all
-        n_batch_errors = 20
+        n_batch_errors = 200
         # filter error by length
-        len_sorted = sorted(self.global_error_dict,\
-                    key=lambda k: self.global_error_dict[k]['e1_length'])
 
-        probs = np.array([self.global_error_dict[k]['e1_length']\
+        # len_sorted = sorted(self.global_error_dict,\
+        #             key=lambda k: self.global_error_dict[k]['e1_length'])
+
+
+        probs = np.array([self.global_error_dict[k]['importance']\
                          for k in self.global_error_dict.keys()],dtype=float)
+        # probs = np.array([\
+        #                  for k in self.global_error_dict.keys()],dtype=float)
         probs /= np.sum(probs)
         selection = np.random.choice(self.global_error_dict.keys(),
                                          size=min(n_batch_errors,
@@ -1281,24 +1305,26 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         e2_pos = np.array([np.array(e["e2_pos"]) - self.pad
                   for e in self.global_error_dict.values()
-                  if e["batch"] == 0])
+                  if e["batch"] == b])
         e2_color = ["g" if e["used"] else 'r'\
-                 for e in self.global_error_dict.values() if e["batch"] == 0]
+                 for e in self.global_error_dict.values() if e["batch"] == b]
+        e2_importance_color = ["g" if e["importance"] > 1000 else 'r'\
+                 for e in self.global_error_dict.values() if e["batch"] == b]
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
-                            # 'scatter':e2_pos,
-                            # 'scatter_color': e2_color,
+                            'scatter':e2_pos,
+                            'scatter_color': e2_color,
                             'im': claims,
                             'interpolation': 'none'})
 
         e1_pos = np.array([np.array(e["e1_pos"]) - self.pad
                   for e in self.global_error_dict.values()
-                  if e["batch"] == 0])
+                  if e["batch"] == b])
         e1_color = ["g" if e["used"] else 'r'\
-                 for e in self.global_error_dict.values() if e["batch"] == 0]
+                 for e in self.global_error_dict.values() if e["batch"] == b]
         plot_images.append({"title": "Ground Truth Label",
-                            # 'scatter': e1_pos,
-                            # 'scatter_color': e1_color,
+                            'scatter': e1_pos,
+                            'scatter_color': e1_color,
                             "cmap": "rand",
                             'im': self.global_label_batch[b, :, :],
                             'interpolation': 'none'})
@@ -1321,13 +1347,20 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_directionmap_batch[b, :, :],
                             'interpolation': 'none'})
 
-        # plot_images.append({"title": "Path Map",
-        #                     'scatter': np.array(
-        #                         [np.array(e["large_pos"]) - self.pad for e in
-        #                          self.global_error_dict.values() if
-        #                          e["batch"] == b]),
-        #                     'im': self.global_errormap[b, 2, :, :],
-        #                     'interpolation': 'none'})
+        plot_images.append({"title": "Path Map",
+                            'scatter': np.array(
+                                [np.array(e["large_pos"]) - self.pad for e in
+                                 self.global_error_dict.values() if
+                                 e["batch"] == b]),
+                            'im': self.global_errormap[b, 2, :, :],
+                            'interpolation': 'none'})
+
+        if not self.hard_regions is None:
+            plot_images.append({"title": "Hard Regions",
+                    'im': self.hard_regions[b, :, :],
+                    'scatter':e2_pos,
+                    'scatter_color': e2_importance_color,
+                    'interpolation': 'none'})
 
         timemap = np.array(self.global_timemap[b, self.pad:-self.pad,
                                                self.pad:-self.pad])
@@ -1336,6 +1369,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                 'im': timemap})
 
         if save:
+            print "saving image to ",path,image_name
             u.save_images(plot_images, path=path, name=image_name)
         else:
             print 'show'
