@@ -77,6 +77,7 @@ if __name__ == '__main__':
 
     # loop over slices
     total_z_lenght = options.slices_total
+    start_z = options.start_slice_z
     assert(total_z_lenght % options.batch_size == 0)
     if options.gpu == 'single':
         gpus = ['gpu0'] * 4
@@ -85,7 +86,7 @@ if __name__ == '__main__':
     if not os.path.exists(options.save_net_path):
         os.makedirs(options.save_net_path)
     
-    for i, start in enumerate(range(0,total_z_lenght,options.batch_size)):
+    for i, start in enumerate(range(start_z,start_z+total_z_lenght, options.batch_size)):
         g = gpus[i%4]
         processes.append(Process(
             target=pred_wrapper,
@@ -108,9 +109,9 @@ if __name__ == '__main__':
         options.global_edge_len -= 68
 
     concat_h5_in_folder(options.save_net_path,
-                         options.batch_size,
-                         total_z_lenght,
-                         options.global_edge_len)
+                        options.batch_size,
+                        total_z_lenght,
+                        options.global_edge_len)
 
     concat_height_h5_in_folder(options.save_net_path,
                          options.batch_size,
@@ -121,3 +122,14 @@ if __name__ == '__main__':
                          options.batch_size,
                          total_z_lenght,
                          options.global_edge_len)
+
+    import validation_scripts as vs
+    reload_path = options.save_net_path + 'final.h5'
+    fov = 68
+    _, results = vs.validate_segmentation(pred_path=reload_path, gt_path=options.label_path,
+                             offset_xy=int(fov)/2, start_z=start_z,
+                             n_z=total_z_lenght,
+                             gel=options.global_edge_len)
+    f = open(options.save_net_path + 'results.txt', 'w')
+    f.write(results)
+    f.close()

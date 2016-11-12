@@ -123,9 +123,9 @@ class DataProvider(object):
             if self.options.quick_eval:
                 print 'using fixed indices '
                 ind_x = np.empty(self.bs, dtype=int)
-                ind_x.fill(int(self.pad))
+                ind_x.fill(int(0))
                 ind_y = np.empty(self.bs, dtype=int)
-                ind_y.fill(int(self.pad))
+                ind_y.fill(int(0))
             else:
                 ind_x = np.random.randint(0,
                                           self.rl_x - self.options.global_input_len + 1,

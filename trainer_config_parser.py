@@ -101,7 +101,7 @@ def get_options():
 
     # validation
     p.add('--slices_total', type=int, default=10)
-    p.add('--start_chunk_z', type=int, default=100)
+    p.add('--start_slice_z', type=int, default=100)
 
     options = p.parse_args()
 

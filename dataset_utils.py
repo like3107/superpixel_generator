@@ -576,8 +576,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         # check for errors in neighbor regions, type II
         # TODO: remove find_errors_b
-        if self.find_errors_b:
-            self.check_type_II_errors(center_x, center_y, Id, b)
+        # if self.find_errors_b:
+        #     self.check_type_II_errors(center_x, center_y, Id, b)
         # print 'b', b, 'height', height, 'centerxy', center_x, center_y, 'Id', Id, \
         #     direction, error_indicator, time_put
         return height, _, center_x, center_y, Id, direction, error_indicator, \
@@ -2050,19 +2050,6 @@ if __name__ == '__main__':
     #             probs[c, d] = random.random()
     #             d += 1
     #     bm.update_priority_path_queue(probs, centers, ids)
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
 
 
 

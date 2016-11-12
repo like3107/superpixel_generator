@@ -512,7 +512,8 @@ class NetBuilder:
         return layers, fov
 
 
-    def build_net_v8_hydra_dilated_ft_joint(self, l_image_in = None, l_claims_in = None):
+    def build_net_v8_hydra_dilated_ft_joint(self, l_image_in = None,
+                                            l_claims_in = None):
 
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
             self.build_v8_hydra_dilated(l_image_in = l_image_in)
