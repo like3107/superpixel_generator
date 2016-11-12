@@ -104,6 +104,7 @@ def get_options():
     p.add('--start_slice_z', type=int, default=100)
 
     options = p.parse_args()
+    options.fc_prec = False
 
     if options.input_data_path == "None":
         options.input_data_path ='./../data/volumes/input_%s.h5' % options.train_version

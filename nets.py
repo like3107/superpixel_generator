@@ -961,19 +961,31 @@ class NetBuilder:
             theano.function([layers['l_in_precomp'].input_var],
                             out_precomp)
 
-
         if self.options.net_arch == 'v8_hydra_dilated_ft_joint':
             print 'joint loss used'
-            loss_train_f = None
 
-            l_in_from_prec = las.layers.InputLayer((None, 64, 1, 1))
-            layers['l_merge'].input_layers[0] = l_in_from_prec
-            layers['l_merge'].input_shapes[0] = l_in_from_prec.output_shape
-            l_out_prediciton_prec = L.get_output(layers['l_out_cross'],
-                                    deterministic=True)
-            probs_f = theano.function([layers['l_in_claims'].input_var,
-                                       l_in_from_prec.input_var],
-                                      l_out_prediciton_prec)
+            if self.options.fc_prec:
+                print 'fc prec'
+                loss_train_f = None
+                l_in_from_prec = las.layers.InputLayer((None, 64, 1, 1))
+                layers['l_merge'].input_layers[0] = l_in_from_prec
+                layers['l_merge'].input_shapes[0] = l_in_from_prec.output_shape
+                l_out_prediciton_prec = L.get_output(layers['l_out_cross'],
+                                                     deterministic=True)
+                probs_f = theano.function([layers['l_in_claims'].input_var,
+                                           l_in_from_prec.input_var],
+                                          l_out_prediciton_prec)
+            else:
+                loss_train_f = theano.function([layers['l_in_claims'].input_var,
+                                                layers['l_in_old'].input_var,
+                                                layers[
+                                                    'l_in_direction'].input_var],
+                                               [loss_train, individual_batch,
+                                                l_out_prediciton, l_out_train],
+                                               updates=updates)
+                probs_f = theano.function([layers['l_in_claims'].input_var,
+                                           layers['l_in_old'].input_var],
+                                          l_out_prediciton)
 
             claim_out, debug_f, debug_singe_out = (None, None, None)
         else:

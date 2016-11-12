@@ -40,6 +40,7 @@ class BatchChannelSlicer(las.layers.MergeLayer):
         batches = l_in.shape[0]
         return l_in[T.arange(batches), slices, None]
 
+
 class GradientToHeight(las.layers.Layer):
     """
     input: 2 Las layers:
@@ -60,6 +61,13 @@ class GradientToHeight(las.layers.Layer):
             input[:,0,:,:]+input[:,2,:,:],
             input[:,0,:,:]+input[:,1,:,:],
             input[:,0,:,:]-input[:,2,:,:]],axis=1)
+
+
+# elu
+def elup1(x):
+    return T.switch(x > 0, x+1, T.exp(x))
+
+
 
 if __name__ == '__main__':
     shape = (10, 2, 4, 4)
