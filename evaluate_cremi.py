@@ -21,9 +21,15 @@ def pred_wrapper(q, options, slices, gpu):
     save_height_path = options.save_net_path \
                     + "/height_%04i_%04i.h5"%(slices[0],slices[-1])
     save_h5(save_height_path, 'data',
-        data=pred.bm.global_claims[:, pred.bm.pad:-pred.bm.pad,
-             pred.bm.pad:-pred.bm.pad],
+        data=pred.bm.global_heightmap_batch,
         overwrite='w')
+
+
+    save_pred_nq_path = options.save_net_path \
+                    + "/pred_nq_path_%04i_%04i.h5"%(slices[0],slices[-1])
+    save_h5(save_pred_nq_path, 'data',
+            data=pred.bm.global_prediction_map_nq,
+            overwrite='w')
 
 def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
     import glob
@@ -35,6 +41,7 @@ def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
     save_h5(path_to_folder + '/final.h5', 'data', data=le_final,
                overwrite='w')
 
+
 def concat_height_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
     import glob
     from data_provider import load_h5, save_h5
@@ -42,24 +49,39 @@ def concat_height_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
     le_final = np.zeros((n_slices, edge_len, edge_len), dtype=np.uint64)
     for start, file in zip(range(0, n_slices, slice_size), files):
         le_final[start:start + slice_size, :, :] = load_h5(file)[0]
-    save_h5(path_to_folder + '/final.h5', 'data', data=le_final,
+    save_h5(path_to_folder + '/final_height.h5', 'data', data=le_final,
                overwrite='w')
+
+
+def concat_pred_nq_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
+    import glob
+    from data_provider import load_h5, save_h5
+    files = sorted(glob.glob(path_to_folder + '/pred_nq' + '*.h5'))
+    le_final = np.zeros((n_slices, edge_len, edge_len, 4), dtype=np.uint64)
+    for start, file in zip(range(0, n_slices, slice_size), files):
+        le_final[start:start + slice_size, :, :] = load_h5(file)[0]
+    save_h5(path_to_folder + '/final_pred_nq.h5', 'data', data=le_final,
+               overwrite='w')
+
 
 if __name__ == '__main__':
     processes = []
     q = Queue()
     options = get_options()
-    if options.global_edge_len > 0:
-        for x in range(10):
+    if options.global_edge_len > 0 and not options.quick_eval:
+        for x in range(2):
             print "WARNING edge length is not set to 0. Are you sure ?"
             time.sleep(0.1)
 
     time.sleep(1)
 
     # loop over slices
-    total_z_lenght = 50
+    total_z_lenght = options.slices_total
     assert(total_z_lenght % options.batch_size == 0)
-    gpus = ["gpu%i"%i for i in range(4)]
+    if options.gpu == 'single':
+        gpus = ['gpu0'] * 4
+    else:
+        gpus = ["gpu%i"%i for i in range(4)]
     if not os.path.exists(options.save_net_path):
         os.makedirs(options.save_net_path)
     
@@ -90,7 +112,12 @@ if __name__ == '__main__':
                          total_z_lenght,
                          options.global_edge_len)
 
-    concat_h5_in_folder(options.save_net_path+"height.h5",
+    concat_height_h5_in_folder(options.save_net_path,
+                         options.batch_size,
+                         total_z_lenght,
+                         options.global_edge_len)
+
+    concat_pred_nq_h5_in_folder(options.save_net_path,
                          options.batch_size,
                          total_z_lenght,
                          options.global_edge_len)

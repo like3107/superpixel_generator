@@ -31,13 +31,15 @@ class Predictor(train_scripts.FinePokemonTrainer):
         self.options = copy(options)
         net_path = options.load_net_path
         # self.options.__dict__.clear()
-        u.load_options(net_path, self.options)
+        # u.load_options(net_path, self.options)
+        self.options = options
+        # debug temporary options
+        self.options.net_arch = 'v8_hydra_dilated_ft_joint'
+
+
         self.options.gpu = options.gpu
         self.options.slices = options.slices
-        self.options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
-        self.options.membrane_path ='./../data/volumes/membranes_%s.h5' % options.train_version
-        self.options.label_path ='./../data/volumes/label_%s.h5' % options.train_version
-        self.options.height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version 
+`
         self.options.batch_size = len(options.slices)
         self.options.load_net_b = options.load_net_b
         self.options.load_net_path = options.load_net_path
@@ -46,6 +48,9 @@ class Predictor(train_scripts.FinePokemonTrainer):
         self.options.quick_eval = options.quick_eval
         self.options.net_name = options.net_name
         self.options.padding_b = options.padding_b
+        self.options.input_data_path = options.input_data_path
+        self.options.height_gt_path = options.height_gt_path
+        self.options.label_path = options.label_path
 
     def set_prediction_options(self, options):
         self.options.seed_method = options.seed_method

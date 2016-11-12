@@ -44,7 +44,7 @@ if __name__ == '__main__':
         print "creating dataset for ",total_z_lenght,"zslices"
 
         i = 0
-        input_data = np.empty((total_z_lenght,6,y_lenght,x_lenght),
+        input_data = np.empty((total_z_lenght,2,y_lenght,x_lenght),
                                 dtype=np.float32)
         label_data = np.empty((total_z_lenght,y_lenght,x_lenght),
                                 dtype=np.uint64)
@@ -72,9 +72,9 @@ if __name__ == '__main__':
      
             gz = indexgetter(z_lenght)
             for z in range(z_lenght)[sl[ds]]:
-                for j in [-1,0,1]:
-                    input_data[i,1+j] = raw[gz(z,j)]
-                    input_data[i,4+j] = membrane[gz(z,j)]
+                for j in [0]:
+                    input_data[i,0+j] = raw[gz(z,j)]
+                    input_data[i,1+j] = membrane[gz(z,j)]
 
                 label_data[i] = label[gz(z,0)]
 
@@ -88,14 +88,14 @@ if __name__ == '__main__':
 
         print "writing data to files"
 
-        dp.save_h5(options.input_data_path+"label_CREMI_%s.h5"%name,'data',
+        dp.save_h5(options.input_data_path+"label_CREMI_noz_%s.h5"%name,'data',
                          data=label_data, overwrite='w')
 
-        dp.save_h5(options.input_data_path+"input_CREMI_%s.h5"%name,'data',
+        dp.save_h5(options.input_data_path+"input_CREMI_noz_%s.h5"%name,'data',
                          data=input_data, overwrite='w')
 
-        dp.save_h5(options.input_data_path+"height_CREMI_%s.h5"%name,'data',
+        dp.save_h5(options.input_data_path+"height_CREMI_noz_%s.h5"%name,'data',
                          data=height_data, overwrite='w')
 
-        dp.save_h5(options.input_data_path+"boundary_CREMI_%s.h5"%name,'data',
+        dp.save_h5(options.input_data_path+"boundary_CREMI_noz_%s.h5"%name,'data',
                          data=boundary_data, overwrite='w')

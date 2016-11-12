@@ -8,50 +8,51 @@ import logging
 logger = logging.getLogger(__name__)
 import time
 import functools
+from skimage import measure
+
+import data_provider as dp
 
 
+class Seeds():
+    def __init__(self, global_label_batch, pad):
+        self.global_label_batch = global_label_batch
+        self.label_shape = global_label_batch.shape
+        self.bs = self.label_shape[0]
+        self.pad = pad
 
-def get_seed_coords(global_label_batch, bs, rand_x_coord_seed=False,
-                    sigma=1.0, min_dist=4, thresh=0.2, pl=40):
-    """
-    Seeds by minima of dist trf of thresh of memb prob
-    :return:
-    """
-    global_el = global_label_batch.shape[1]
-    global_seeds = []
-    pad = pl / 2
-    seed_ids = []
-    dist_trf = np.zeros_like(global_label_batch)
-    for b in range(bs):
-        seed_ids.append(np.unique(
-            global_label_batch[b, :, :]).astype(int))
+    def get_seed_coords_gt(self):
+        self.global_seeds = []
+        seed_ids = []
+        dist_trf = np.zeros(self.label_shape)
+        # self.global_label_batch = self.global_label_batch.astype(np.uint32)
+        for b in range(self.bs):
 
-        _, dist_trf[b, :, :] = \
-            du.segmenation_to_membrane_core(
-                global_label_batch[b, :, :])
+            self.global_label_batch[b] = measure.label(self.global_label_batch[b])
+            seed_ids.append(np.unique(
+                self.global_label_batch[b, :, :]).astype(int))
 
-    for b, ids in zip(range(bs),
-                      seed_ids):  # iterates over batches
-        seeds = []
-        for Id in ids:  # ids within each slice
-            regions = np.where(
-                global_label_batch[b, :, :] == Id)
-            seed_ind = np.argmax(dist_trf[b][regions])
-            if rand_x_coord_seed:
-                seed = \
-                    np.array([regions[0][seed_ind],
-                              np.random.randint(0,
-                                                global_el - pl)])
+            # add border to labels
+            padded_label = \
+                dp.pad_cube(self.global_label_batch[b, :, :],
+                                       1,
+                                       value=np.max(seed_ids[-1]) + 1)
 
-            else:
-                seed = \
-                    np.array([regions[0][seed_ind],
-                              regions[1][seed_ind]]) + pad
+            dist_trf[b, :, :] = \
+                dp.segmenation_to_membrane_core(
+                    padded_label)[1][1:-1, 1:-1]
+        for b, ids in zip(range(self.bs),
+                          seed_ids):  # iterates over batches
+            seeds = []
+            for Id in ids:  # ids within each slice
+                regions = np.where(
+                    self.global_label_batch[b, :, :] == Id)
+                seed_ind = np.argmax(dist_trf[b][regions])
+                seed = np.array([regions[0][seed_ind],
+                                 regions[1][seed_ind]]) + self.pad
+                seeds.append([seed[0], seed[1]])
+            self.global_seeds.append(seeds)
+        return self.global_seeds
 
-            seeds.append([seed[0], seed[1]])
-        global_seeds.append(seeds)
-
-    return global_seeds
 
 def load_h5(path, h5_key=None, group=None, group2=None):
     if not exists(path):
@@ -77,6 +78,7 @@ def load_h5(path, h5_key=None, group=None, group2=None):
     else:
         raise Exception('h5 key type is not supported')
     return output
+
 
 def save_h5(path, h5_key, data, overwrite='w-'):
     f = h.File(path, overwrite)
@@ -110,7 +112,7 @@ def log_calls(log_level):
 
 @log_calls(logging.INFO)
 def wsDtSegmentation(pmap, pmin, minMembraneSize, minSegmentSize, sigmaMinima,
-                     sigmaWeights, seed_mat,
+                     sigmaWeights, seed_mat=None,
                      groupSeeds=True, out_debug_image_dict=None,
                      out=None):
     """A probability map 'pmap' is provided and thresholded using pmin.
@@ -153,14 +155,12 @@ def wsDtSegmentation(pmap, pmin, minMembraneSize, minSegmentSize, sigmaMinima,
     distance_to_membrane = signed_distance_transform(pmap, pmin,
                                                      minMembraneSize,
                                                      out_debug_image_dict)
-    if not np.any(seed_mat):
-        binary_seeds = \
-            binary_seeds_from_distance_transform(distance_to_membrane,
+    binary_seeds = binary_seeds_from_distance_transform(distance_to_membrane,
                                                         sigmaMinima,
                                                         out_debug_image_dict)
-    else:
-        print 'lukas seeds'
-        binary_seeds = seed_mat
+    if seed_mat is not None:
+        binary_seeds[:] = seed_mat.astype(np.bool)
+        # labeled_seeds = binary_seeds.astype(numpy.uint32)
 
     if groupSeeds:
         labeled_seeds = group_seeds_by_distance(binary_seeds,
@@ -170,8 +170,9 @@ def wsDtSegmentation(pmap, pmin, minMembraneSize, minSegmentSize, sigmaMinima,
             binary_seeds.view(numpy.uint8), out=out)
 
 
+
     my_seeds = numpy.where(labeled_seeds != 0)
-    print my_seeds
+
     del binary_seeds
     save_debug_image('seeds', labeled_seeds, out_debug_image_dict)
 
@@ -369,8 +370,7 @@ def group_seeds_by_distance(binary_seeds, distance_to_membrane, out=None):
     if seed_locations.max() < numpy.sqrt(2 ** 31):
         seed_locations = seed_locations.astype(numpy.int32)
 
-    # From the distance transform image, extract each seed's distance to
-    #  the nearest membrane
+    # From the distance transform image, extract each seed's distance to the nearest membrane
     point_distances_to_membrane = distance_to_membrane[binary_seeds]
 
     # Create a graph of the seed points containing only the connections between 'close' seeds, as found below.
@@ -553,75 +553,82 @@ def wsDtseeds(pmap, pmin, minMembraneSize, sigmaMinima,
 
 
 
+
 if __name__ == '__main__':
     memb_path = ''
     version = 'a'
     # memb_path = './data/volumes/membranes_%s.h5' % version
-    # gt_path = './data/volumes/label_%s.h5' % version
-    # gt = load_h5(gt_path)[0]
+    memb_path = './../data/volumes/input_CREMI_test.h5'
+    gt_path = './../data/volumes/label_CREMI_test.h5'
+    start_z = 100
+    fov = 68        # edge effects
 
-
+    gel = 500
+    gt = load_h5(gt_path)[0][100:150, fov:fov+gel,  fov:fov+gel]
+    memb_probs = load_h5(memb_path)[0][100:150, 5,  fov:fov+gel,  fov:fov+gel]
+    pad = 34
 
     threshold_dist_trf = 0.3
-    thres_memb_cc = 1
-    thresh_seg_cc = 1
+    thres_memb_cc = 15
+    thresh_seg_cc = 0
     sigma_dist_trf = 2
     somethingunimportant = 0
     two_dim = True
-    import dataset_utils as du
-    raw, memb_probs, dist_trf, gt = du.generate_dummy_data2(2, edge_len=60)
-    seeds = np.array(get_seed_coords(gt, bs=64))
+    groupSeeds = False
+    print 'TImos Waterhshed with gt seeds'
+    segmentation = np.zeros((50, gel, gel))
 
-    # exit()
     import utils as u
+    BM = Seeds(gt, pad)
+
+    seeds = np.array(BM.get_seed_coords_gt())
     p = []
     p.append({"title": "gt",
               'cmap': "rand",
               'im': gt[0],
-              "scatter": np.array(seeds[0]) - 20
+              "scatter": np.array(seeds[0]) - pad
               })
     p.append({"title": "prob",
               'cmap': "grey",
               'im': memb_probs[0],
-              "scatter": np.array(seeds[0]) - 20
+              "scatter": np.array(seeds[0]) - pad
               })
-
-    # memb_probs = load_h5(memb_path)[0]
-    groupSeeds = False
-    print 'TImos Waterhshed'
-    segmentation = np.zeros((64, 60, 60))
 
     all_seeds = []
     if two_dim:
-        for i in range(1):
-            seed_mat = np.zeros(memb_probs[i, :, :].shape).astype(np.bool)
-            boundary = np.zeros(memb_probs[i, :, :].shape)
-            boundary[memb_probs[i, :, :] > 0.1] = 1.
-            seed = np.array(seeds[i]) - 20
+        for i in range(segmentation.shape[0]):
+        # for i in range(1):
+            seed_mat = np.zeros(gt[i, :, :].shape).astype(np.bool)
+            seed = np.array(seeds[i]) - pad
+            # print 'init', seed[:, 0], seed[:, 1]
             seed_mat[seed[:, 0], seed[:, 1]] = 1.
-            print 'init', seed[:, 0], seed[:, 1]
-            print 'sum', seed_mat.sum(), seed_mat.shape,memb_probs[i, :, :].shape
-
             segmentation[i, :, :], _ = \
-                wsDtSegmentation(boundary[:, :],
+            wsDtSegmentation(memb_probs[i, :, :],
                                   threshold_dist_trf, thres_memb_cc,
                                   thresh_seg_cc, sigma_dist_trf,
-                                  somethingunimportant, seed_mat,
-                                                        groupSeeds=False)
-            # print segmentation, seeds
+                                  somethingunimportant,
+                                  seed_mat=seed_mat,
+                                  groupSeeds=groupSeeds)
 
+    else:
+        NotImplemented()
 
+    # print 'seg', segmentation[0]
+    segmentation = segmentation.astype(np.uint64)
+
+    print 'segmemnation', segmentation[0]
     p.append({"title": "timo",
               'cmap': "rand",
               'im': segmentation[0],
               })
     u.save_images(p, './../data/debug/', 'ws_timo2')
 
-    # segmentation = segmentation.astype(np.uint64)
-    # import validation_scripts
-    # validation_scripts.validate_segmentation(segmentation, gt)
-    # # save_h5('./data/preds/ws_2D_timo_b.h5', 'pred', segmentation, 'w')
-    # print 'save', './data/preds/timo_%s.h5' %version,
+
+    import validation_scripts
+    validation_scripts.validate_segmentation(segmentation, gt)
+    print 'making debug plot in debug folder'
+    save_h5('./../data/ws_2D_timo_b.h5', 'pred', segmentation, 'w')
+
     # save_h5('./data/preds/timo_%s.h5' %version, 'pred', segmentation, 'w')
-    # # f = open('./data/preds/timo_seeds_%s.pkl' % version, mode='w`')
-    # # pickle.dump(all_seeds, f)
+    # f = open('./data/preds/timo_seeds_%s.pkl' % version, mode='w`')
+    # pickle.dump(all_seeds, f)
