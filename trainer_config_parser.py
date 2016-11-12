@@ -6,7 +6,8 @@ def get_options():
     propagated throughout all member classes of the trainer class
     :param options:
     """
-    p = configargparse.ArgParser(default_config_files=['./../data/config/training.conf'])
+    p = configargparse.ArgParser(default_config_files=
+                                 ['./../data/config/training.conf'])
 
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'

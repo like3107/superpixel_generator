@@ -961,12 +961,19 @@ class NetBuilder:
             theano.function([layers['l_in_precomp'].input_var],
                             out_precomp)
 
+
         if self.options.net_arch == 'v8_hydra_dilated_ft_joint':
             print 'joint loss used'
 
             if self.options.fc_prec:
+                loss_train_f = theano.function([layers['l_in_claims'].input_var,
+                                                layers['l_in_old'].input_var,
+                                                layers[
+                                                    'l_in_direction'].input_var],
+                                               [loss_train, individual_batch,
+                                                l_out_prediciton, l_out_train],
+                                               updates=updates)
                 print 'fc prec'
-                loss_train_f = None
                 l_in_from_prec = las.layers.InputLayer((None, 64, 1, 1))
                 layers['l_merge'].input_layers[0] = l_in_from_prec
                 layers['l_merge'].input_shapes[0] = l_in_from_prec.output_shape
