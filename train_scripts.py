@@ -40,7 +40,7 @@ class PokemonTrainer(object):
         self.define_loss()
         self.network_i_choose_you()
 
-        self.iterations = -1
+        self.iterations = 0
         self.update_steps = 10
         self.free_voxel_empty = self.bm.get_num_free_voxel()
         self.free_voxel = self.free_voxel_empty
@@ -244,15 +244,16 @@ class FinePokemonTrainer(PokemonTrainer):
 
     def train(self):
         self.free_voxel = self.free_voxel_empty
-        self.iterations = 0
         bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         while (self.free_voxel > 0):
             self.update_BM()
             # if self.iterations % 100 == 0:
             #     self.draw_debug()
-            bar.update(self.iterations)
+            bar.update(self.free_voxel_empty - self.free_voxel)
             self.free_voxel -= 1
             self.iterations += 1
+
+        ft_loss_train = 0
 
         self.bm.find_global_error_paths()
         self.save_net()
@@ -269,26 +270,17 @@ class FinePokemonTrainer(PokemonTrainer):
                     self.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:],
                                            batch_dir_ft)
 
+            print "ft_loss_train",ft_loss_train
             self.update_history.append(self.iterations)
             self.loss_history.append(ft_loss_train)
-            u.plot_train_val_errors(
-                [self.loss_history],
-                self.update_history,
-                self.save_net_path + '/training_finetuning.png',
-                names=['loss finetuning'], log_scale=False)
-            print "ft_loss_train",ft_loss_train,  
-            # zip(heights, self.bm.e1heights + self.bm.e2heights)
-            bs = len(heights) / 2
-            # for err, heightpreve1, heightpreve2, heightrec1, heightrec2, \
-            #     ind_loss, errt in \
-            #         zip(self.bm.all_errorsq, self.bm.e1heights,
-            #             self.bm.e2heights, heights[:bs], heights[bs:],
-            #             individual_loss_fine, self.bm.error_II_type):
+        u.plot_train_val_errors(
+            [self.loss_history],
+            self.update_history,
+            self.save_net_path + '/training_finetuning.png',
+            names=['loss finetuning'], log_scale=False)
+        print ""
 
-            #     print 'error', err["batch"], 'e1 pos', err["e1_pos"], \
-            #         err['e2_pos'], 'loss', ind_loss[0, 0, 0],\
-            #         heightpreve1 - heightrec1[0, 0, 0], heightpreve2 - heightrec2[0, 0, 0], errt, \
-            #         'plateau', err["plateau"]
+        self.save_net()
         if self.free_voxel == 0:
             trainer.draw_debug(reset=True)
             self.bm.init_batch()
@@ -337,11 +329,10 @@ class SpeedyPokemonTrainer(FinePokemonTrainer):
         #     self.free_voxel -= 1
         #     print self.free_voxel,"\t",self.iterations
         #     self.update_BM()
-        self.iterations = 0
         bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         while (self.free_voxel > 0):
             self.update_BM()
-            bar.update(self.iterations)
+            bar.update(self.free_voxel_empty - self.free_voxel)
             self.free_voxel -= 1
             self.iterations += 1
 
@@ -570,8 +561,8 @@ if __name__ == '__main__':
         # from pycallgraph import PyCallGraph
         # from pycallgraph.output import GraphvizOutput
         # with PyCallGraph(output=GraphvizOutput()):
-        trainer = SpeedyPokemonTrainer(options)
-        # trainer = FinePokemonTrainer(options)
+        # trainer = SpeedyPokemonTrainer(options)
+        trainer = FinePokemonTrainer(options)
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
