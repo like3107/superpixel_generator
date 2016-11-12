@@ -287,6 +287,15 @@ class HoneyBatcherPredict(object):
         self.hard_regions = self.batch_data_provider.find_timo_errors(\
             self.global_label_batch, self.global_input_batch ,self.global_seeds)
 
+        l = self.global_label_batch.shape[1]
+        for b, seeds in enumerate(self.global_seeds):
+            pos = np.array(seeds) - self.pad
+            pos = np.clip(pos,1,l-1)
+            for p in pos:
+                self.hard_regions[b, p[0]-1:p[0]+2, p[1]-1:p[1]+2] = 1
+
+
+
     def get_centers_from_queue(self):
         centers = np.empty((self.bs, 2),dtype='int32')
         ids = []
@@ -828,9 +837,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def weitght_importance_by_hard_regions(self):
         for k in self.global_error_dict:
             self.global_error_dict[k]['importance'] = self.global_error_dict[k]['e1_length']
-            pos = np.array(self.global_error_dict[k]['e2_pos']) - self.pad
             batch = self.global_error_dict[k]['batch']
-            if self.hard_regions[batch,pos[0],pos[1]]:
+            pos1 = np.array(self.global_error_dict[k]['e1_pos']) - self.pad
+            pos2 = np.array(self.global_error_dict[k]['e2_pos']) - self.pad
+            if self.hard_regions[batch,pos1[0],pos1[1]] or\
+               self.hard_regions[batch,pos2[0],pos2[1]]:
                 self.global_error_dict[k]['importance'] *= 1000
 
     def find_global_error_paths(self):
