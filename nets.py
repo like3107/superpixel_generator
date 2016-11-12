@@ -952,8 +952,12 @@ class NetBuilder:
             loss_train = loss_valid + L1_weight * L1_norm
 
         print "using nesterov_momentum"
-        # updates = las.updates.adam(loss_train, all_params)
-        updates = las.updates.nesterov_momentum(loss_train, all_params, 0.001)
+        if self.options.optimizer == "nesterov":
+            updates = las.updates.nesterov_momentum(loss_train, all_params, 0.001)
+        elif self.options.optimizer == "adam":
+            updates = las.updates.adam(loss_train, all_params)
+        else:
+            raise Exception("unknown optimizer %s"%self.options.optimizer)
 
         # theano funcs
         # precompute convs on raw till dense layer

@@ -71,6 +71,7 @@ def get_options(script='training'):
     p.add('--reset_pretraining', dest='reset_pretraining', action='store_true')
     p.add('--margin', default=0.5, type=float)
     p.add('--no-aug-ft', dest='augment_ft', action='store_false')
+    p.add('--optimizer', default="nesterov", type=str)
     # experience replay
     # clip_method="exp20"
     p.add('--exp_bs', default=16, type=int)
