@@ -1,3 +1,8 @@
+import matplotlib
+matplotlib.use('Agg')
+
+import utils as u
+import validation_scripts
 import numpy as np
 import h5py as h
 from os.path import exists
@@ -558,14 +563,15 @@ if __name__ == '__main__':
     memb_path = ''
     version = 'a'
     # memb_path = './data/volumes/membranes_%s.h5' % version
-    memb_path = './../data/volumes/input_CREMI_test.h5'
-    gt_path = './../data/volumes/label_CREMI_test.h5'
+    memb_path = './../data/volumes/input_CREMI_noz_test.h5'
+    gt_path = './../data/volumes/label_CREMI_noz_test.h5'
     start_z = 100
     fov = 68        # edge effects
 
     gel = 500
     gt = load_h5(gt_path)[0][100:150, fov:fov+gel,  fov:fov+gel]
-    memb_probs = load_h5(memb_path)[0][100:150, 5,  fov:fov+gel,  fov:fov+gel]
+    memb_probs = load_h5(memb_path)[0][100:150, 1,  fov:fov+gel,  fov:fov+gel]
+    raw_image = load_h5(memb_path)[0][100:150, 0,  fov:fov+gel,  fov:fov+gel]
     pad = 34
 
     threshold_dist_trf = 0.3
@@ -578,56 +584,72 @@ if __name__ == '__main__':
     print 'TImos Waterhshed with gt seeds'
     segmentation = np.zeros((50, gel, gel))
 
-    import utils as u
+
     BM = Seeds(gt, pad)
 
     seeds = np.array(BM.get_seed_coords_gt())
-    p = []
-    p.append({"title": "gt",
-              'cmap': "rand",
-              'im': gt[0],
-              "scatter": np.array(seeds[0]) - pad
-              })
-    p.append({"title": "prob",
-              'cmap': "grey",
-              'im': memb_probs[0],
-              "scatter": np.array(seeds[0]) - pad
-              })
+    ars = []
+    arsp = []
+        
 
-    all_seeds = []
-    if two_dim:
-        for i in range(segmentation.shape[0]):
-        # for i in range(1):
-            seed_mat = np.zeros(gt[i, :, :].shape).astype(np.bool)
-            seed = np.array(seeds[i]) - pad
-            # print 'init', seed[:, 0], seed[:, 1]
-            seed_mat[seed[:, 0], seed[:, 1]] = 1.
-            segmentation[i, :, :], _ = \
-            wsDtSegmentation(memb_probs[i, :, :],
-                                  threshold_dist_trf, thres_memb_cc,
-                                  thresh_seg_cc, sigma_dist_trf,
-                                  somethingunimportant,
-                                  seed_mat=seed_mat,
-                                  groupSeeds=groupSeeds)
+    stepsize = 0.05
+    alpha_range = np.arange(0,1+stepsize,stepsize)
+    for alpha in alpha_range:
+        p = []
+        p.append({"title": "gt",
+                  'cmap': "rand",
+                  'im': gt[0],
+                  "scatter": np.array(seeds[0]) - pad
+                  })
+        p.append({"title": "prob",
+                  'cmap': "grey",
+                  'im': memb_probs[0],
+                  "scatter": np.array(seeds[0]) - pad
+                  })
 
-    else:
-        NotImplemented()
+        all_seeds = []
+        if two_dim:
+            for i in range(segmentation.shape[0]):
+            # for i in range(1):
+                seed_mat = np.zeros(gt[i, :, :].shape).astype(np.bool)
+                seed = np.array(seeds[i]) - pad
+                # print 'init', seed[:, 0], seed[:, 1]
+                seed_mat[seed[:, 0], seed[:, 1]] = 1.
+                segmentation[i, :, :], _ = \
+                wsDtSegmentation(alpha*memb_probs[i, :, :]+(1-alpha)*raw_image[i, :, :],
+                                      threshold_dist_trf, thres_memb_cc,
+                                      thresh_seg_cc, sigma_dist_trf,
+                                      somethingunimportant,
+                                      seed_mat=seed_mat,
+                                      groupSeeds=groupSeeds)
 
-    # print 'seg', segmentation[0]
-    segmentation = segmentation.astype(np.uint64)
+        else:
+            NotImplemented()
 
-    print 'segmemnation', segmentation[0]
-    p.append({"title": "timo",
-              'cmap': "rand",
-              'im': segmentation[0],
-              })
-    u.save_images(p, './../data/debug/', 'ws_timo2')
+        # print 'seg', segmentation[0]
+        segmentation = segmentation.astype(np.uint64)
+
+        p.append({"title": "timo",
+                  'cmap': "rand",
+                  'im': segmentation[0],
+                  })
+        u.save_images(p, './../data/debug/', 'ws_%f_timo2'%alpha+'.png')
 
 
-    import validation_scripts
-    validation_scripts.validate_segmentation(segmentation, gt)
-    print 'making debug plot in debug folder'
-    save_h5('./../data/ws_2D_timo_b.h5', 'pred', segmentation, 'w')
+        scores = validation_scripts.validate_segmentation(segmentation, gt)
+        ars.append(scores['Adapted Rand error'])
+        arsp.append(scores['Adapted Rand error precision'])
+
+
+        # print 'making debug plot in debug folder'
+        save_h5('./../data/ws_2D_timo_b.h5', 'pred', segmentation, 'w')
+
+
+    u.plot_train_val_errors(
+        [ars, arsp],
+        alpha_range,
+        './../data/debug/alpha_evaluation.png',
+        names=['Adapted Rand error', 'Adapted Rand error precision'])
 
     # save_h5('./data/preds/timo_%s.h5' %version, 'pred', segmentation, 'w')
     # f = open('./data/preds/timo_seeds_%s.pkl' % version, mode='w`')
