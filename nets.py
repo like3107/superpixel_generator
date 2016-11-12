@@ -975,6 +975,7 @@ class NetBuilder:
                                                updates=updates)
                 print 'fc prec'
                 l_in_from_prec = las.layers.InputLayer((None, 64, 1, 1))
+                # disconnect graph temporarely
                 layers['l_merge'].input_layers[0] = l_in_from_prec
                 layers['l_merge'].input_shapes[0] = l_in_from_prec.output_shape
                 l_out_prediciton_prec = L.get_output(layers['l_out_cross'],
@@ -982,6 +983,10 @@ class NetBuilder:
                 probs_f = theano.function([layers['l_in_claims'].input_var,
                                            l_in_from_prec.input_var],
                                           l_out_prediciton_prec)
+
+                layers['l_merge'].input_layers[0] = layers['l_out_precomp']
+                layers['l_merge'].input_shapes[0] = \
+                    layers['l_out_precomp'].output_shape
             else:
                 loss_train_f = theano.function([layers['l_in_claims'].input_var,
                                                 layers['l_in_old'].input_var,

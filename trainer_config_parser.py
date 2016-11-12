@@ -1,13 +1,13 @@
 import configargparse
 
-def get_options():
+def get_options(script='training'):
     """
     config parser wrapper. Used to generate options object that can be 
     propagated throughout all member classes of the trainer class
     :param options:
     """
     p = configargparse.ArgParser(default_config_files=
-                                 ['./../data/config/training.conf'])
+                                 ['./../data/config/%s.conf' %script])
 
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
@@ -119,7 +119,7 @@ def get_options():
     if options.height_gt_path == "None":
         options.height_gt_path ='./../data/volumes/height_%s.h5' % options.train_version
 
-	options.save_net_path = './../data/nets/' + options.net_name + '/'
+    options.save_net_path = './../data/nets/' + options.net_name + '/'
     print 'saving files to ', options.net_name
     return options
 

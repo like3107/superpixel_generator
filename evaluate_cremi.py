@@ -67,7 +67,7 @@ def concat_pred_nq_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
 if __name__ == '__main__':
     processes = []
     q = Queue()
-    options = get_options()
+    options = get_options(script='validation')
     if options.global_edge_len > 0 and not options.quick_eval:
         for x in range(2):
             print "WARNING edge length is not set to 0. Are you sure ?"
