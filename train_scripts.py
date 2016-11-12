@@ -249,7 +249,8 @@ class FinePokemonTrainer(PokemonTrainer):
             self.update_BM()
             # if self.iterations % 100 == 0:
             #     self.draw_debug()
-            bar.update(self.free_voxel_empty - self.free_voxel)
+            if self.free_voxel % 100 == 0:
+                bar.update(self.free_voxel_empty - self.free_voxel)
             self.free_voxel -= 1
             self.iterations += 1
 
