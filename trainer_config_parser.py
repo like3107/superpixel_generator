@@ -69,7 +69,7 @@ def get_options():
     p.add('--reset-ft', dest='rs_ft', action='store_true')
     p.add('--reset_pretraining', dest='reset_pretraining', action='store_true')
     p.add('--margin', default=0.5, type=float)
-    p.add('--no-aug-ft', dest='augment_ft', action='store_false')
+    p.add('--aug-ft', dest='augment_ft', action='store_true')
     # experience replay
     # clip_method="exp20"
     p.add('--exp_bs', default=16, type=int)

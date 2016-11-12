@@ -540,7 +540,6 @@ class NetBuilder:
         names =     ['ft', 'ft', 'ft', 'ft']
         if l_claims_in is None:
             l_in = L.InputLayer((None, n_channels, fov, fov))
-            print "this should not happen"
         else:
             l_in = L.InputLayer(shape=(None, n_channels, fov, fov), input_var = l_claims_in)
         l_prev = l_in
@@ -944,8 +943,8 @@ class NetBuilder:
                                                          las.regularization.l1)
 
         # typeII - typeI + m
-        individual_batch = (l_out_train[bs/2:] - l_out_train[:bs/2] + margin)
-        loss_valid = T.mean(individual_batch)
+        individual_batch = T.maximum(margin, l_out_train[bs/2:] - l_out_train[:bs/2])
+        loss_valid = T.mean(individual_batch) + margin
         if L1_weight > 0:
             loss_train = loss_valid + L1_weight * L1_norm
 

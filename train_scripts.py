@@ -255,10 +255,15 @@ class FinePokemonTrainer(PokemonTrainer):
             self.iterations += 1
 
         self.bm.find_global_error_paths()
-        self.save_net()
-        if self.bm.count_new_path_errors() > 0:
+        while self.bm.count_available_errors() > 0:
             error_b_type1, error_b_type2, dir1, dir2 = \
                         self.bm.reconstruct_path_error_inputs()
+
+            if self.options.augment_ft:
+                error_b_type1, dir1 = du.augment_batch(error_b_type1, direction=dir1)
+                error_b_type2, dir2 = du.augment_batch(error_b_type2, direction=dir2)
+
+
             batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
             batch_dir_ft = exp.stack_batch(dir1, dir2)
 

@@ -637,6 +637,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  "large_gtid": claim_projection[center_x,
                                                 center_y],
                  "small_pos": [x, y],
+                 "used": False,
                  "small_direction": reverse_direction,
                  "small_gtid": claim_projection[x, y],
                  "small_id": self.global_claims[b, x, y],
@@ -1026,7 +1027,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
 
     def check_error(self, error):
-        return not 'used' in error
+        return error['used']
         # return not 'used' in error and error['e1_length'] > 5
 
     def reverse_direction(self, direction):
@@ -1036,6 +1037,20 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def count_new_path_errors(self):
         return len([v for v in self.global_error_dict.values()
                     if self.check_error(v)])
+
+    def get_unused_errors(self, min_length=1):
+        unused_keys = [k for k in self.global_error_dict.keys()\
+                         if not self.global_error_dict[k]['used']\
+                         and self.global_error_dict[k]['e1_length'] > min_length]
+        probs = np.array([self.global_error_dict[k]['e1_length'] for k in unused_keys], dtype='float32')
+
+        probs /= np.sum(probs)
+
+        return unused_keys, probs
+
+    def count_available_errors(self):
+        keys, _ = self.get_unused_errors()
+        return len(keys)
 
     def reconstruct_path_error_inputs(self, fc=False):
         error_I_timelist = []
@@ -1048,22 +1063,18 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_I_direction = []
         error_II_direction = []
         # take approx this many errors or all
-        n_batch_errors = 20
+        n_batch_errors = 100
         # filter error by length
         len_sorted = sorted(self.global_error_dict,\
                     key=lambda k: self.global_error_dict[k]['e1_length'])
 
-        probs = np.array([self.global_error_dict[k]['e1_length']\
-                         for k in self.global_error_dict.keys()],dtype=float)
-        probs /= np.sum(probs)
-        selection = np.random.choice(self.global_error_dict.keys(),
+        unused_keys, probs = self.get_unused_errors()
+
+        selection = np.random.choice(unused_keys,
                                          size=min(n_batch_errors,
                                                 len(probs)),
                                          p=probs,
                                          replace=False)
-
-        for k in self.global_error_dict:
-            self.global_error_dict[k]['used'] = False
 
         # debug
         self.error_II_type = []
@@ -1286,8 +1297,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  for e in self.global_error_dict.values() if e["batch"] == 0]
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
-                            # 'scatter':e2_pos,
-                            # 'scatter_color': e2_color,
+                            'scatter':e2_pos,
+                            'scatter_color': e2_color,
                             'im': claims,
                             'interpolation': 'none'})
 
@@ -1297,8 +1308,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         e1_color = ["g" if e["used"] else 'r'\
                  for e in self.global_error_dict.values() if e["batch"] == 0]
         plot_images.append({"title": "Ground Truth Label",
-                            # 'scatter': e1_pos,
-                            # 'scatter_color': e1_color,
+                            'scatter': e1_pos,
+                            'scatter_color': e1_color,
                             "cmap": "rand",
                             'im': self.global_label_batch[b, :, :],
                             'interpolation': 'none'})
@@ -1321,13 +1332,13 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_directionmap_batch[b, :, :],
                             'interpolation': 'none'})
 
-        # plot_images.append({"title": "Path Map",
-        #                     'scatter': np.array(
-        #                         [np.array(e["large_pos"]) - self.pad for e in
-        #                          self.global_error_dict.values() if
-        #                          e["batch"] == b]),
-        #                     'im': self.global_errormap[b, 2, :, :],
-        #                     'interpolation': 'none'})
+        plot_images.append({"title": "Path Map",
+                            'scatter': np.array(
+                                [np.array(e["large_pos"]) - self.pad for e in
+                                 self.global_error_dict.values() if
+                                 e["batch"] == b]),
+                            'im': self.global_errormap[b, 2, :, :],
+                            'interpolation': 'none'})
 
         timemap = np.array(self.global_timemap[b, self.pad:-self.pad,
                                                self.pad:-self.pad])

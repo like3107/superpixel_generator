@@ -366,10 +366,11 @@ def save_options(load_path, options):
     if len(options) > 0:
         with h5py.File(load_path, 'r+') as net_h5:
             for op_key, op_val in options:
-                if not op_val is None:
+                if not op_val is None and op_key != "theano":
                     if "options/"+op_key in net_h5:
                         net_h5.__delitem__("options/"+op_key)
-                    net_h5.create_dataset("options/"+op_key,data=op_val)
+                        print "sss",op_key,op_val
+                        net_h5.create_dataset("options/"+op_key,data=op_val)
 
 
 def print_options_for_net(options):
