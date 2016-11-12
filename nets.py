@@ -951,7 +951,9 @@ class NetBuilder:
         if L1_weight > 0:
             loss_train = loss_valid + L1_weight * L1_norm
 
-        updates = las.updates.adam(loss_train, all_params)
+        print "using nesterov_momentum"
+        # updates = las.updates.adam(loss_train, all_params)
+        updates = las.updates.nesterov_momentum(loss_train, all_params, 0.001)
 
         # theano funcs
         # precompute convs on raw till dense layer
