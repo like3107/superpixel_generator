@@ -67,7 +67,7 @@ class DataProvider(object):
 
         # assert (patch_len <= global_edge_len)
         assert (options.global_input_len <= self.rl_x)
-         (options.global_input_len <=  self.rl_y)
+        assert (options.global_input_len <=  self.rl_y)
 
     def set_slices(self, o):
         print o

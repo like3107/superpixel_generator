@@ -545,10 +545,10 @@ class NetBuilder:
             l_in = L.InputLayer(shape=(None, n_channels, fov, fov), input_var = l_claims_in)
         l_prev = l_in
         for filt, dil, n_filt, name in zip(filts, dils, n_filts, names):
-            # debug
             l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt,
                                                        dilation=(dil, dil)),
                                   name=name)
+            # debug
             # l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
             #                                            dilation=(dil, dil))
             l_prev = l_next

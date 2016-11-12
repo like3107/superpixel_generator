@@ -1,15 +1,20 @@
 import numpy as np
 import scipy.sparse as sparse
-import dataset_utils as du
+import data_provider as du
 
 
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
-                          pred_key=None, gt_key=None, slice_by_slice=True):
+                          pred_key=None, gt_key=None, slice_by_slice=True,
+                          offset_xy=0, gel=None, start_z=None, n_z=None):
     assert (gt_path != gt)  # specify either gt path or gt as np array
     assert (pred_path != pred)    # specify either raw path or raw as np array
 
     if isinstance(gt_path, str):
-        gt = du.load_h5(gt_path, h5_key=gt_key)[0]
+        if gel is None:
+            gel=1250
+        gt = du.load_h5(gt_path, h5_key=gt_key)[0][:,
+                                                   offset_xy:offset_xy+gel,
+                                                   offset_xy:offset_xy+gel]
     if isinstance(pred_path, str):
         pred = du.load_h5(pred_path, h5_key=pred_key)[0]
     print 'gt', gt.shape, 'pred', pred.shape
@@ -418,23 +423,21 @@ def make_val_dic(all_means, all_vars):
 
 
 
-
 if __name__ == '__main__':
     print   
     # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
-    pred_path='./data/preds/timo_first_repr_zstack.h5'
-    pred_path='./data/preds/tmp.h5'
-    pred_path='./data/preds/preds_first_repr_big_zstacknet_632000.h5'
+    # pred_path='./data/preds/timo_first_repr_zstack.h5'
+    # pred_path='./data/preds/tmp.h5'
+    pred_path='./../data/nets/pred_C_big/final.h5'
     # pred_path='./data/preds/random.h5'
     # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './data/volumes/label_first_repr_big_zstack_cut.h5'
+    gt_path = './../data/volumes/label_CREMI_test.h5'
 
-    print  'gt path'
+    print 'gt path'
     print pred_path
 
-    validate_segmentation(
-        pred_path=pred_path,
-        gt_path=gt_path,
-        slice_by_slice=True)
+    validate_segmentation(pred_path=pred_path,
+                          gt_path=gt_path,
+                          slice_by_slice=True)
 
 

@@ -99,6 +99,10 @@ def get_options():
     p.add('--dash_len', default=5, type=int)
     p.add('--hole_length', default=5, type=int)
 
+    # validation
+    p.add('--slices_total', type=int, default=10)
+    p.add('--start_chunk_z', type=int, default=100)
+
     options = p.parse_args()
 
     if options.input_data_path == "None":

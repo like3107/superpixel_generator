@@ -31,7 +31,12 @@ class Predictor(train_scripts.FinePokemonTrainer):
         self.options = copy(options)
         net_path = options.load_net_path
         # self.options.__dict__.clear()
-        u.load_options(net_path, self.options)
+        # u.load_options(net_path, self.options)
+        self.options = options
+        # debug temporary options
+        self.options.net_arch = 'v8_hydra_dilated_ft_joint'
+
+
         self.options.gpu = options.gpu
         self.options.slices = options.slices
         self.options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version

@@ -57,9 +57,12 @@ if __name__ == '__main__':
     time.sleep(1)
 
     # loop over slices
-    total_z_lenght = 50
+    total_z_lenght = options.slices_total
     assert(total_z_lenght % options.batch_size == 0)
-    gpus = ["gpu%i"%i for i in range(4)]
+    if options.gpu == 'single':
+        gpus = ['gpu0'] * 4
+    else:
+        gpus = ["gpu%i"%i for i in range(4)]
     if not os.path.exists(options.save_net_path):
         os.makedirs(options.save_net_path)
     
