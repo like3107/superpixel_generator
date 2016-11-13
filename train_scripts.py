@@ -224,7 +224,6 @@ class FinePokemonTrainer(PokemonTrainer):
         layers, self.options.patch_len, _ = network()
         self.l_out = layers['l_out_cross']
 
-        target_t = T.ftensor4()
         if self.options.load_net_b:
             np.random.seed(np.random.seed(int(time.time())))
             # change seed so different images for retrain
@@ -249,7 +248,8 @@ class FinePokemonTrainer(PokemonTrainer):
             self.update_BM()
             # if self.iterations % 100 == 0:
             #     self.draw_debug()
-            bar.update(self.free_voxel_empty - self.free_voxel)
+            if self.free_voxel % 100 == 0:
+                bar.update(self.free_voxel_empty - self.free_voxel)
             self.free_voxel -= 1
             self.iterations += 1
 
@@ -342,7 +342,7 @@ class SpeedyPokemonTrainer(FinePokemonTrainer):
 
 class FCFinePokemonTrainer(FinePokemonTrainer):
     def init_BM(self):
-        self.BM = du.HoneyBatcherPatchFast
+        self.BM = du.HoneyBatcherPath
         self.images_counter = -1
 
     def define_loss(self):
@@ -353,8 +353,8 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         c.use(self.options.gpu)
         layers, self.options.patch_len, _ = network()
         self.l_out = layers["l_out_cross"]
-        self.options.network_channels = layers['l_in_claims'].shape[1]
-        target_t = T.ftensor4()
+
+        # self.options.network_channels = layers['l_in_claims'].shape[1]
 
         if self.options.load_net_b:
             np.random.seed(np.random.seed(int(time.time())))
@@ -377,12 +377,13 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                                            seeds[:, 0] - self.bm.pad,
                                            seeds[:, 1] - self.bm.pad]
         precomp_input = precomp_input[:, :, None, None]
-        heights = self.prediction_f(claims, precomp_input)
+        heights = self.prediction_f(claims[:, :2], precomp_input)
         self.bm.update_priority_queue(heights, seeds, ids)
         return
 
     def train(self):
         self.bm.init_batch()
+        bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         inputs = self.update_BM_FC()
         # precompute fc part
         self.precomp_input = self.fc_prec_conv_body(inputs)
@@ -390,21 +391,17 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         while (self.free_voxel > 0):
             self.iterations += 1
             self.free_voxel -= 1
-
             self.update_BM()
+            # if self.iterations % self.observation_counter == 0:
+            #     self.draw_debug(reset=False)
 
-            if self.iterations % self.observation_counter == 0:
-                self.draw_debug(reset=False)
+            if self.free_voxel % 100 == 0:
+                bar.update(self.free_voxel_empty - self.free_voxel)
 
         self.bm.find_global_error_paths()
         if self.bm.count_new_path_errors() > 0:
             error_b_type1, error_b_type2, dir1, dir2, e_pos, batches = \
                 self.bm.reconstruct_path_error_inputs(fc=True)
-            precomp_input = self.precomp_input[batches, :,
-                                               e_pos[:, 0] - self.bm.pad,
-                                               e_pos[:, 1] - self.bm.pad]
-
-            precomp_input = precomp_input[:, :, None, None]
 
             batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
             batch_dir_ft = exp.stack_batch(dir1, dir2)
@@ -412,16 +409,11 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             batch_ft = exp.flatten_stack(batch_ft).astype(np.float32)
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
 
-            # heights = self.prediction_f(batch_ft, precomp_input, batch_dir_ft)
-            # batch_ft[...] = 0.
-
-            single_heights, cross_heighst = self.debug_singe_out(batch_ft,
-                                                                 precomp_input,
-                                                                 batch_dir_ft)
             ft_loss_train, individual_loss_fine, _, heights = \
-                self.loss_train_fine_f(batch_ft, precomp_input, batch_dir_ft)
-
-
+                    self.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:],
+                                           batch_dir_ft)
+            if np.any(individual_loss_fine <0):
+                print 'any', min(individual_loss_fine)
             print 'loss ft', ft_loss_train
             # print 'error type II ', self.bm.error_II_type
 
@@ -449,7 +441,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                 self.save_net_path + '/training_finetuning.png',
                 names=['loss finetuning'], log_scale=False)
 
-        if self.images_counter % 1 == 0:
+        if self.images_counter % 5 == 0:
             self.save_net()
             trainer.draw_debug(reset=True)
 
@@ -550,23 +542,24 @@ if __name__ == '__main__':
                   %(trainer.train(), trainer.iterations, trainer.free_voxel),
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
 
-    elif options.net_arch == 'v8_hydra_dilated_ft':
-
+    elif options.net_arch == 'v8_hydra_dilated_ft_joint':
+        options.fc_prec = True
         trainer = FCFinePokemonTrainer(options)
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
-    elif options.net_arch == 'v8_hydra_dilated_ft_joint':
-        # from pycallgraph import PyCallGraph
-        # from pycallgraph.output import GraphvizOutput
-        # with PyCallGraph(output=GraphvizOutput()):
-        # trainer = SpeedyPokemonTrainer(options)
-        trainer = FinePokemonTrainer(options)
-        while not trainer.converged():
-            trainer.train()
-            trainer.save_net()
 
+    # elif options.net_arch == 'v8_hydra_dilated_ft_joint':
+    #     # from pycallgraph import PyCallGraph
+    #     # from pycallgraph.output import GraphvizOutput
+    #     # with PyCallGraph(output=GraphvizOutput()):
+    #     # trainer = SpeedyPokemonTrainer(options)
+    #     trainer = FCFinePokemonTrainer(options)
+    #     while not trainer.converged():
+    #         trainer.train()
+    #         trainer.save_net()
+    print 'ende'
     # COLD WAR TEST 
 
     # trainer = StalinTrainer(options)
