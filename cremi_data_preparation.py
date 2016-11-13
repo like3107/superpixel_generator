@@ -28,8 +28,26 @@ if __name__ == '__main__':
     datasets = ["a","b","c"]
     # define slices here if you want to reduce the size of the dataset
     # None means all slices
-    dic_slices = {"test":{"a":slice(50),"b":slice(50),"c":slice(50)},
-                  "train":{"a":slice(50,125),"b":slice(50,125),"c":slice(50,125)}}
+
+    dataset_name = "noz_small"
+
+    if dataset_name == "noz_full":
+
+        dic_slices = {"test":{"a":slice(50),"b":slice(50),"c":slice(50)},
+                      "train":{"a":slice(50,125),"b":slice(50,125),"c":slice(50,125)}}
+        x_slice = slice(None)
+        y_slice = slice(None)
+
+    elif dataset_name == "noz_small":
+        fov = 68        # edge effects
+        gel = 400
+        gel += fov
+        dic_slices = {"test":{"a":slice(0,50,5),"b":slice(0,50,5),"c":slice(0,50,5)}}
+        x_slice = slice(fov,fov+gel)
+        y_slice = slice(fov,fov+gel)
+    else:
+        print "unknown dataset"
+        exit()
 
     for name,sl in dic_slices.items():
 
@@ -37,13 +55,13 @@ if __name__ == '__main__':
         for ds in datasets:
             with h5py.File(options.label_path%ds,"r") as f:
                 z_lenght = f[f.keys()[0]].shape[0]
-                y_lenght = f[f.keys()[0]].shape[1]
-                x_lenght = f[f.keys()[0]].shape[2]
+                y_lenght, x_lenght = f[f.keys()[0]][0,y_slice, x_slice].shape
                 total_z_lenght += len(range(z_lenght)[sl[ds]])
 
         print "creating dataset for ",total_z_lenght,"zslices"
 
         i = 0
+
         input_data = np.empty((total_z_lenght,2,y_lenght,x_lenght),
                                 dtype=np.float32)
         label_data = np.empty((total_z_lenght,y_lenght,x_lenght),
@@ -73,29 +91,33 @@ if __name__ == '__main__':
             gz = indexgetter(z_lenght)
             for z in range(z_lenght)[sl[ds]]:
                 for j in [0]:
-                    input_data[i,0+j] = raw[gz(z,j)]
-                    input_data[i,1+j] = membrane[gz(z,j)]
+                    input_data[i,0+j] = raw[gz(z,j),y_slice,x_slice]
+                    input_data[i,1+j] = membrane[gz(z,j),y_slice,x_slice]
 
-                label_data[i] = label[gz(z,0)]
+                label_data[i] = label[gz(z,0),y_slice,x_slice]
 
                 gx = convolve(label_data[i] + 1, np.array([-1., 0., 1.]).reshape(1, 3))
                 gy = convolve(label_data[i] + 1, np.array([-1., 0., 1.]).reshape(3, 1))
                 boundary_data[i] = np.float32((gx ** 2 + gy ** 2) > 0)
 
-                height_data[i] = height[gz(z,0)]
+                height_data[i] = height[gz(z,0),y_slice,x_slice]
                 i += 1
                 bar.update(i)
 
+
         print "writing data to files"
 
-        dp.save_h5(options.input_data_path+"label_CREMI_noz_%s.h5"%name,'data',
+        dp.save_h5(options.input_data_path+"label_CREMI_%s_%s.h5"%(dataset_name,name),'data',
                          data=label_data, overwrite='w')
 
-        dp.save_h5(options.input_data_path+"input_CREMI_noz_%s.h5"%name,'data',
+        dp.save_h5(options.input_data_path+"input_CREMI_%s_%s.h5"%(dataset_name,name),'data',
                          data=input_data, overwrite='w')
 
-        dp.save_h5(options.input_data_path+"height_CREMI_noz_%s.h5"%name,'data',
+        dp.save_h5(options.input_data_path+"height_CREMI_%s_%s.h5"%(dataset_name,name),'data',
                          data=height_data, overwrite='w')
 
-        dp.save_h5(options.input_data_path+"boundary_CREMI_noz_%s.h5"%name,'data',
+        dp.save_h5(options.input_data_path+"boundary_CREMI_%s_%s.h5"%(dataset_name,name),'data',
+                         data=boundary_data, overwrite='w')
+
+        dp.save_h5(options.input_data_path+"boundary_CREMI_%s_%s.h5"%(dataset_name,name),'data',
                          data=boundary_data, overwrite='w')
