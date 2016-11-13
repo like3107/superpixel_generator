@@ -52,7 +52,6 @@ class PokemonTrainer(object):
         network = self.builder.get_net(self.options.net_arch)
         l_in, l_in_direction, self.l_out, l_out_direction,\
                  self.options.patch_len, l_eat = network()
-        self.l_out = l_out
         self.options.network_channels = l_in.shape[1]
         target_t = T.ftensor4()
         self.loss_train_f, loss_valid_f, self.prediction_f = \
@@ -62,7 +61,7 @@ class PokemonTrainer(object):
             np.random.seed(np.random.seed(int(time.time())))
             # change seed so different images for retrain
             print "loading network parameters from ", self.options.load_net_path
-            u.load_network(self.options.load_net_path, l_out)
+            u.load_network(self.options.load_net_path, self.l_out)
 
     def init_BM(self):
         self.BM = du.HoneyBatcherPath
