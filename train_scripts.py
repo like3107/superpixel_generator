@@ -541,8 +541,6 @@ class WayToVertania(GottaCatchemAllTrainer):
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
 
         ind_b, ind_x, ind_y = self.bm.rois
-        ind_x -= self.bm.pad
-        ind_y -= self.bm.pad
         target_shape = list(self.bm.global_height_gt_batch.shape)
         target_shape.insert(1,5)
         target = np.empty((target_shape), dtype='float32')
@@ -559,11 +557,39 @@ class WayToVertania(GottaCatchemAllTrainer):
         self.bm.global_target = target
         return inputs, None, target
 
-    def predict(self):
-        inputs, _, target = self.update_BM()
-        pred = self.prediction_f(inputs)
+    def train(self):
+        self.iterations += 1
+        inputs, _, heights = self.update_BM()
 
-        directions = np.argmax(pred, axis=1)
+        height_pred = self.prediction_f(inputs)
+        # this is intensive surgery to the BM
+
+        self.bm.global_prediction_map_FC = height_pred
+
+        if self.iterations % self.observation_counter == 0:
+            trainer.unionFindLabel(height_pred)
+            trainer.draw_debug(reset=True)
+
+        loss_train, individual_loss, _ = self.loss_train_f(inputs, heights)
+        loss_no_reg = np.mean(individual_loss)
+
+        if self.iterations % 100 == 0:
+            self.save_net()
+
+        # update parameters once
+        self.update_history.append(self.iterations)
+        self.loss_history[0].append(loss_train)
+        self.loss_history[1].append(loss_no_reg)
+        u.plot_train_val_errors(
+            [self.loss_history[0], self.loss_history[1]],
+            self.update_history,
+            self.save_net_path + '/training.png',
+            names=['loss', 'loss no reg'], log_scale=False)
+        return loss_train
+
+    def unionFindLabel(self, prediction):
+
+        directions = np.argmax(prediction, axis=1)
         # run unionFind
         shape = directions.shape
         labels = np.zeros_like(directions)
@@ -609,14 +635,14 @@ class WayToVertania(GottaCatchemAllTrainer):
         print labels.shape
         self.bm.global_claims[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad] = labels
         # self.bm.global_label_batch[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad] = self.bm.global_label_batch[:,:-2*self.bm.pad,:-2*self.bm.pad]
-        self.bm.draw_debug_image("prediciton.png",path=self.image_path_reset, b=0)
+        # self.bm.draw_debug_image("prediciton.png",path=self.image_path_reset, b=0)
 
-        with h5py.File("direction_out.h5", 'w') as out:
-            out.create_dataset("directions",data=directions)
-            out.create_dataset("pred",data=pred)
-            out.create_dataset("target",data=target)
-            out.create_dataset("inputs",data=inputs)
-            out.create_dataset("labels",data=labels)
+        # with h5py.File("direction_out.h5", 'w') as out:
+        #     out.create_dataset("directions",data=directions)
+        #     out.create_dataset("prediction",data=prediction)
+        #     out.create_dataset("target",data=target)
+        #     out.create_dataset("inputs",data=inputs)
+        #     out.create_dataset("labels",data=labels)
 
                     
 
@@ -628,9 +654,7 @@ if __name__ == '__main__':
     if options.net_arch == 'v8_hydra_dilated':
         trainer = WayToVertania(options)
         while not trainer.converged():
-            print "predicting"
-            trainer.predict()
-            exit()
+            trainer.train()
             print "\r pretrain %0.4f iteration %i free voxel %i" \
                   %(trainer.train(), trainer.iterations, trainer.free_voxel),
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
