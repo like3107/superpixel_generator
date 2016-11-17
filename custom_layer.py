@@ -18,6 +18,11 @@ class SliceLayer(lasagne.layers.Layer):
     def get_output_shape_for(self, input_shape):
         return (input_shape[0], 1, 3, 3)
 
+class FCSoftmax(las.layers.NonlinearityLayer):
+	def get_output_for(self, input, **kwargs):
+		exp = T.exp(input - T.max(input, axis=1, keepdims=True))
+		return exp / T.sum(exp, axis=1, keepdims=True)
+		# return T.nnet.nnet.softmax(input)
 
 class BatchChannelSlicer(las.layers.MergeLayer):
     """

@@ -6,6 +6,8 @@ from lasagne import layers as L
 import custom_layer as cs
 import utils as u
 
+def flatten_c(x, n_classes, axis=1):
+    return x.swapaxes(0,axis).reshape((n_classes, -1))
 
 class NetBuilder:
     def __init__(self, options=None):
@@ -379,23 +381,24 @@ class NetBuilder:
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
 
-    def build_net_v8_dilated(self, l_image_in=None):
+    def build_net_v8_dilated(self, l_image_in=None, n_classes = 5):
         n_channels = self.options.network_channels
         if n_channels is None:
             n_channels = 1
         fov = None
-        n_classes = 4
         filts =         [4,     3,      3,      3,      3,      3,      3,      1,      1]
         dils  =         [1,     1,      2,      4,      8,      16,     1,      1,      1]
         n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048, n_classes]
         # debug
         batch_norms =   [True, True,   True,   True,   True,   True,   True,   False,   False]
-        regs        =   [True, True,   True,   True,   True,   True,   True,   True,   False]
+        regs        =   [True, True,   True,   True,   True,   True,   True,   True,   True]
         # batch_norms = [False] * len(n_filt)
         ELU = las.nonlinearities.elu
         ReLU = las.nonlinearities.rectify
-        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU,   ReLU]
-        names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc','fc']
+        SoftMax = las.nonlinearities.softmax
+
+        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU,   SoftMax]
+        names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc','softmax']
 
         if l_image_in is None:
             l_in = L.InputLayer((None, n_channels, fov, fov))
@@ -408,26 +411,39 @@ class NetBuilder:
                 zip(filts, dils, n_filts, batch_norms, act_fcts, regs, names):
             i += 1
             l_seconds_last = l_prev
-            if batch_norm:
-                l_next = L.batch_norm(
-                    L.DilatedConv2DLayer(l_prev, n_filt, filt,
-                                         dilation=(dil, dil), name=name,
-                                         nonlinearity=act_fct))
+
+            if name == 'softmax':
+                l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
+                             dilation=(dil, dil), name=name,
+                             nonlinearity=None)
+
+                l_next = cs.FCSoftmax(l_next)
+                # print dir(l_prev)
+                # print l_prev.output_shape
+                # l_next = L.ReshapeLayer(l_next, ((-1, n_classes)))
+                # l_next = L.NonlinearityLayer(l_next, nonlinearity=SoftMax)
+                # l_next = L.ReshapeLayer(l_next, (l_prev.get_output_shape()))
+
             else:
                 l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
-                                              dilation=(dil, dil), name=name,
-                                              nonlinearity=act_fct)
+                                         dilation=(dil, dil), name=name,
+                                         nonlinearity=act_fct)
+        
+            if batch_norm:
+                l_next = L.batch_norm(l_next)
+
             if not reg:
                 l_next.params[l_next.W].remove('regularizable')
             l_prev = l_next
+
         fov = 68
 
         return l_in, (l_prev, l_seconds_last), fov
 
-    def build_net_v8_dilated_ft(self):
+    def build_net_v8_dilated_ft(self, n_classes = 5):
 
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
-            self.build_v8_hydra_dilated()
+            self.build_v8_hydra_dilated(n_classes=n_classes)
 
         u.load_network(self.options.load_init_net_path, l_out_old)
         # get pointer to last conv layer
@@ -444,7 +460,6 @@ class NetBuilder:
 
         n_channels = 2
 
-        n_classes = 4
         fov = None
         filts =     [4, 3, 3, 8]
         dils =      [4, 8, 16, 1]
@@ -513,10 +528,11 @@ class NetBuilder:
 
 
     def build_net_v8_hydra_dilated_ft_joint(self, l_image_in = None,
-                                            l_claims_in = None):
+                                            l_claims_in = None, n_classes = 5):
         print 'building joint net'
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
-            self.build_v8_hydra_dilated(l_image_in = l_image_in)
+            self.build_v8_hydra_dilated(l_image_in = l_image_in,
+                                        n_classes = n_classes)
 
         u.load_network(self.options.load_init_net_path, l_out_old)
         # get pointer to last conv layer
@@ -533,7 +549,6 @@ class NetBuilder:
 
         n_channels = 2
 
-        n_classes = 4
         fov = None
         filts =     [4, 3, 3, 8]
         dils =      [4, 8, 16, 1]
@@ -789,6 +804,41 @@ class NetBuilder:
                 las.regularization.l1)
 
         loss_individual_batch = (l_out_train - target)**2
+
+        loss_train = T.mean(loss_individual_batch)
+        if L1_weight > 0:
+            loss_train += L1_weight * L1_norm
+        loss_valid = T.mean(loss_individual_batch)
+        if update == 'adam':
+            updates = las.updates.adam(loss_train, all_params)
+        if update == 'sgd':
+            updates = las.updates.sgd(loss_train, all_params, 0.0001)
+        loss_train_f = theano.function([l_in.input_var, target],
+                                       [loss_train, loss_individual_batch,
+                                        l_out_train],
+                                       updates=updates)
+
+        loss_valid_f = theano.function([l_in.input_var, target], loss_valid)
+        probs_f = theano.function([l_in.input_var], l_out_valid)
+
+        return loss_train_f, loss_valid_f, probs_f
+
+    def loss_updates_direction(self, l_in, target, last_layer, L1_weight=10**-5,
+                              update='adam'):
+
+        n_classes = 5
+
+        all_params = L.get_all_params(last_layer, trainable=True)
+
+        l_out_train = L.get_output(last_layer, deterministic=False)
+        l_out_valid = L.get_output(last_layer, deterministic=True)
+
+        L1_norm = las.regularization.regularize_network_params(
+                last_layer,
+                las.regularization.l1)
+
+        loss_individual_batch = las.objectives.categorical_crossentropy(
+                flatten_c(l_out_train, n_classes) ,flatten_c(target, n_classes))
 
         loss_train = T.mean(loss_individual_batch)
         if L1_weight > 0:

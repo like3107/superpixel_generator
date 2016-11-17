@@ -93,7 +93,7 @@ def get_options(script='training'):
     p.add('--membrane_path', default="None", type=str)
     p.add('--label_path', default="None", type=str)
     p.add('--height_gt_path', default="None", type=str)
-
+    p.add('--target_data_path', default="None", type=str)
     # dataprovider
 
     # polygon

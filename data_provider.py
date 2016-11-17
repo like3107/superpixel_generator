@@ -150,8 +150,8 @@ class DataProvider(object):
         if self.options.global_edge_len > 0:
             ind_b, ind_x, ind_y = rois
             if not self.options.padding_b:
-                ind_x += self.options.patch_len / 2
-                ind_y += self.options.patch_len / 2
+                ind_x = ind_x + self.options.patch_len / 2
+                ind_y = ind_y + self.options.patch_len / 2
             for b in range(self.bs):
                 label_inp_len = \
                     self.options.global_input_len - self.options.patch_len
@@ -258,6 +258,37 @@ class CremiDataProvider(DataProvider):
                 gt_id_map[s] = i+1
             segmentation[b] = gt_id_map[segmentation[b]]
         return segmentation != label_batch
+
+# class DirectionCremiDataProvider(CremiDataProvider):
+#     def prepare_label_batch(self, label, height, rois):
+
+#         if self.options.global_edge_len > 0:
+#             ind_b, ind_x, ind_y = rois
+#             if not self.options.padding_b:
+#                 ind_x += self.options.patch_len / 2
+#                 ind_y += self.options.patch_len / 2
+#             for b in range(self.bs):
+#                 label_inp_len = \
+#                     self.options.global_input_len - self.options.patch_len
+
+#                 height[b, :, :] = \
+#                     self.height_gt[ind_b[b],
+#                        ind_x[b]:ind_x[b] + label_inp_len,
+#                        ind_y[b]:ind_y[b] + label_inp_len]
+#                 label[b, :, :] = \
+#                     self.label[ind_b[b],
+#                         ind_x[b]:ind_x[b] + label_inp_len,
+#                         ind_y[b]:ind_y[b] + label_inp_len]
+#         else:
+#             for b in range(self.bs):
+#                 if self.options.padding_b:
+#                     label[b] = self.label[b,:,:]
+#                     height[b] = self.height_gt[b,:,:]
+#                 else:
+#                     label[b] = self.label[b, self.pad:-self.pad,
+#                                              self.pad:-self.pad]
+#                     height[b] = self.height_gt[b,self.pad:-self.pad,
+#                                                  self.pad:-self.pad]
 
 class PolygonDataProvider(DataProvider):
     def __init__(self, options):

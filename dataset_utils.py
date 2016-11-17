@@ -74,6 +74,7 @@ class HoneyBatcherPredict(object):
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
         self.priority_queue = None
+        
         self.coordinate_offset = np.array([[-1,0],[0,-1],[1,0],[0,1]],dtype=np.int)
         self.direction_array = np.arange(4)
         self.error_indicator_pass = np.zeros((self.bs))
@@ -167,9 +168,11 @@ class HoneyBatcherPredict(object):
         return height
 
     def prepare_global_batch(self):
-        return self.batch_data_provider.prepare_input_batch(\
+        rois = self.batch_data_provider.prepare_input_batch(\
                                     self.global_input_batch,
                                     preselect_batches=self.preselect_batches)
+        self.rois = rois
+        return rois
 
     def set_preselect_batches(self, batches):
         assert(self.bs == len(batches))
@@ -425,9 +428,15 @@ class HoneyBatcherPredict(object):
                                 'im': self.global_heightmap_batch[b, :, :],
                                 'interpolation': 'none'})
         if self.global_prediction_map_FC is not None:
-            for i in range(self.bs):
+            for i in range(self.global_prediction_map_FC.shape[1]):
                 plot_images.append({"title": "Heightmap Prediciton %i" %i,
                                 'im': self.global_prediction_map_FC[b, i, :, :],
+                                'interpolation': 'none',
+                                'cmap':'gray'})
+        if not self.global_target is None:
+            for i in range(self.global_target.shape[1]):
+                plot_images.append({"title": "Target %i" %i,
+                                'im': self.global_target[b, i, :, :],
                                 'interpolation': 'none',
                                 'cmap':'gray'})
         if not inherite_code:
@@ -487,6 +496,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def prepare_global_batch(self):
         rois = super(HoneyBatcherPath, self).prepare_global_batch()
+
         self.batch_data_provider.prepare_label_batch(self.global_label_batch,
                                                      self.global_height_gt_batch,
                                                      rois)
