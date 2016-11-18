@@ -220,7 +220,8 @@ class FusionPokemonTrainer(PokemonTrainer):
 
 class FinePokemonTrainer(PokemonTrainer):
     def init_BM(self):
-        self.BM = du.HoneyBatcherPath
+    	print "using edge based prediction method"
+        self.BM = du.HoneyBatcherE
 
     def define_loss(self):
         self.loss = self.builder.get_loss('updates_hydra_v8')
@@ -347,7 +348,8 @@ class SpeedyPokemonTrainer(FinePokemonTrainer):
 class FCFinePokemonTrainer(FinePokemonTrainer):
 
     def init_BM(self):
-        self.BM = du.HoneyBatcherPath
+    	print "using edge based prediction"
+        self.BM = du.HoneyBatcherE
         self.images_counter = -1
 
     def define_loss(self):

@@ -1317,7 +1317,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             plt.close(f)
 
 
-class HoneyBatchergE(HoneyBatcherPath):
+class HoneyBatcherE(HoneyBatcherPath):
     def get_plateau_indicator(self):
         return self.global_prediction_map_nq  > 0
 
@@ -1341,6 +1341,14 @@ class HoneyBatchergE(HoneyBatcherPath):
             self.max_new_old_pq_update(b, cross_x, cross_y, height+lower_bound,
                                         lower_bound, Id, cross_d, center,
                                            input_time=self.global_time)
+
+class HoneyBatcherBatcher(HoneyBatcherPath):
+    """
+    batch control class that propagates hidden states along the minimal spanning tree
+    """
+    def __init__(self, options):
+        super(HoneyBatcherPath, self).__init__(options)
+        self.global_hidden_states = None
 
 class HoneyBatcherPatchFast(HoneyBatcherPath):
     def __init__(self, options):
