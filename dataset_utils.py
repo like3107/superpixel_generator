@@ -364,6 +364,7 @@ class HoneyBatcherPredict(object):
             if il:
                 self.priority_queue[b].put((hj, np.random.random(), cx, cy, Id, cd, self.error_indicator_pass[b],
                                             input_time))
+
     def check_is_lowest(self, b, heights, x, y, add_all):
         return ((heights < self.global_heightmap_batch[b, x - self.pad, y - self.pad]) | add_all )\
                         & (self.global_claims[b, x, y] == 0)
@@ -770,6 +771,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             pos2 = np.array(self.global_error_dict[k]['e2_pos']) - self.pad
             if self.hard_regions[batch,pos1[0],pos1[1]] or self.hard_regions[batch,pos2[0],pos2[1]]:
                 self.global_error_dict[k]['importance'] *= 1000
+
+    def get_plateau_indicator(self):
+        return self.global_prediction_map_nq  < self.global_prediction_map
 
     def find_global_error_paths(self):
         print 'searching for hard regions'
@@ -1312,6 +1316,31 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
 
+
+class HoneyBatchergE(HoneyBatcherPath):
+    def get_plateau_indicator(self):
+        return self.global_prediction_map_nq  > 0
+
+    def update_priority_queue(self, heights_batch, centers, ids):
+        for b, center, Id, height in zip(range(self.bs), centers, ids,
+                                          heights_batch[:, :, 0, 0]):
+            # if possibly wrong
+            cross_x, cross_y, cross_d = self.get_cross_coords(center)
+            lower_bound = self.global_heightmap_batch[b,
+                                                      center[0] - self.pad,
+                                                      center[1] - self.pad] + \
+                                                      self.lowercomplete_e
+            if lower_bound == np.inf:
+                print "encountered inf for prediction center !!!!", \
+                    b, center, Id, height, lower_bound
+                raise Exception('encountered inf for prediction center')
+            # debug
+            self.global_prediction_map_nq[
+                b, center[0] - self.pad, center[1] - self.pad, :] = \
+                height
+            self.max_new_old_pq_update(b, cross_x, cross_y, height+lower_bound,
+                                        lower_bound, Id, cross_d, center,
+                                           input_time=self.global_time)
 
 class HoneyBatcherPatchFast(HoneyBatcherPath):
     def __init__(self, options):
