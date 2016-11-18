@@ -78,6 +78,7 @@ class HoneyBatcherPredict(object):
         self.direction_array = np.arange(4)
         self.error_indicator_pass = np.zeros((self.bs))
         self.global_time = 0
+        self.edge_map_gt = None
         self.global_prediction_map_FC = None
         self.preselect_batches = None
         self.hard_regions = None
@@ -428,6 +429,13 @@ class HoneyBatcherPredict(object):
             for i in range(self.bs):
                 plot_images.append({"title": "Heightmap Prediciton %i" %i,
                                 'im': self.global_prediction_map_FC[b, i, :, :],
+                                'interpolation': 'none',
+                                'cmap':'gray'})
+
+        if self.edge_map_gt is not None:
+            for i in range(4):
+                plot_images.append({"title": "Edge Map %i" %i,
+                                'im': self.edge_map_gt[b, i, :, :],
                                 'interpolation': 'none',
                                 'cmap':'gray'})
         if not inherite_code:
@@ -1105,6 +1113,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.e1heights = []
         self.e2heights = []
         self.all_errorsq = []
+        self.err_lens = []
 
         for k in selection:
 
@@ -1126,6 +1135,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             error_II_id_list.append(error["small_id"])
             # debug
             self.error_II_type.append(error["slow_intruder"])
+            self.err_lens.append(error['e1_length'])
 
             # debug
             e_height_pos = error["e1_pos"]
@@ -1534,6 +1544,7 @@ class HoneyBatcherPatchFast(HoneyBatcherPath):
     def __init__(self, options):
         super(HoneyBatcherPatchFast, self).__init__(options)
         self.n_channels = 2
+        self.edge_map_gt = None
     def get_network_input(self, center, b, Id, out):
         self.crop_mask_claimed(center, b, Id, out=out[0:2])
         return out
@@ -1734,6 +1745,31 @@ def height_to_fc_height_gt(height):
     fc_height[:, 3, :, :-1] = height[:, :, 1:]
     fc_height[:, 3, :, -1] = height[:, :, -1]
     return fc_height
+
+def height_to_fc_edge_gt(height):
+    edge_height_shape = list(height.shape)
+    edge_height_shape.insert(1, 4)
+    global_edges = np.zeros((edge_height_shape), dtype='float32')
+    # cross_coords = [[-1, 0], [0, -1], [1, 0], [0, 1]] top, left, bottom, right
+    # top
+    edges = height[:, :-1, :] - height[:, 1:, :]
+    global_edges[:, 0, 1:, :] = edges
+    global_edges[:, 0, 0, :] = 0.
+    # left
+    edges = height[:, :, :-1] - height[:, :, 1:]
+    global_edges[:, 1, :, 1:] = edges
+    global_edges[:, 1, :, 0] = 0
+    # bottom
+    edges = height[:, 1:, :] - height[:, :-1, :]
+    global_edges[:, 2, :-1, :] = edges
+    global_edges[:, 2, -1, :] = 0
+    # right
+    edges = height[:, :, 1:] - height[:, :, :-1]
+    global_edges[:, 3, :, :-1] = edges
+    global_edges[:, 3, :, -1] = 0
+    np.absolute(global_edges, global_edges)
+    return global_edges
+
 
 class HoneyBatcherGonzales(HoneyBatcherPath):
     def __init__(self, options):
