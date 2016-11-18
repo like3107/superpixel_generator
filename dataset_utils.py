@@ -390,6 +390,7 @@ class HoneyBatcherPredict(object):
                                             Id, cd,
                                             self.error_indicator_pass[b],
                                             input_time))
+
     def check_is_lowest(self, b, heights, x, y, add_all):
         return ((heights < self.global_heightmap_batch[b,
                                            x - self.pad,
@@ -844,13 +845,16 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                self.hard_regions[batch,pos2[0],pos2[1]]:
                 self.global_error_dict[k]['importance'] *= 1000
 
+    def get_plateau_indicator(self):
+        return self.global_prediction_map_nq  < self.global_prediction_map
+
     def find_global_error_paths(self):
         print 'searching for hard regions'
         self.find_hard_regions()
         self.locate_global_error_path_intersections()
         # now errors have been found so start and end of paths shall be found
-        self.global_plateau_indicator = \
-            self.global_prediction_map_nq  < self.global_prediction_map
+        self.global_plateau_indicator = self.get_plateau_indicator()
+
         self.find_type_I_error()
         self.find_source_of_II_error()
         self.weitght_importance_by_hard_regions()
@@ -1529,6 +1533,31 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             f.savefig(path + image_name + '_e%07d' % nume, dpi=200)
             plt.close(f)
 
+
+class HoneyBatchergE(HoneyBatcherPath):
+    def get_plateau_indicator(self):
+        return self.global_prediction_map_nq  > 0
+
+    def update_priority_queue(self, heights_batch, centers, ids):
+        for b, center, Id, height in zip(range(self.bs), centers, ids,
+                                          heights_batch[:, :, 0, 0]):
+            # if possibly wrong
+            cross_x, cross_y, cross_d = self.get_cross_coords(center)
+            lower_bound = self.global_heightmap_batch[b,
+                                                      center[0] - self.pad,
+                                                      center[1] - self.pad] + \
+                                                      self.lowercomplete_e
+            if lower_bound == np.inf:
+                print "encountered inf for prediction center !!!!", \
+                    b, center, Id, height, lower_bound
+                raise Exception('encountered inf for prediction center')
+            # debug
+            self.global_prediction_map_nq[
+                b, center[0] - self.pad, center[1] - self.pad, :] = \
+                height
+            self.max_new_old_pq_update(b, cross_x, cross_y, height+lower_bound,
+                                        lower_bound, Id, cross_d, center,
+                                           input_time=self.global_time)
 
 class HoneyBatcherPatchFast(HoneyBatcherPath):
     def __init__(self, options):
