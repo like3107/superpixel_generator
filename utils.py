@@ -9,6 +9,8 @@ import sys
 import h5py
 import data_provider as dp
 
+matplotlib.rcParams.update({'font.size': 8})
+
 np.random.seed(1236)
 fixed_rand = np.random.rand(256, 3)
 import multiprocessing
