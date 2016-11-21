@@ -1330,6 +1330,8 @@ class HoneyBatcherE(HoneyBatcherPath):
                                                       center[0] - self.pad,
                                                       center[1] - self.pad] + \
                                                       self.lowercomplete_e
+            if lower_bound < 0:
+                lower_bound = 0
             if lower_bound == np.inf:
                 print "encountered inf for prediction center !!!!", \
                     b, center, Id, height, lower_bound
