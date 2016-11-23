@@ -64,19 +64,20 @@ class NetBuilder:
             n_channels = 1
         fov = None
         n_classes = 4
-        filts =         [4,     3,      3,      3,      3,      3,      3,      1,      1]
-        dils  =         [1,     1,      2,      4,      8,      16,     1,      1,      1]
-        n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048, n_classes]
+        filts =         [4,     3,      3,      3,      3,      3,      3,      1,      1,      1]
+        dils  =         [1,     1,      2,      4,      8,      16,     1,      1,      1,      1]
+        n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048,     128,    n_classes]
         # debug
-        batch_norms =   [True, True,   True,   True,   True,   True,   True,   False,   False]
-        regs        =   [True, True,   True,   True,   True,   True,   True,   True,   False]
+        batch_norms =   [True, True,   True,   True,   True,   True,   True,   False,  False,   False]
+        regs        =   [True, True,   True,   True,   True,   True,   True,   True,   True,    False]
         # batch_norms = [False] * len(n_filt)
         ELU = las.nonlinearities.elu
         ReLU = las.nonlinearities.rectify
         ident = las.nonlinearities.identity
-        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU,   cs.elup1]
-        names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc','fc']
-
+        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU, ReLU,   ReLU]
+        names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc', 'fc', 'fc']
+        assert(len(filts) == len(dils) and len(filts) == len(batch_norms) and len(filts) == len(regs) and
+               len(filts) == len(n_filts) and len(names) == len(act_fcts) and len(filts) == len(names))
         if l_image_in is None:
             l_in = L.InputLayer((None, n_channels, fov, fov))
         else:
@@ -90,12 +91,9 @@ class NetBuilder:
             l_seconds_last = l_prev
             if batch_norm:
                 l_next = L.batch_norm(
-                    L.DilatedConv2DLayer(l_prev, n_filt, filt,
-                                         dilation=(dil, dil), name=name,
-                                         nonlinearity=act_fct))
+                    L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), name=name, nonlinearity=act_fct))
             else:
-                l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt,
-                                              dilation=(dil, dil), name=name,
+                l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), name=name,
                                               nonlinearity=act_fct)
             if not reg:
                 l_next.params[l_next.W].remove('regularizable')
@@ -208,7 +206,6 @@ class NetBuilder:
         l_in_hid = las.layers.InputLayer((None, 10))
         l_recurrent = las.layers.RecurrentLayer(l_resh, 10, hid_init=l_in_hid)
 
-
         out = las.layers.get_output(l_conv)
         out_conv_f = theano.function([l_in_inp.input_var], out)
 
@@ -221,11 +218,10 @@ class NetBuilder:
     def build_net_v8_hydra_dilated_ft_joint(self, l_image_in = None,
                                             l_claims_in = None):
         self.sequ_len_s = T.iscalar()
-        print 'building joint net'
+        print 'building recurrent joint net'
         l_in_old, l_in_direction, l_out_old, l_out_direction, _, _ =\
             self.build_v8_hydra_dilated(l_image_in = l_image_in)
-        # TODO: debug
-        # u.load_network(self.options.load_init_net_path, l_out_old)
+        u.load_network(self.options.load_init_net_path, l_out_old)
         # get pointer to last conv layer
         l_out_precomp = l_out_old
         while 'conv' not in l_out_precomp.name:
@@ -269,65 +265,42 @@ class NetBuilder:
         W[:, :-64, 0, 0] = np.array(first_fc.W.eval()).swapaxes(0, 1)[:, :, 0, 0]
         W = theano.shared(W)
 
-        fc_1 = las.layers.Conv2DLayer(l_merge, 2048, filter_size=1,
-                                       name='fc', W=W, b=first_fc.b,
+        fc_1 = las.layers.Conv2DLayer(l_merge, 2048, filter_size=1, name='fc', W=W, b=first_fc.b,
                                       nonlinearity=las.nonlinearities.rectify)
 
-        # fc_2 = las.layers.Conv2DLayer(l_merge, 128, filter_size=1,
-        #                                name='fc', W=W, b=first_fc.b,
-        #                               nonlinearity=las.nonlinearities.rectify)
-
+        # recurrent part
         l_resh_pred = las.layers.ReshapeLayer(fc_1, (-1, self.sequ_len_s, 2048))
-        l_in_hid = las.layers.InputLayer((None, 128))
-        l_recurrent = las.layers.RecurrentLayer(l_resh_pred, 128,
-                                                hid_init=l_in_hid)
+        rec_hidden = self.options.n_recurrent_hidden
+        l_in_hid = las.layers.InputLayer((None, rec_hidden))
+        l_in_rec_mask = las.layers.InputLayer((None, self.options.backtrace_length))
+        W_hid_to_hid = np.random.random((128, 128)).astype('float32') / 10000.
+        l_recurrent = las.layers.RecurrentLayer(l_resh_pred, rec_hidden,
+                                                hid_init=l_in_hid, mask_input=l_in_rec_mask,
+                                                W_in_to_hid=l_out_old.input_layer.W[:, :, 0, 0],
+                                                W_hid_to_hid=W_hid_to_hid,
+                                                b=l_out_old.input_layer.b)
+        l_reshape_fc = las.layers.ReshapeLayer(l_recurrent, (-1, rec_hidden, 1, 1))
 
-        l_reshape_fc = las.layers.ReshapeLayer(l_recurrent, (-1, 128, 1, 1))
-        l_out_cross = las.layers.Conv2DLayer(
-                                l_reshape_fc, 4, filter_size=1,
-                                name='fc',
-                                # W=l_out_old.W.dimshuffle(1,0,2,3),
-                                # b=l_out_old.b,
-                                nonlinearity=las.nonlinearities.identity)
-
+        # last layer
+        l_out_cross = las.layers.Conv2DLayer(l_reshape_fc, 4, filter_size=1, name='fc',
+                                             W=l_out_old.W.dimshuffle(1,0,2,3), b=l_out_old.b,
+                                             nonlinearity=las.nonlinearities.rectify)
         l_out_cross.params[l_out_cross.W].remove('regularizable')
         layers = {}
         layers['l_in_claims'] = l_in
+        layers['l_in_rec_mask'] = l_in_rec_mask
         layers['l_in_precomp'] = l_in_old
         layers['l_in_hid'] = l_in_hid
+        layers['l_recurrent'] = l_recurrent
         layers['l_reshape'] = l_resh_pred
-
-        # layers['l_in_dense'] = l_in_dense
         layers['l_in_old'] = l_in_old
         layers['l_out_cross'] = l_out_cross
         layers['l_out_precomp'] = l_out_precomp
         layers['l_claims_out'] = l_claims_out
         layers['l_merge'] = l_merge
 
-        # print 'b new', l_out_cross.b.shape.eval()
-        # print 'W new', l_out_cross.W.shape.eval()
-        #
-        # print 'b old', first_fc.b.eval()
-        # print 'old out', first_fc.W.shape.eval()
-        # print 'old out', first_fc.output_shape
-        #
-        # print 'lout', l_out_old.W.shape.eval()
-        # print 'lout', l_out_old.b.shape.eval()
-        # print 'lout', l_out_old.output_shape
-
-        # print 'l_prev', l_prev.output_shape
-        # print 'l_prev', l_prev.input_layer.input_layer.W.shape.eval()
-        # print 'l_prev', l_prev.input_layer.beta.shape.eval()
-        #
-        # print 'last_conv', last_conv.output_shape
-        # print 'last_conv', last_conv.input_layer.input_layer.W.shape.eval()
-        #
-        # print 'BN beta', last_conv.input_layer.beta.shape.eval()
-        # print 'BN gamma', last_conv.input_layer.gamma.shape.eval()
         fov = 68
         return layers, fov
-
-
 
 
     def build_net_v8_hydra_dilated_ft_joint_old(self, l_image_in = None,
@@ -400,27 +373,6 @@ class NetBuilder:
         layers['l_out_precomp'] = l_out_precomp
         layers['l_claims_out'] = l_claims_out
         layers['l_merge'] = l_merge
-
-        # print 'b new', l_out_cross.b.shape.eval()
-        # print 'W new', l_out_cross.W.shape.eval()
-        #
-        # print 'b old', first_fc.b.eval()
-        # print 'old out', first_fc.W.shape.eval()
-        # print 'old out', first_fc.output_shape
-        #
-        # print 'lout', l_out_old.W.shape.eval()
-        # print 'lout', l_out_old.b.shape.eval()
-        # print 'lout', l_out_old.output_shape
-
-        # print 'l_prev', l_prev.output_shape
-        # print 'l_prev', l_prev.input_layer.input_layer.W.shape.eval()
-        # print 'l_prev', l_prev.input_layer.beta.shape.eval()
-        #
-        # print 'last_conv', last_conv.output_shape
-        # print 'last_conv', last_conv.input_layer.input_layer.W.shape.eval()
-        #
-        # print 'BN beta', last_conv.input_layer.beta.shape.eval()
-        # print 'BN gamma', last_conv.input_layer.gamma.shape.eval()
         fov = 68
         return layers, fov
 
@@ -450,7 +402,6 @@ class NetBuilder:
         l_in_direction = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         l_10 = cs.BatchChannelSlicer([l_9, l_in_direction])
         return l_in, l_in_direction, l_9, l_10, fov, None
-
 
 
     def loss_updates_probs_v0(self, l_in, target, last_layer, L1_weight=10**-5,
@@ -504,10 +455,13 @@ class NetBuilder:
             las.regularization.regularize_network_params(layers['l_out_cross'],
                                                          las.regularization.l1)
 
-
-
         # typeII - typeI + m
-        individual_batch = (l_out_train[bs/2:] - l_out_train[:bs/2])
+        step = self.options.backtrace_length
+        sum_height = l_out_train[::step]
+        for t in range(1, ):
+            sum_height += l_out_train[t::step]
+
+        individual_batch = (sum_height[bs/2/step:] - sum_height[:bs/2/step])
         loss_valid = T.mean(individual_batch)
         if L1_weight > 0:
             loss_train = loss_valid + L1_weight * L1_norm
@@ -528,16 +482,16 @@ class NetBuilder:
             theano.function([layers['l_in_precomp'].input_var],
                             out_precomp)
 
-
         if self.options.net_arch == 'v8_hydra_dilated_ft_joint':
             print 'joint loss used'
 
             if self.options.fc_prec:
                 loss_train_f = theano.function(
                     [layers['l_in_claims'].input_var,
-                    layers['l_in_old'].input_var,
-                    layers['l_in_direction'].input_var,
-                    layers['l_in_hid'].input_var,
+                     layers['l_in_old'].input_var,
+                     layers['l_in_direction'].input_var,
+                     layers['l_in_hid'].input_var,
+                     layers['l_in_rec_mask'].input_var,
                      self.sequ_len_s],
                    [loss_train, individual_batch,
                     l_out_prediciton, l_out_train],
@@ -550,11 +504,13 @@ class NetBuilder:
 
                 l_out_prediciton_prec = L.get_output(layers['l_out_cross'],
                                                      deterministic=True)
+                l_out_hidden = L.get_output(layers['l_recurrent'])
                 probs_f = theano.function([layers['l_in_claims'].input_var,
                                            l_in_from_prec.input_var,
                                            layers['l_in_hid'].input_var,
+                                           layers['l_in_rec_mask'].input_var,
                                            self.sequ_len_s],
-                                          l_out_prediciton_prec)
+                                          [l_out_prediciton_prec, l_out_hidden])
 
                 layers['l_merge'].input_layers[0] = layers['l_out_precomp']
                 layers['l_merge'].input_shapes[0] = \

@@ -107,6 +107,8 @@ def get_options(script='training'):
 
     options = p.parse_args()
     options.fc_prec = False
+    options.n_recurrent_hidden = 128
+    options.backtrace_length = 5
 
     if options.input_data_path == "None":
         options.input_data_path ='./../data/volumes/input_%s.h5' % options.train_version
