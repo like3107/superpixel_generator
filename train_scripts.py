@@ -19,6 +19,7 @@ import time
 from trainer_config_parser import get_options
 import progressbar
 from lasagne import layers as L
+import unionFind
 
 # TODO: add allowed slices?
 
@@ -52,7 +53,6 @@ class PokemonTrainer(object):
         network = self.builder.get_net(self.options.net_arch)
         l_in, l_in_direction, self.l_out, l_out_direction,\
                  self.options.patch_len, l_eat = network()
-        self.l_out = l_out
         self.options.network_channels = l_in.shape[1]
         target_t = T.ftensor4()
         self.loss_train_f, loss_valid_f, self.prediction_f = \
@@ -62,7 +62,7 @@ class PokemonTrainer(object):
             np.random.seed(np.random.seed(int(time.time())))
             # change seed so different images for retrain
             print "loading network parameters from ", self.options.load_net_path
-            u.load_network(self.options.load_net_path, l_out)
+            u.load_network(self.options.load_net_path, self.l_out)
 
     def init_BM(self):
         self.BM = du.HoneyBatcherPath
@@ -472,7 +472,7 @@ class GottaCatchemAllTrainer(PokemonTrainer):
     def __init__(self,  options):
         super(GottaCatchemAllTrainer, self).__init__(options)
         self.update_steps = 1
-        self.observation_counter = 100
+        self.observation_counter = 20
         self.loss_history = [[], []]
 
 
@@ -514,7 +514,7 @@ class GottaCatchemAllTrainer(PokemonTrainer):
             [self.loss_history[0], self.loss_history[1]],
             self.update_history,
             self.save_net_path + '/training.png',
-            names=['loss', 'loss no reg'])
+            names=['loss', 'loss no reg'], log_scale=False)
         return loss_train
 
     def draw_debug(self, reset=False, image_path=None):
@@ -530,18 +530,134 @@ class GottaCatchemAllTrainer(PokemonTrainer):
                 path=image_path, b=b, plot_height_pred=True)
 
 
+class WayToVertania(GottaCatchemAllTrainer):
+    def define_loss(self):
+        self.loss = self.builder.get_loss('updates_direction')
+
+    def update_BM(self):
+        # self.bm.batch_data_provider.load_data(self.options)
+        # self.bm.batch_data_provider = PolygonDataProvider(self.options)
+        self.bm.init_batch()
+        inputs = self.bm.global_input_batch[:, :, :-1, :-1]
+
+        ind_b, ind_x, ind_y = self.bm.rois
+        target_shape = list(self.bm.global_height_gt_batch.shape)
+        target_shape.insert(1,5)
+        target = np.empty((target_shape), dtype='float32')
+
+        with h5py.File(self.options.target_data_path, 'r') as targ:
+            # target = targ[]
+            for b in range(self.bm.bs):
+                for c in range(5):
+                    target[b, c, :, :] = \
+                        targ['data'][ind_b[b],
+                                 ind_x[b]+self.bm.pad:ind_x[b] + self.options.global_input_len-self.bm.pad,
+                                 ind_y[b]+self.bm.pad:ind_y[b] + self.options.global_input_len-self.bm.pad,
+                                 c]
+        self.bm.global_target = target
+        return inputs, None, target
+
+    def train(self):
+        self.iterations += 1
+        inputs, _, heights = self.update_BM()
+
+        height_pred = self.prediction_f(inputs)
+        # this is intensive surgery to the BM
+
+        self.bm.global_prediction_map_FC = height_pred
+
+        if self.iterations % self.observation_counter == 0:
+            trainer.unionFindLabel(height_pred)
+            trainer.draw_debug(reset=True)
+
+        loss_train, individual_loss, _ = self.loss_train_f(inputs, heights)
+        loss_no_reg = np.mean(individual_loss)
+
+        if self.iterations % 100 == 0:
+            self.save_net()
+
+        # update parameters once
+        self.update_history.append(self.iterations)
+        self.loss_history[0].append(loss_train)
+        self.loss_history[1].append(loss_no_reg)
+        u.plot_train_val_errors(
+            [self.loss_history[0], self.loss_history[1]],
+            self.update_history,
+            self.save_net_path + '/training.png',
+            names=['loss', 'loss no reg'], log_scale=False)
+        return loss_train
+
+    def unionFindLabel(self, prediction):
+
+        directions = np.argmax(prediction, axis=1)
+        # run unionFind
+        shape = directions.shape
+        labels = np.zeros_like(directions)
+        direction_array = np.array([[-1,0],[0,-1],[1,0],[0,1]],dtype=np.int)
+        for b in range(shape[0]):
+            uf = unionFind.UnionFind()
+            for y in range(1, shape[1]-1):
+            # for y in range(1, 40):
+                for x in range(1, shape[2]-1):
+                # for x in range(1, 40):
+                    d = directions[b,x,y]
+                    pos = (x,y)
+
+                    if d != 4:
+                        con_pos = (x - direction_array[d,0],
+                                   y - direction_array[d,1])
+                        uf.union(pos,con_pos)
+
+                        # interpixel merging
+                        d_con = directions[b,con_pos[0],con_pos[1]]
+                        if d == d_con + 2 % 4:
+                            # found interlocked pixel pair
+                            # assume that there is a seed in between
+                            self.bm.global_errormap[b,0,x,y] = 1
+                            for dn in range(4):
+                                pos_merge = (x - direction_array[dn,0],
+                                           y - direction_array[dn,1])
+                                uf.union(pos,pos_merge)
+                    else:
+                        for dn in range(4):
+                            con_pos = (x - direction_array[dn,0],
+                                       y - direction_array[dn,1])
+                            uf.union(pos,con_pos)
+
+
+            for y in range(1, shape[1]):
+                for x in range(1, shape[2]):
+                    xx,yy = uf[(x,y)]
+                    label = yy*shape[1]+xx
+                    labels[b,x,y] = label
+
+        print self.bm.global_claims.shape
+        print labels.shape
+        self.bm.global_claims[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad] = labels
+        # self.bm.global_label_batch[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad] = self.bm.global_label_batch[:,:-2*self.bm.pad,:-2*self.bm.pad]
+        # self.bm.draw_debug_image("prediciton.png",path=self.image_path_reset, b=0)
+
+        # with h5py.File("direction_out.h5", 'w') as out:
+        #     out.create_dataset("directions",data=directions)
+        #     out.create_dataset("prediction",data=prediction)
+        #     out.create_dataset("target",data=target)
+        #     out.create_dataset("inputs",data=inputs)
+        #     out.create_dataset("labels",data=labels)
+
+                    
+
 
 if __name__ == '__main__':
     options = get_options()
 
     # pret
     if options.net_arch == 'v8_hydra_dilated':
-        trainer = GottaCatchemAllTrainer(options)
+        trainer = WayToVertania(options)
         while not trainer.converged():
+            trainer.train()
             print "\r pretrain %0.4f iteration %i free voxel %i" \
                   %(trainer.train(), trainer.iterations, trainer.free_voxel),
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
-
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
         options.fc_prec = True
         trainer = FCFinePokemonTrainer(options)
