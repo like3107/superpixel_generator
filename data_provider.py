@@ -33,7 +33,7 @@ def generate_gt_height(label_image, max_height, clip_method='clip'):
         np.clip(height, 0, max_height, out=height)
         maximum = np.max(height)
         height *= -1.
-        height += maximum 
+        height += maximum
     elif clip_method=='exp':
         np.square(height, out=height)
         height /= (-2 * (max_height/10) ** 2)

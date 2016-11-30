@@ -29,7 +29,8 @@ if __name__ == '__main__':
     # define slices here if you want to reduce the size of the dataset
     # None means all slices
 
-    dataset_name = "noz_small"
+    dataset_name = "noz_full"
+    fov = 68        # edge effects
 
     if dataset_name == "noz_full":
 
@@ -39,10 +40,10 @@ if __name__ == '__main__':
         y_slice = slice(None)
 
     elif dataset_name == "noz_small":
-        fov = 68        # edge effects
         gel = 400
         gel += fov
-        dic_slices = {"test":{"a":slice(0,50,5),"b":slice(0,50,5),"c":slice(0,50,5)}}
+        dic_slices = {"test":{"a":slice(0,50,5),"b":slice(0,50,5),"c":slice(0,50,5)},
+                      "train":{"a":slice(50,125),"b":slice(50,125),"c":slice(50,125)}}
         x_slice = slice(fov,fov+gel)
         y_slice = slice(fov,fov+gel)
     else:
@@ -70,6 +71,9 @@ if __name__ == '__main__':
                                 dtype=np.float32)
         boundary_data  = np.empty((total_z_lenght,y_lenght,x_lenght),
                                 dtype=np.float32)
+        direction_data  = np.empty((total_z_lenght,y_lenght,x_lenght, 6),
+                                dtype=np.float32)
+
 
         print "processing ",name," sets ",sl.keys()
         bar = progressbar.ProgressBar(max_value=total_z_lenght)
@@ -87,7 +91,7 @@ if __name__ == '__main__':
             height = dp.load_h5(hp, h5_key='height')[0]
             label = dp.load_h5(lp)[0]
             z_lenght_in = raw.shape[0]
-     
+
             gz = indexgetter(z_lenght)
             for z in range(z_lenght)[sl[ds]]:
                 for j in [0]:
@@ -100,9 +104,35 @@ if __name__ == '__main__':
                 gy = convolve(label_data[i] + 1, np.array([-1., 0., 1.]).reshape(3, 1))
                 boundary_data[i] = np.float32((gx ** 2 + gy ** 2) > 0)
 
+                
+
+                height_clip = np.clip(height[gz(z,0),y_slice,x_slice], 0, fov)
+                maximum = np.max(height_clip)
+                height_clip *= -1.
+                height_clip += maximum
+
+                hdx = convolve(height_clip + 1, np.array([-1., 0., 1.]).reshape(1, 3))
+                hdy = convolve(height_clip + 1, np.array([-1., 0., 1.]).reshape(3, 1))
+
+                direction_data[i, :, :, 0] = hdy * ((hdy > 0) & (np.abs(hdx) < np.abs(hdy)))  # up
+                direction_data[i, :, :, 1] = hdx * ((hdx > 0) & (np.abs(hdx) >= np.abs(hdy)))  # left
+                direction_data[i, :, :, 2] = -hdy * ((hdy < 0) & (np.abs(hdx) < np.abs(hdy)))  # down
+                direction_data[i, :, :, 3] = -hdx * ((hdx < 0) & (np.abs(hdx) >= np.abs(hdy)))  # right
+                direction_data[i, :, :, 4] = 100* (height_clip == 0)
+                direction = np.argmax(direction_data[i, :, :, 0:5],axis=2)
+
+                for k in range(5):
+                    direction_data[i, :, :, k] = direction[:, :] == k
+
+                direction_data[i, :, :, 5] = np.sum(direction_data[i, :, :, 0:5],axis=2)
+                
+
                 height_data[i] = height[gz(z,0),y_slice,x_slice]
                 i += 1
                 bar.update(i)
+
+
+     
 
 
         print "writing data to files"
@@ -119,5 +149,5 @@ if __name__ == '__main__':
         dp.save_h5(options.input_data_path+"boundary_CREMI_%s_%s.h5"%(dataset_name,name),'data',
                          data=boundary_data, overwrite='w')
 
-        dp.save_h5(options.input_data_path+"boundary_CREMI_%s_%s.h5"%(dataset_name,name),'data',
-                         data=boundary_data, overwrite='w')
+        dp.save_h5(options.input_data_path+"direction_CREMI_%s_%s.h5"%(dataset_name,name),'data',
+                         data=direction_data, overwrite='w')

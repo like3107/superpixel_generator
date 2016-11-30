@@ -564,15 +564,15 @@ if __name__ == '__main__':
     memb_path = ''
     version = 'a'
     # memb_path = './data/volumes/membranes_%s.h5' % version
-    memb_path = './../data/volumes/input_CREMI_noz_test.h5'
-    gt_path = './../data/volumes/label_CREMI_noz_test.h5'
-    start_z = 100
-    fov = 68        # edge effects
+    memb_path = './../data/volumes/input_CREMI_noz_small_test.h5'
+    gt_path = './../data/volumes/label_CREMI_noz_small_test.h5'
+    start_z = 0
+    fov = 34        # edge effects
 
-    gel = 500
-    gt = load_h5(gt_path)[0][100:150, fov:fov+gel,  fov:fov+gel]
-    memb_probs = load_h5(memb_path)[0][100:150, 1,  fov:fov+gel,  fov:fov+gel]
-    raw_image = load_h5(memb_path)[0][100:150, 0,  fov:fov+gel,  fov:fov+gel]
+    gel = 400
+    gt = load_h5(gt_path)[0][:, fov:fov+gel,  fov:fov+gel]
+    memb_probs = load_h5(memb_path)[0][:, 1,  fov:fov+gel,  fov:fov+gel]
+    raw_image = load_h5(memb_path)[0][:, 0,  fov:fov+gel,  fov:fov+gel]
     pad = 34
 
     threshold_dist_trf = 0.3
@@ -583,7 +583,7 @@ if __name__ == '__main__':
     two_dim = True
     groupSeeds = False
     print 'TImos Waterhshed with gt seeds'
-    segmentation = np.zeros((50, gel, gel))
+    segmentation = np.zeros((30, gel, gel))
     import validation_scripts
 
 
@@ -595,7 +595,7 @@ if __name__ == '__main__':
         
 
     stepsize = 0.05
-    alpha_range = np.arange(0,1+stepsize,stepsize)
+    alpha_range = np.arange(0.9,1+stepsize,stepsize)
     for alpha in alpha_range:
         p = []
         p.append({"title": "gt",
@@ -639,12 +639,13 @@ if __name__ == '__main__':
 
 
         scores = validation_scripts.validate_segmentation(segmentation, gt)
-        ars.append(scores['Adapted Rand error'])
-        arsp.append(scores['Adapted Rand error precision'])
+        print scores
+        ars.append(scores[0]['Adapted Rand error'])
+        arsp.append(scores[0]['Adapted Rand error precision'])
 
 
         # print 'making debug plot in debug folder'
-        save_h5('./../data/ws_2D_timo_b.h5', 'pred', segmentation, 'w')
+        save_h5('./../data/ws_2D_timo_%f.h5'%alpha, 'pred', segmentation, 'w')
 
 
     u.plot_train_val_errors(
