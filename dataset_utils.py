@@ -42,6 +42,7 @@ class HoneyBatcherPredict(object):
 
         # either pad raw or crop labels -> labels are always shifted by self.pad
         self.padding_b = options.padding_b
+        self.pl = int(options.patch_len)
         self.pad = options.patch_len / 2
         self.seed_method = options.seed_method
         self.bs = options.batch_size
@@ -52,15 +53,12 @@ class HoneyBatcherPredict(object):
         self.batch_shape = self.batch_data_provider.get_batch_shape()
         self.image_shape = self.batch_data_provider.get_image_shape()
         self.label_shape = self.batch_data_provider.get_label_shape()
-        self.global_input_batch = np.zeros(self.batch_shape,
-                                           dtype=np.float32)
-        self.global_label_batch = np.zeros(self.label_shape,
-                                           dtype=np.int)
-        self.global_height_gt_batch = np.zeros(self.label_shape,
-                                           dtype=np.float32)
+        self.global_input_batch = np.zeros(self.batch_shape, dtype=np.float32)
+        self.global_label_batch = np.zeros(self.label_shape, dtype=np.int)
+        self.global_height_gt_batch = np.zeros(self.label_shape, dtype=np.float32)
 
         # length of field, global_batch # includes padding)
-        self.pl = options.patch_len
+
 
         # private
         self.n_channels = options.network_channels + 2
@@ -89,11 +87,12 @@ class HoneyBatcherPredict(object):
         # debug
         self.max_batch = 0
         self.counter = 0
+        assert(self.pl == self.pad * 2 + 1)
+
 
     def get_seed_ids(self):
         assert (self.global_seeds is not None)  # call get seeds first
-        self.global_seed_ids = \
-            [np.arange(start=1, stop=len(s)+1) for s in self.global_seeds]
+        self.global_seed_ids =  [np.arange(start=1, stop=len(s)+1) for s in self.global_seeds]
 
     def initialize_priority_queue(self):
         """
@@ -123,43 +122,40 @@ class HoneyBatcherPredict(object):
             yield x, y, d
 
     def get_cross_coords(self, center):
+        assert (center[0] >= self.pad and center[0] < self.image_shape[-2] - self.pad)
+        assert (center[1] >= self.pad and center[1] < self.image_shape[-1] - self.pad)
         coords = self.coordinate_offset + center
-        np.clip(coords[:,0],self.pad,\
-            self.label_shape[1] + self.pad - 1, out=coords[:,0])
-        np.clip(coords[:,1],self.pad,\
-            self.label_shape[2] + self.pad - 1, out=coords[:,1])
+        np.clip(coords[:,0], self.pad, self.label_shape[1] + self.pad - 1, out=coords[:,0])
+        np.clip(coords[:,1], self.pad, self.label_shape[2] + self.pad - 1, out=coords[:,1])
         return coords[:,0], coords[:,1], self.direction_array
 
     def get_cross_coords_offset(self, center):
         coords = self.coordinate_offset + center - self.pad
-        np.clip(coords[:,0],0,\
-            self.label_shape[1] - 1, out=coords[:,0])
-        np.clip(coords[:,1],0,\
-            self.label_shape[2] - 1, out=coords[:,1])
-        return coords[:,0], coords[:,1], self.direction_array
+        np.clip(coords[:, 0], 0,  self.label_shape[1] - 1, out=coords[:, 0])
+        np.clip(coords[:, 1], 0, self.label_shape[2] - 1, out=coords[:, 1])
+        return coords[:, 0], coords[:, 1], self.direction_array
 
     def crop_input(self, seed, b, out=None):
         if out is None:
             return self.global_input_batch[b, :,
-                                     seed[0] - self.pad:seed[0] + self.pad,
-                                     seed[1] - self.pad:seed[1] + self.pad]
+                                           seed[0] - self.pad:seed[0] + self.pad + 1,
+                                           seed[1] - self.pad:seed[1] + self.pad + 1]
         else:
             out[:] = self.global_input_batch[b, :,
-                         seed[0] - self.pad:seed[0] + self.pad,
-                         seed[1] - self.pad:seed[1] + self.pad]
+                                             seed[0] - self.pad:seed[0] + self.pad + 1,
+                                             seed[1] - self.pad:seed[1] + self.pad + 1]
 
     def crop_mask_claimed(self, seed, b, Id, out=None):
         labels = self.global_claims[b,
-                 seed[0] - self.pad:seed[0] + self.pad,
-                 seed[1] - self.pad:seed[1] + self.pad]
+                                    seed[0] - self.pad:seed[0] + self.pad + 1,
+                                    seed[1] - self.pad:seed[1] + self.pad + 1]
         if out is None:
             out = np.zeros((2, self.pl, self.pl), dtype='float32')
         else:
             out[:2].fill(0)
-
         out[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
-        out[0, :, :][labels == -1] = 0  # the others
-        out[1, :, :][labels == Id] = 1  # me
+        out[0, :, :][labels == -1] = 0                    # the others
+        out[1, :, :][labels == Id] = 1                    # me
         return out
 
     def crop_height_map(self, seed, b):
@@ -169,9 +165,8 @@ class HoneyBatcherPredict(object):
         return height
 
     def prepare_global_batch(self):
-        return self.batch_data_provider.prepare_input_batch(\
-                                    self.global_input_batch,
-                                    preselect_batches=self.preselect_batches)
+        return self.batch_data_provider.prepare_input_batch(self.global_input_batch,
+                                                            preselect_batches=self.preselect_batches)
 
     def set_preselect_batches(self, batches):
         assert(self.bs == len(batches))
@@ -202,13 +197,12 @@ class HoneyBatcherPredict(object):
                                                   self.label_shape[2], 4))
         self.global_prediction_map_nq.fill(np.inf)
 
-
     def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
         """
-        print "using seed method:", self.seed_method
+        # print "using seed method:", self.seed_method
         if self.seed_method == "gt":
             self.get_seed_coords_gt()
         elif self.seed_method == "over":
@@ -219,7 +213,6 @@ class HoneyBatcherPredict(object):
             self.batch_data_provider.get_seed_coords_from_file(self.global_seeds)
         else:
             raise Exception("no valid seeding method defined")
-
 
     def get_seed_coords_timo(self, sigma=1.0, min_dist=4, thresh=0.2):
         """
@@ -273,15 +266,12 @@ class HoneyBatcherPredict(object):
             dist_trf[b, :, :] = \
                 data_provider.segmenation_to_membrane_core(
                                 padded_label)[1][1:-1, 1:-1]
-        for b, ids in zip(range(self.bs),
-                          seed_ids):  # iterates over batches
+        for b, ids in zip(range(self.bs), seed_ids):  # iterates over batches
             seeds = []
             for Id in ids:  # ids within each slice
-                regions = np.where(
-                    self.global_label_batch[b, :, :] == Id)
+                regions = np.where(self.global_label_batch[b, :, :] == Id)
                 seed_ind = np.argmax(dist_trf[b][regions])
-                seed = np.array([regions[0][seed_ind],
-                                 regions[1][seed_ind]]) + self.pad
+                seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) + self.pad
                 seeds.append([seed[0], seed[1]])
             self.global_seeds.append(seeds)
 
@@ -292,11 +282,9 @@ class HoneyBatcherPredict(object):
         l = self.global_label_batch.shape[1]
         for b, seeds in enumerate(self.global_seeds):
             pos = np.array(seeds) - self.pad
-            pos = np.clip(pos,1,l-1)
+            pos = np.clip(pos, 1, l - 1)
             for p in pos:
-                self.hard_regions[b, p[0]-1:p[0]+2, p[1]-1:p[1]+2] = 1
-
-
+                self.hard_regions[b, p[0] - 1:p[0] + 2, p[1] - 1:p[1] + 2] = 1
 
     def get_centers_from_queue(self):
         centers = np.empty((self.bs, 2),dtype='int32')
@@ -304,8 +292,7 @@ class HoneyBatcherPredict(object):
         heights = []
 
         for b in range(self.bs):
-            height, _, center_x, center_y, Id, direction, error_indicator, \
-                            time_put = self.get_center_i_from_queue(b)
+            height, _, center_x, center_y, Id, direction, error_indicator, time_put = self.get_center_i_from_queue(b)
             centers[b, :] = [center_x, center_y]
             ids.append(Id)
             heights.append(height)
@@ -337,8 +324,7 @@ class HoneyBatcherPredict(object):
     def get_batches(self):
         centers, ids, heights = self.get_centers_from_queue()
         # TODO: use input batch
-        raw_batch = np.zeros((self.bs, self.n_channels, self.pl, self.pl),
-                             dtype='float32')
+        raw_batch = np.zeros((self.bs, self.n_channels, self.pl, self.pl), dtype='float32')
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
             self.get_batch_i(b, center, height, Id, raw_batch)
         return raw_batch, centers, ids
@@ -346,19 +332,15 @@ class HoneyBatcherPredict(object):
     def get_batch_i(self,  b, center, height, Id, raw_batch):
         assert (self.global_claims[b, center[0], center[1]] == 0)
         self.set_claims(b, center, Id)
-        raw_batch[b, :, :, :] = \
-            self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
+        raw_batch[b, :, :, :] = self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
         # check whether already pulled
-        self.global_heightmap_batch[b,
-                                    center[0] - self.pad,
-                                    center[1] - self.pad] = height
+        self.global_heightmap_batch[b, center[0] - self.pad, center[1] - self.pad] = height
 
     def set_claims(self, b, center, idx):
         self.global_claims[b, center[0], center[1]] = idx
 
     def update_priority_queue(self, heights_batch, centers, ids, **kwargs):
-        for b, center, Id, height in zip(range(self.bs), centers, ids,
-                                          heights_batch[:, :, 0, 0]):
+        for b, center, Id, height in zip(range(self.bs), centers, ids, heights_batch):
             self.global_prediction_map_nq[b, center[0] - self.pad, center[1] - self.pad, :] = height
             self.update_priority_queue_i(b, center, Id, height, **kwargs)
 
@@ -396,9 +378,7 @@ class HoneyBatcherPredict(object):
                                             self.error_indicator_pass[b],
                                             input_time))
     def check_is_lowest(self, b, heights, x, y, add_all):
-        return ((heights < self.global_heightmap_batch[b,
-                                           x - self.pad,
-                                           y - self.pad]) | add_all )\
+        return ((heights < self.global_heightmap_batch[b, x - self.pad, y - self.pad]) | add_all )\
                         & (self.global_claims[b, x, y] == 0)
 
     def get_num_free_voxel(self):
@@ -430,17 +410,16 @@ class HoneyBatcherPredict(object):
                                 'im': self.global_heightmap_batch[b, :, :],
                                 'interpolation': 'none'})
         if self.global_prediction_map_FC is not None:
-            for i in range(self.bs):
-                plot_images.append({"title": "Heightmap Prediciton %i" %i,
-                                'im': self.global_prediction_map_FC[b, i, :, :],
-                                'interpolation': 'none',
-                                'cmap':'gray'})
-        if self.edge_map_gt is not None:
-            for i in range(4):
-                plot_images.append({"title": "Edge Map %i" %i,
-                                'im': self.edge_map_gt[b, i, :, :],
-                                'interpolation': 'none',
-                                'cmap':'gray'})
+            plot_images.append({"title": "Heightmap Prediciton",
+                            'im': self.global_prediction_map_FC[b, 0, :, :],
+                            'interpolation': 'none',
+                            'cmap':'gray'})
+        # if self.edge_map_gt is not None:
+        #     for i in range(4):
+        #         plot_images.append({"title": "Edge Map %i" %i,
+        #                         'im': self.edge_map_gt[b, i, :, :],
+        #                         'interpolation': 'none',
+        #                         'cmap':'gray'})
         for i in range(4):
             plot_images.append({"title": "Network Output %i" % i,
                                 'im': self.global_prediction_map_nq[b, :, :, i],
@@ -473,6 +452,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.find_errors_b = options.fine_tune_b and not options.rs_ft
         self.error_indicator_pass = None
 
+        print 'du pl pad label raw', self.pl, self.pad, self.label_shape, self.image_shape
+
     def get_seed_ids(self):
         super(HoneyBatcherPath, self).get_seed_ids()
         self.global_id2gt = []
@@ -486,8 +467,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.global_id2gt.append(id2gt)
 
     def crop_timemap(self, center, b):
-        return self.global_timemap[b, center[0]-self.pad:center[0]+self.pad,
-                                   center[1]-self.pad:center[1]+self.pad]
+        return self.global_timemap[b,
+                                   center[0] - self.pad:center[0] + self.pad + 1,
+                                   center[1] - self.pad:center[1] + self.pad + 1]
 
     def crop_time_mask(self, centers, timepoint, batches):
         """
@@ -503,9 +485,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def prepare_global_batch(self):
         rois = super(HoneyBatcherPath, self).prepare_global_batch()
-        self.batch_data_provider.prepare_label_batch(self.global_label_batch,
-                                                     self.global_height_gt_batch,
-                                                     rois)
+        self.batch_data_provider.prepare_label_batch(self.global_label_batch, self.global_height_gt_batch, rois)
         return rois
 
     def init_batch(self, start=None, allowed_slices = None):
@@ -527,8 +507,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         gts = np.zeros((self.bs, 4, 1, 1), dtype='float32')
         for b in range(self.bs):
             if self.add_height_b:
-                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b,
-                                                            ids[b])
+                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b, ids[b])
             else:
                 gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
         assert (not np.any(gts < 0))
@@ -545,14 +524,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         assert (np.any(seeds_x >= 0) or np.any(seeds_y >= 0))
         # assert (np.any(self.rl - self.pl > seeds_x) or
                 # np.any(self.rl - self.pl > seeds_y))
-        ground_truth = \
-            self.global_height_gt_batch[batch, seeds_x, seeds_y].flatten()
+        ground_truth = self.global_height_gt_batch[batch, seeds_x, seeds_y].flatten()
         # increase height relative to label (go up even after boundary crossing)
         if Id is not None:      #  == if self.add_height
-            mask = [self.global_label_batch[batch,
-                                           seeds_x,
-                                           seeds_y] != \
-                    self.global_id2gt[batch][Id]]
+            mask = [self.global_label_batch[batch, seeds_x,  seeds_y] != self.global_id2gt[batch][Id]]
             if np.any(mask):
                 if self.error_indicator_pass[batch] != 0:
                     # center on wrong label
@@ -595,10 +570,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                  center_y - self.pad] = 1
         # check for type I errors
         elif self.global_id2gt[b][Id] != \
-                self.global_label_batch[b, center_x - self.pad,
-                                        center_y - self.pad]:
-            self.global_errormap[b, :2, center_x - self.pad,
-                                 center_y - self.pad] = 1
+                self.global_label_batch[b, center_x - self.pad, center_y - self.pad]:
+            self.global_errormap[b, :2, center_x - self.pad, center_y - self.pad] = 1
             self.error_indicator_pass[b] = 1
 
         # check for errors in neighbor regions, type II
@@ -1039,19 +1012,19 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             # self.find_source_of_II_error()
                             pass
 
-    def reconstruct_input_at_timepoint(self, errors, key_time, key_center, key_id):
-        raw_batch = np.zeros((len(errors), self.n_channels, self.pl, self.pl),
-                             dtype='float32')
+    def reconstruct_input_at_timepoint(self, errors, key_time, key_center, key_id, key_dir):
+        raw_batch = np.zeros((len(errors), self.n_channels, self.pl, self.pl), dtype='float32')
         centers = []
         timepoints = []
         batches = []
         for i, error in enumerate(errors):
             batch, center, Id = [error['batch'], error[key_center], error[key_id]]
+            # assert (self.global_timemap[batch, center[0], center[1]] == timepoints[i])
+            center += self.coordinate_offset[error[key_dir]]
             batches.append(batch)
             centers.append(center)
             timepoints.append(error[key_time])
             raw_batch[i, :, :, :] = self.get_network_input(center, batch, Id, raw_batch[i, :, :, :])
-            assert (self.global_timemap[batch, center[0], center[1]] == timepoints[i])
         mask = self.crop_time_mask(centers, timepoints, batches)
         raw_batch[:, 0, :, :][mask] = 0
         raw_batch[:, 1, :, :][mask] = 0
@@ -1128,9 +1101,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_I_id_list    = [e["large_id"]     for e in error_selection]
         error_I_direction  = [e["e1_direction"] for e in error_selection]
         error_II_direction = [e["e2_direction"] for e in error_selection]
-
-        reconst_e1 = self.reconstruct_input_at_timepoint(error_selection, "e1_time", "e1_pos", "large_id")
-        reconst_e2 = self.reconstruct_input_at_timepoint(error_selection, "e2_time", "e2_pos", "small_id")
+        self.pad -= 1
+        self.pl -= 2
+        reconst_e1 = self.reconstruct_input_at_timepoint(error_selection, "e1_time", "e1_pos", "large_id", "e1_direction")
+        reconst_e2 = self.reconstruct_input_at_timepoint(error_selection, "e2_time", "e2_pos", "small_id", "e2_direction")
+        self.pad += 1
+        self.pl += 2
         return reconst_e1, reconst_e2, np.array(error_I_direction), np.array(error_II_direction), \
                rnn_mask_e1, rnn_mask_e2
 
@@ -1192,12 +1168,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         plot_images = []
         n_batches = min(10, raw_batch.shape[0])     # for visibility
         for b in range(n_batches):
-            plot_images.append({"title": "membrane",
-                                'im': raw_batch[b, 2],
-                                'interpolation': 'none'})
-            plot_images.append({"title": "raw",
-                                'im': raw_batch[b, 3],
-                                'interpolation': 'none'})
             plot_images.append({"title": "claim others",
                                 'cmap': "rand",
                                 'im': raw_batch[b, 0],
@@ -1206,6 +1176,13 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                 'cmap': "rand",
                                 'im': raw_batch[b, 1],
                                 'interpolation': 'none'})
+            plot_images.append({"title": "membrane",
+                                'im': raw_batch[b, 2],
+                                'interpolation': 'none'})
+            plot_images.append({"title": "raw",
+                                'im': raw_batch[b, 3],
+                                'interpolation': 'none'})
+
         u.save_images(plot_images, path=path, name=image_name, column_size=4)
 
     def draw_error_reconst(self, image_name, path='./../data/debug/',
@@ -1523,11 +1500,12 @@ class HoneyBatcherPatchFast(HoneyBatcherPath):
 class HoneyBatcherRec(HoneyBatcherPath):
     def __init__(self,  options):
         super(HoneyBatcherRec, self).__init__(options)
-        self.global_hidden_states = np.empty((options.batch_size, self.label_shape[1], self.label_shape[2],
+        self.global_hidden_states = np.empty((options.batch_size, 4, self.label_shape[1], self.label_shape[2],
                                               options.n_recurrent_hidden))
 
     def update_priority_queue_i(self, b, center, Id, height, hidden_states=None):
-        self.global_hidden_states[b, center[0] - self.pad, center[1] - self.pad, :] = hidden_states[b, 0]
+        self.global_hidden_states[b, :, center[0] - self.pad, center[1] - self.pad, :] = \
+            hidden_states[b, 0, :]
         super(HoneyBatcherRec, self).update_priority_queue_i(b, center, Id, height)
 
     def get_batches(self):
@@ -1535,14 +1513,13 @@ class HoneyBatcherRec(HoneyBatcherPath):
         hiddens = np.zeros((self.bs, 128), dtype='float32')
         # load hidden states
         for b, center in enumerate(centers):
-            direction = self.global_directionmap_batch[b, center[0] - self.pad,
-                                                       center[1] - self.pad]
+            direction = self.global_directionmap_batch[b, center[0] - self.pad,  center[1] - self.pad]
             if direction == -1:  # seed
                 hiddens[b] = 0
             else:
                 origin = self.update_position(center, self.global_directionmap_batch[b, center[0] - self.pad,
-                                                                                     center[1] - self.pad])
-                hiddens[b] = self.global_hidden_states[b, origin[0] - self.pad, origin[1] - self.pad, :]
+                                                                                        center[1] - self.pad])
+                hiddens[b] = self.global_hidden_states[b, direction, origin[0] - self.pad, origin[1] - self.pad, :]
         return raw_batch, gts, centers, ids, hiddens
 
 
@@ -1801,11 +1778,11 @@ class HoneyBatcherGonzales(HoneyBatcherPath):
 
         for b in range(self.bs):
             crop_raw = self.global_input_batch[None, b, :,
-                                             coords[b,0]-self.pad:coords[b,0]+self.pad,
-                                             coords[b,1]-self.pad:coords[b,1]+self.pad]
+                                             coords[b, 0]-self.pad:coords[b, 0] + self.pad,
+                                             coords[b, 1]-self.pad:coords[b, 1] + self.pad]
 
-            claim_c = self.global_claims[None, b, :, coords[b,0]-self.pad:coords[b,0]+self.pad,
-                                          coords[b,1]-self.pad:coords[b,1]+self.pad]
+            claim_c = self.global_claims[None, b, :, coords[b, 0] - self.pad:coords[b, 0] + self.pad,
+                                          coords[b, 1] - self.pad:coords[b, 1] + self.pad]
 
             claim_me = T.eq(claim_c, mes[b])
             claim_them_with_bg = T.neq(claim_c, mes[b])

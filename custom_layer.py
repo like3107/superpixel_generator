@@ -41,6 +41,31 @@ class BatchChannelSlicer(las.layers.MergeLayer):
         return l_in[T.arange(batches), slices, None]
 
 
+
+class CrossSlicer(las.layers.Layer):
+    """
+    input: 2 Las layers:
+        1. layer which should be sliced along the channels (axis=1)
+        2. vector of which indices should be used (one channel per batch)
+    output: shape (b, 1, ...)
+    """
+    def __init__(self, incoming, **kwargs):
+        super(CrossSlicer, self).__init__(incoming, **kwargs)
+
+    def get_output_shape_for(self, input_shape):
+        return tuple((input_shape[0], input_shape[1], None, None))
+
+    def get_output_for(self, input, **kwargs):
+        batches = input.shape[0]
+        slices_x = theano.shared(np.array([[0, 1, 2, 1]], dtype=np.int32))          # up left down right
+        slices_y = theano.shared(np.array([[1, 0, 1, 2]], dtype=np.int32))          # up left down right
+        batches_list = T.extra_ops.repeat(T.arange(batches), 4, axis=0).flatten()
+        slices_x = T.extra_ops.repeat(slices_x, batches, axis=0).flatten()
+        slices_y = T.extra_ops.repeat(slices_y, batches, axis=0).flatten()
+        input = input[batches_list, :, slices_x, slices_y].reshape((batches, -1, 2, 2))
+        return input
+
+
 class GradientToHeight(las.layers.Layer):
     """
     input: 2 Las layers:
@@ -70,11 +95,13 @@ def elup1(x):
 
 
 if __name__ == '__main__':
-    shape = (10, 2, 4, 4)
+    shape = (10, 2, 3, 3)
     l_in = las.layers.InputLayer(shape)
     l_1 = SliceLayer(l_in)
-    l_dense = las.layers.DenseLayer(l_in, 3)
-    l_out = las.layers.get_output(l_dense)
+    l_slice = CrossSlicer(l_in)
+
+    # l_dense = las.layers.DenseLayer(l_in, 3)
+    l_out = las.layers.get_output(l_slice)
 
     a = np.arange(np.prod(shape)).reshape(shape).astype(theano.config.floatX)
 
@@ -82,5 +109,5 @@ if __name__ == '__main__':
 
     probs(a)
     print 'a', a
-    print
+    print 'out', probs(a)
     print probs(a).shape

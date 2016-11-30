@@ -30,15 +30,14 @@ class PokemonTrainer(object):
         self.prepare_paths()
         # options.patch_len = 68
         self.builder = nets.NetBuilder(options)
-        self.options.patch_len = self.builder.get_fov(self.options.net_arch)
+        self.define_loss()
+        self.network_i_choose_you()
+
+        self.options.patch_len = self.builder.fov
 
         self.init_BM()
         self.bm = self.BM(self.options)
         self.bm.init_batch()
-
-
-        self.define_loss()
-        self.network_i_choose_you()
 
         self.iterations = -1
         self.update_steps = 10
@@ -50,16 +49,13 @@ class PokemonTrainer(object):
 
     def network_i_choose_you(self):
         network = self.builder.get_net(self.options.net_arch)
-        l_in, l_in_direction, self.l_out, l_out_direction,\
-                 self.options.patch_len, l_eat = network()
-        self.options.network_channels = l_in.shape[1]
+        layers, self.options.patch_len, l_eat = network()
+        self.l_out = layers['l_out_cross']
         target_t = T.ftensor4()
-        self.loss_train_f, loss_valid_f, self.prediction_f = \
-            self.loss(l_in, target_t, self.l_out, L1_weight=self.options.regularization)
-
+        self.loss_train_f, loss_valid_f, self.prediction_f = self.loss(layers, target_t,
+                                                                       L1_weight=self.options.regularization)
         if self.options.load_net_b:
-            np.random.seed(np.random.seed(int(time.time())))
-            # change seed so different images for retrain
+            np.random.seed(np.random.seed(int(time.time())))    # change seed so different images for retrain
             print "loading network parameters from ", self.options.load_net_path
             u.load_network(self.options.load_net_path, self.l_out)
 
@@ -141,8 +137,7 @@ class PokemonTrainer(object):
         if name is None:
             name = 'net_%i' % self.iterations
 
-        u.save_network(path, self.l_out,
-                   name, add=self.options._get_kwargs())
+        u.save_network(path, self.l_out, name, add=self.options._get_kwargs())
 
     def load_net(self, file_path=None):
         if file_path is None:
@@ -179,9 +174,8 @@ class FusionPokemonTrainer(PokemonTrainer):
     def network_i_choose_you(self):
         network = self.builder.get_net(self.options.net_arch)
         c.use(self.options.gpu)
-        l_in, l_in_direction, self.l_out, l_out_direction,\
-                 self.options.patch_len, l_eat = network()
-        self.options.network_channels = l_in.shape[1]
+        layers, self.options.patch_len, l_eat = network()
+        self.l_out = layers['l_out_cross']
         target_t = T.ftensor4()
         target_eat = T.ftensor4()
         target_eat_factor = T.ftensor4()
@@ -338,6 +332,7 @@ class SpeedyPokemonTrainer(FinePokemonTrainer):
 
 
 class FCFinePokemonTrainer(FinePokemonTrainer):
+
     def init_BM(self):
         self.BM = du.HoneyBatcherPath
         self.images_counter = -1
@@ -448,22 +443,32 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             self.free_voxel = self.free_voxel_empty
 
 
-class FCERecFinePokemonTrainer(FCFinePokemonTrainer):
+class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def init_BM(self):
-        self.BM = du.HoneyBatcherERec
+        self.BM = du.HoneyBatcherRec
         self.images_counter = -1
 
     def update_BM(self):
-        claims, gt, seeds, ids, hiddens= self.bm.get_batches()
+        inputs, gt, seeds, ids, hiddens = self.bm.get_batches()
         seeds = np.array(seeds, dtype=np.int)
-        precomp_input = self.precomp_input[range(self.bm.bs), :,
-                                           seeds[:, 0] - self.bm.pad,
-                                           seeds[:, 1] - self.bm.pad]
-        precomp_input = precomp_input[:, :, None, None]
+        n_c_prec = self.precomp_input.shape[1]
+        precomp_input_sliced = np.zeros((self.bm.bs, n_c_prec, 2, 2)).astype(np.float32)
+        for b, seed in enumerate(seeds):
+            cross_x, cross_y, _ = self.bm.get_cross_coords(seed)
+            # + 1 because we face the FOV for the BM + 2 because the cross is a inherent FC conv formulation
+            precomp_input_sliced[b, :, :, :] = \
+                self.precomp_input[b, :,
+                                   cross_x - self.bm.pad + 1,
+                                   cross_y - self.bm.pad + 1].swapaxes(0, 1).reshape(n_c_prec, 2, 2)
         sequ_len = 1
-        rnn_mask = np.ones((self.bm.bs, sequ_len), dtype=np.bool)
-        edge_prob, hidden = self.prediction_f(claims[:, :2], precomp_input, hiddens, rnn_mask, sequ_len)
-        self.bm.update_priority_queue(edge_prob, seeds, ids, hidden_states=hidden)
+        rnn_mask = np.ones((self.bm.bs*4, sequ_len), dtype=np.float32)
+        hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
+        height_probs, hidden = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens, rnn_mask, 1)
+
+
+        hidden_new = hiddens.reshape((self.bm.bs, 4, self.options.n_recurrent_hidden))
+        height_probs = height_probs.reshape((self.bm.bs, 4))
+        self.bm.update_priority_queue(height_probs, seeds, ids, hidden_states=hidden_new)
         return
 
     def train(self):
@@ -471,8 +476,9 @@ class FCERecFinePokemonTrainer(FCFinePokemonTrainer):
         self.bm.init_batch()
         bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         inputs = self.update_BM_FC()
-        # precompute fc part
-        self.precomp_input = self.fc_prec_conv_body(inputs)
+        # precompute fc partf
+        self.precomp_input = self.builder.fc_prec_conv_body(inputs)
+
         self.images_counter += 1
         while (self.free_voxel > 0):
             self.iterations += 1
@@ -481,8 +487,8 @@ class FCERecFinePokemonTrainer(FCFinePokemonTrainer):
             # if self.iterations % self.observation_counter == 0:
             #     self.draw_debug(reset=False)
         #
-        #     if self.free_voxel % 100 == 0:
-        #         bar.update(self.free_voxel_empty - self.free_voxel)
+            if self.free_voxel % 100 == 0:
+                bar.update(self.free_voxel_empty - self.free_voxel)
 
         self.bm.find_global_error_paths()
         if self.bm.count_new_path_errors() > 0:
@@ -502,10 +508,10 @@ class FCERecFinePokemonTrainer(FCFinePokemonTrainer):
             print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'batch dir ft', batch_dir_ft.shape, 'hidden', hid.shape, \
                 'rnn mask', batch_mask_ft.shape
             ft_loss_train, individual_loss_fine, _, heights = \
-                    self.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:],
-                                           batch_dir_ft, hid, batch_mask_ft, sequ_len)
+                    self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :],
+                                                   batch_dir_ft, hid, batch_mask_ft, 5)
 
-            if np.any(individual_loss_fine <0):
+            if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)
             print 'loss ft', ft_loss_train
 
@@ -519,6 +525,12 @@ class FCERecFinePokemonTrainer(FCFinePokemonTrainer):
             print 'init batch'
             # self.bm.draw_error_reconst('err_rec%i' %self.iterations)
             self.free_voxel = self.free_voxel_empty
+
+
+class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
+    def init_BM(self):
+        self.BM = du.HoneyBatcherERec
+        self.images_counter = -1
 
 
 class StalinTrainer(FCFinePokemonTrainer):
@@ -545,22 +557,18 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         print 'Gotta Catchem All'
         super(GottaCatchemAllTrainer, self).__init__(options)
         self.update_steps = 1
-        self.observation_counter = 100
+        self.observation_counter = 200
         self.loss_history = [[], []]
 
     def init_BM(self):
         self.BM = du.HoneyBatcherPath
 
     def update_BM(self):
-        # self.bm.batch_data_provider.load_data(self.options)
-        # self.bm.batch_data_provider = PolygonDataProvider(self.options)
         self.bm.init_batch()
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
-        # heights_gt = du.height_to_fc_height_gt(self.bm.global_height_gt_batch)
-        heights_gt = du.height_to_fc_edge_gt(self.bm.global_height_gt_batch)
+        heights_gt = self.bm.global_height_gt_batch[:, None, :, :]
         self.bm.edge_map_gt = heights_gt
         return inputs, None, heights_gt
-
 
     def train(self):
         self.iterations += 1
@@ -577,18 +585,15 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         loss_train, individual_loss, _ = self.loss_train_f(inputs, heights)
         loss_no_reg = np.mean(individual_loss)
 
-        if self.iterations % 100 == 0:
+        if self.iterations % 500 == 0:
             self.save_net()
 
         # update parameters once
         self.update_history.append(self.iterations)
         self.loss_history[0].append(loss_train)
         self.loss_history[1].append(loss_no_reg)
-        u.plot_train_val_errors(
-            [self.loss_history[0], self.loss_history[1]],
-            self.update_history,
-            self.save_net_path + '/training.png',
-            names=['loss', 'loss no reg'])
+        u.plot_train_val_errors([self.loss_history[0], self.loss_history[1]], self.update_history,
+                                self.save_net_path + '/training.png', names=['loss', 'loss no reg'])
         return loss_train
 
     def draw_debug(self, reset=False, image_path=None):
@@ -624,7 +629,7 @@ if __name__ == '__main__':
     options = get_options()
 
     # pret
-    if options.net_arch == 'v8_hydra_dilated':
+    if options.net_arch == 'net_v8_dilated':
         trainer = GottaCatchemAllTrainer(options)
         while not trainer.converged():
             print "\r pretrain %0.4f iteration %i free voxel %i" \
@@ -633,7 +638,7 @@ if __name__ == '__main__':
 
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
         options.fc_prec = True
-        trainer = FCERecFinePokemonTrainer(options)
+        trainer = FCRecFinePokemonTrainer(options)
         while not trainer.converged():
             trainer.train()
             trainer.save_net()

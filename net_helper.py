@@ -54,27 +54,28 @@ def calc_field_of_view(filt_sizes, stride=None, poolings=None,
                                                 np.array(stride[::-1]), \
                                                 np.array(dilatations[::-1])
 
-
-    if dilatations is not None:
-        filt_sizes += (filt_sizes - 1) * (dilatations - 1)
     new_edge_len = 1
     i = 0
+
     for p, f, s, d in zip(poolings, filt_sizes, stride, dilatations):
         i += 1
+        print "new", new_edge_len
+        assert (s == 1)
+        new_edge_len = new_edge_len + (f - 1) * d * p
+
         print 'pool', p, 'filt size', f, 'stride', s
         # new_edge_len = f + 2 * (d - 1) + new_edge_len + (i - 1)
-        new_edge_len = new_edge_len  + f + 2 * (d - 1)
         print "new", new_edge_len
 
 
 if __name__ == '__main__':
-    filts = [4, 3, 3, 3, 3,  3, 3, 1, 1]
-    dils =  [1, 1, 2, 4, 8, 16, 1, 1, 1]
+    # filts = [4, 3, 3, 3, 3,  3, 3, 1, 1]
+    # dils =  [1, 1, 2, 4, 8, 16, 1, 1, 1]
 
     # strides = [1, 1, 1]
-    filts = [3, 3]
-    dils = [1, 1]
-    fov = 61
+    filts = [5, 3, 3, 5]
+    dils = [4, 8, 16, 1]
+    fov = 69
     print fov
     calc_field_of_view(filts, dilatations=dils)
     # for fs, p, dil in zip(filts, poolings, dilatations):

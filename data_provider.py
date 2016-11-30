@@ -55,7 +55,6 @@ class DataProvider(object):
         self.pl = options.patch_len
         self.load_data(options)
         self.n_slices = range(self.full_input.shape[0])
-
         self.options.global_input_len = self.options.global_edge_len
 
         if options.padding_b:
@@ -102,8 +101,8 @@ class DataProvider(object):
             data_shape[2] = self.options.global_edge_len
 
         if not self.options.padding_b:
-            data_shape[1] -= self.options.patch_len
-            data_shape[2] -= self.options.patch_len
+            data_shape[1] -= self.options.patch_len - 1
+            data_shape[2] -= self.options.patch_len - 1
 
 
         return data_shape
@@ -146,24 +145,19 @@ class DataProvider(object):
             return [ind_b, None, None]
 
     def prepare_label_batch(self, label, height, rois):
-
         if self.options.global_edge_len > 0:
             ind_b, ind_x, ind_y = rois
             if not self.options.padding_b:
                 ind_x += self.options.patch_len / 2
                 ind_y += self.options.patch_len / 2
             for b in range(self.bs):
-                label_inp_len = \
-                    self.options.global_input_len - self.options.patch_len
-
-                height[b, :, :] = \
-                    self.height_gt[ind_b[b],
-                       ind_x[b]:ind_x[b] + label_inp_len,
-                       ind_y[b]:ind_y[b] + label_inp_len]
-                label[b, :, :] = \
-                    self.label[ind_b[b],
-                        ind_x[b]:ind_x[b] + label_inp_len,
-                        ind_y[b]:ind_y[b] + label_inp_len]
+                label_inp_len = self.options.global_input_len - self.options.patch_len + 1
+                height[b, :, :] = self.height_gt[ind_b[b],
+                                                 ind_x[b]:ind_x[b] + label_inp_len,
+                                                 ind_y[b]:ind_y[b] + label_inp_len]
+                label[b, :, :] = self.label[ind_b[b],
+                                            ind_x[b]:ind_x[b] + label_inp_len,
+                                            ind_y[b]:ind_y[b] + label_inp_len]
         else:
             for b in range(self.bs):
                 if self.options.padding_b:
@@ -181,7 +175,6 @@ class DataProvider(object):
         del global_seeds[:]
         for b in range(self.bs):
             self.global_seeds.append(seeds[b]+self.pad)
-
 
     def load_data(self, options):
         # print self.options.input_data_path
