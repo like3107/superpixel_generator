@@ -63,7 +63,7 @@ class HoneyBatcherPredict(object):
         # private
         self.n_channels = options.network_channels + 2
 
-        self.lowercomplete_e = options.lowercomplete_e 
+        self.lowercomplete_e = options.lowercomplete_e
         self.max_penalty_pixel = options.max_penalty_pixel
 
         self.global_claims = np.empty(self.image_shape)
@@ -131,7 +131,7 @@ class HoneyBatcherPredict(object):
 
     def get_cross_coords_offset(self, center):
         coords = self.coordinate_offset + center - self.pad
-        np.clip(coords[:, 0], 0,  self.label_shape[1] - 1, out=coords[:, 0])
+        np.clip(coords[:, 0], 0, self.label_shape[1] - 1, out=coords[:, 0])
         np.clip(coords[:, 1], 0, self.label_shape[2] - 1, out=coords[:, 1])
         return coords[:, 0], coords[:, 1], self.direction_array
 
@@ -363,7 +363,7 @@ class HoneyBatcherPredict(object):
                                direction, center, input_time=0, add_all=False):
         # check if there is no other lower prediction
         is_lowest = self.check_is_lowest(b, heights, x, y, add_all)
-            
+
         heights[heights < lower_bound] = lower_bound
         self.global_heightmap_batch[b, x - self.pad, y - self.pad][is_lowest] \
             = heights[is_lowest]
@@ -1020,7 +1020,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         for i, error in enumerate(errors):
             batch, center, Id = [error['batch'], error[key_center], error[key_id]]
             # assert (self.global_timemap[batch, center[0], center[1]] == timepoints[i])
-            center += self.coordinate_offset[error[key_dir]]
+            center = self.update_position(center, error[key_dir])
             batches.append(batch)
             centers.append(center)
             timepoints.append(error[key_time])
