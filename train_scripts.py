@@ -505,7 +505,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                  names=['Adapted Rand error', 'Adapted Rand error precision'])
         for b in range(min(5, self.bm.bs)):
             self.val_bm.draw_debug_image("%i_validation_b_%03i_i_%08i_f_%i" % (b, 0, self.iterations, self.free_voxel),
-                                        path=self.image_path_validation, b=0)
+                                        path=self.image_path_validation, b=b)
         return score
 
     def train(self):
