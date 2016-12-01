@@ -1012,37 +1012,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         path[:count_non_mask] = path[:count_non_mask][::-1]
         return path
 
-    def backtrace_error(self, selection, backtrace_length, err_type, id_type):
-        error_selection = []
-        for s in selection:
-            current_error = copy.copy(self.global_error_dict[s])
-            new_path_error = []
-            new_path_error.append(current_error)
-            for t_back in range(1, backtrace_length):
-                current_error = self.backtrace_error_step(current_error, err_type + "_time", err_type + "_pos",
-                                                          id_type + "_id", err_type + "_direction",
-                                                          err_type + "_mask")
-                new_path_error.append(current_error)
-            # new_path_error.reverse()
-            new_path_error = self.reverse_path(new_path_error, err_type + "_mask")
-            error_selection += new_path_error
-        return error_selection
-
-    def backtrace_error_step(self, error, key_time, key_center, key_id, key_direction, key_mask):
-        bt_error = copy.copy(error)
-        batch, center, Id = [error['batch'], error[key_center], error[key_id]]
-        direction = self.global_directionmap_batch[batch, center[0] - self.pad, center[1] - self.pad]
-        if direction == -1:
-            bt_error[key_mask] = True
-            return bt_error
-
-        bt_pos = self.update_position(center, direction)
-        bt_error[key_center] = bt_pos
-        bt_error[key_time] = self.global_timemap[batch, bt_pos[0], bt_pos[1]]
-        bt_error[key_direction] = direction
-        return bt_error
-
-    def reconstruct_path_error_inputs(self, backtrace_length=0):
+    def select_errors(self):
         # take approx this many errors or all
         n_batch_errors = 20
         probs = np.array([self.global_error_dict[k]['importance'] for k in self.global_error_dict.keys()],dtype=float)
@@ -1055,29 +1025,23 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         for k in selection:
             self.global_error_dict[k]['used'] = True
+        return selection
 
-        rnn_masks = []
+    def reconstruct_path_error_inputs(self, backtrace_length=0):
+        selection = self.select_errors()
         reconst_es = []
         error_selections = []
         for err_type, id_type in zip(['e1', 'e2'], ['large', 'small']):
-            if backtrace_length == 0:
-                error_selection = [global_error_dict[e] for e in selection]
-            else:
-                error_selection = self.backtrace_error(selection, backtrace_length, err_type, id_type)
-
-            rnn_mask = [err_type + '_mask' not in e for e in error_selection]
-            rnn_mask = np.array(rnn_mask, dtype=np.bool).reshape((-1, backtrace_length))
-
+            error_selection = [global_error_dict[e] for e in selection]
             self.pad -= 1
             self.pl -= 2
             reconst_e = self.reconstruct_input_at_timepoint(error_selection, err_type + "_time", err_type + "_pos",
                                                             id_type + "_id", err_type + "_direction")
             self.pad += 1
             self.pl += 2
-            rnn_masks.append(rnn_mask)
-            reconst_es.append(reconst_e)
             error_selections.append(error_selection)
-        return reconst_es[0], reconst_es[1], rnn_masks[0], rnn_masks[1]
+        return reconst_es[0], reconst_es[1]
+
 
     def serialize_to_h5(self, h5_filename, path="./../data/debug/serial/"):
         if not exists(path):
@@ -1115,8 +1079,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
             print "path",path+'/'+name+'pred.h5', "gt_path",path+'/'+name+'_gt.h5'
 
-            val_score = vs.validate_segmentation(pred_path=path+'/'+name+'pred.h5',
-                                            gt_path=path+'/'+name+'_gt.h5')
+            val_score = vs.validate_segmentation(pred_path=path+'/'+name+'pred.h5', gt_path=path+'/'+name+'_gt.h5')
             print val_score
             import json
             with open(path+'/'+name+'_score.json', 'w') as f:
@@ -1451,19 +1414,82 @@ class HoneyBatcherRec(HoneyBatcherPath):
             hidden_states[b, 0, :]
         super(HoneyBatcherRec, self).update_priority_queue_i(b, center, Id, height)
 
+    def get_hidden(self, b, center):
+        direction = self.global_directionmap_batch[b, center[0] - self.pad, center[1] - self.pad]
+        if direction == -1:  # seed
+            return np.zeros((self.n_recurrent_hidden), dtype=np.float32)
+        else:
+            origin = self.update_position(center, self.global_directionmap_batch[b, center[0] - self.pad,
+                                                                                    center[1] - self.pad])
+            return self.global_hidden_states[b, direction, origin[0] - self.pad, origin[1] - self.pad, :]
+
     def get_batches(self):
         raw_batch, gts, centers, ids = super(HoneyBatcherRec, self).get_batches()
         hiddens = np.zeros((self.bs,  self.n_recurrent_hidden), dtype='float32')
         # load hidden states
         for b, center in enumerate(centers):
-            direction = self.global_directionmap_batch[b, center[0] - self.pad,  center[1] - self.pad]
-            if direction == -1:  # seed
-                hiddens[b] = 0
-            else:
-                origin = self.update_position(center, self.global_directionmap_batch[b, center[0] - self.pad,
-                                                                                        center[1] - self.pad])
-                hiddens[b] = self.global_hidden_states[b, direction, origin[0] - self.pad, origin[1] - self.pad, :]
+            hiddens[b] = self.get_hidden(b, center)
         return raw_batch, gts, centers, ids, hiddens
+
+
+    def backtrace_error(self, selection, backtrace_length, err_type, id_type):
+        error_selection = []
+        hidden_coords = []
+        for s in selection:
+            current_error = copy.copy(self.global_error_dict[s])
+            new_path_error = []
+            new_path_error.append(current_error)
+            for t_back in range(1, backtrace_length):
+                current_error = self.backtrace_error_step(current_error, err_type + "_time", err_type + "_pos",
+                                                          id_type + "_id", err_type + "_direction", err_type + "_mask")
+                new_path_error.append(current_error)
+            new_path_error = self.reverse_path(new_path_error, err_type + "_mask")
+            error_selection += new_path_error
+            hidden_coords.append([current_error["batch"], current_error[err_type + "_pos"]])
+        return error_selection, hidden_coords
+
+    def backtrace_error_step(self, error, key_time, key_center, key_id, key_direction, key_mask):
+        bt_error = copy.copy(error)
+        batch, center, Id = [error['batch'], error[key_center], error[key_id]]
+        direction = self.global_directionmap_batch[batch, center[0] - self.pad, center[1] - self.pad]
+        if direction == -1:
+            bt_error[key_mask] = True
+            return bt_error
+        else:
+            bt_pos = self.update_position(center, direction)
+            bt_error[key_center] = bt_pos
+            bt_error[key_time] = self.global_timemap[batch, bt_pos[0], bt_pos[1]]
+            bt_error[key_direction] = direction
+            return bt_error
+
+    def reconstruct_path_error_inputs(self, backtrace_length=0):
+        selection = self.select_errors()
+
+        rnn_masks = []
+        rnn_hidden_inits = []
+        reconst_es = []
+        error_selections = []
+        for err_type, id_type in zip(['e1', 'e2'], ['large', 'small']):
+            if backtrace_length == 0:
+                error_selection = [global_error_dict[e] for e in selection]
+            else:
+                error_selection, hidden_coords = self.backtrace_error(selection, backtrace_length, err_type, id_type)
+
+            rnn_hidden_init = [self.get_hidden(b, hidden_coord) for b, hidden_coord in hidden_coords]
+            rnn_mask = [err_type + '_mask' not in e for e in error_selection]
+            rnn_mask = np.array(rnn_mask, dtype=np.bool).reshape((-1, backtrace_length))
+
+            self.pad -= 1
+            self.pl -= 2
+            reconst_e = self.reconstruct_input_at_timepoint(error_selection, err_type + "_time", err_type + "_pos",
+                                                            id_type + "_id", err_type + "_direction")
+            self.pad += 1
+            self.pl += 2
+            rnn_masks.append(rnn_mask)
+            reconst_es.append(reconst_e)
+            error_selections.append(error_selection)
+            rnn_hidden_inits.append(np.array(rnn_hidden_init))
+        return reconst_es[0], reconst_es[1], rnn_masks[0], rnn_masks[1], rnn_hidden_inits[0], rnn_hidden_inits[1]
 
 
 class HoneyBatcherERec(HoneyBatcherRec):

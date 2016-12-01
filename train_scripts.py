@@ -503,10 +503,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                  range(len(self.val_loss_history[0])),
                                  self.save_net_path + '/validation.png',
                  names=['Adapted Rand error', 'Adapted Rand error precision'])
-        self.val_bm.draw_debug_image(
-                "validation_b_%03i_i_%08i_f_%i" %
-                (0, self.iterations, self.free_voxel),
-                path=self.image_path_validation, b=0)
+        for b in range(min(5, self.bm.bs)):
+            self.val_bm.draw_debug_image("%i_validation_b_%03i_i_%08i_f_%i" % (b, 0, self.iterations, self.free_voxel),
+                                        path=self.image_path_validation, b=0)
         return score
 
     def train(self):
@@ -525,26 +524,25 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             self.update_BM()
             # if self.iterations % self.observation_counter == 0:
             #     self.draw_debug(reset=False)
-        #
+
             if self.free_voxel % 100 == 0:
                 bar.update(self.free_voxel_empty - self.free_voxel)
 
         self.bm.find_global_error_paths()
         if self.bm.count_new_path_errors() > 0:
-            error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2 = \
+            error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
                 self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
 
-            batch_mask_ft = exp.stack_batch(rnn_mask_e1, rnn_mask_e2)
-            batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
+            batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
+            batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
+            batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
 
-            batch_ft = exp.flatten_stack(batch_ft).astype(np.float32)
-            batch_mask_ft = exp.flatten_stack(batch_mask_ft).astype(np.float32)
-
-            hid = np.zeros((batch_mask_ft.shape[0], options.n_recurrent_hidden), dtype=np.float32)
             sequ_len = self.options.backtrace_length
-            print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', hid.shape, 'rnn mask', batch_mask_ft.shape
+            print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
+                'rnn mask', batch_mask_ft.shape
             ft_loss_train, individual_loss_fine, heights, ft_loss_noreg = \
-                    self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], hid, batch_mask_ft, 5)
+                    self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
+                                                   batch_mask_ft, 5)
 
             if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)
@@ -565,7 +563,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         u.plot_train_val_errors([self.loss_history[0], self.loss_history[1]], self.update_history,
                                 self.save_net_path + '/ft_training.png', names=['loss', 'loss no reg'],
                                 log_scale=False)
-
 
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
@@ -665,7 +662,6 @@ class RecurrentTrainer(FCFinePokemonTrainer):
         print out_rec_f(self.input, self.hid_init).shape
 
 
-
 if __name__ == '__main__':
     options = get_options()
     # pret
@@ -683,7 +679,7 @@ if __name__ == '__main__':
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
-            if trainer.val_bm is not None and epoch % 5 == 0:
+            if trainer.val_bm is not None and epoch % 10 == 0:
                 trainer.validate()
             epoch += 1
 
