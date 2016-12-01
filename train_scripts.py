@@ -472,9 +472,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         sequ_len = 1
         rnn_mask = np.ones((bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
-        height_probs, hidden = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens, rnn_mask, 1)
+        height_probs, hidden_out = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens, rnn_mask, 1)
 
-        hidden_new = hiddens.reshape((bm.bs, 4, self.options.n_recurrent_hidden))
+        hidden_new = hidden_out.reshape((bm.bs, 4, self.options.n_recurrent_hidden))
         height_probs = height_probs.reshape((bm.bs, 4))
         bm.update_priority_queue(height_probs, seeds, ids, hidden_states=hidden_new)
 
