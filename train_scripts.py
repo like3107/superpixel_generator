@@ -464,8 +464,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         rnn_mask = np.ones((self.bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
         height_probs, hidden = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens, rnn_mask, 1)
-
-
         hidden_new = hiddens.reshape((self.bm.bs, 4, self.options.n_recurrent_hidden))
         height_probs = height_probs.reshape((self.bm.bs, 4))
         self.bm.update_priority_queue(height_probs, seeds, ids, hidden_states=hidden_new)
@@ -497,19 +495,17 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
             batch_mask_ft = exp.stack_batch(rnn_mask_e1, rnn_mask_e2)
             batch_ft = exp.stack_batch(error_b_type1, error_b_type2)
-            batch_dir_ft = exp.stack_batch(dir1, dir2)
 
             batch_ft = exp.flatten_stack(batch_ft).astype(np.float32)
             batch_mask_ft = exp.flatten_stack(batch_mask_ft).astype(np.float32)
-            batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
 
             hid = np.zeros((batch_mask_ft.shape[0], options.n_recurrent_hidden), dtype=np.float32)
             sequ_len = self.options.backtrace_length
-            print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'batch dir ft', batch_dir_ft.shape, 'hidden', hid.shape, \
+            print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', hid.shape, \
                 'rnn mask', batch_mask_ft.shape
             ft_loss_train, individual_loss_fine, _, heights = \
                     self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :],
-                                                   batch_dir_ft, hid, batch_mask_ft, 5)
+                                                   hid, batch_mask_ft, 5)
 
             if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)

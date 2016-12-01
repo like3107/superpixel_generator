@@ -187,14 +187,10 @@ class HoneyBatcherPredict(object):
         self.get_seed_ids()
         self.initialize_priority_queue()
 
-        self.global_prediction_map = np.empty((self.bs,
-                                               self.label_shape[1],
-                                               self.label_shape[2], 4))
+        self.global_prediction_map = np.empty((self.bs, self.label_shape[1], self.label_shape[2], 4))
         self.global_prediction_map.fill(np.inf)
-        # debug
-        self.global_prediction_map_nq = np.empty((self.bs,
-                                                  self.label_shape[1],
-                                                  self.label_shape[2], 4))
+
+        self.global_prediction_map_nq = np.empty((self.bs, self.label_shape[1], self.label_shape[2], 4))
         self.global_prediction_map_nq.fill(np.inf)
 
     def get_seed_coords(self, sigma=1.0, min_dist=4, thresh=0.2):
@@ -1064,10 +1060,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         probs = np.array([self.global_error_dict[k]['importance'] \
                           for k in self.global_error_dict.keys()],dtype=float)
         probs /= np.sum(probs)
-        selection = np.random.choice(self.global_error_dict.keys(),
-                                     size=min(n_batch_errors,
-                                              len(probs)),
-                                     p=probs,
+        selection = np.random.choice(self.global_error_dict.keys(), size=min(n_batch_errors, len(probs)), p=probs,
                                      replace=False)
 
         for k in self.global_error_dict:
@@ -1162,9 +1155,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             with open(path+'/'+name+'_score.json', 'w') as f:
                 f.write(json.dumps(val_score))
 
-    def draw_batch(self, raw_batch, image_name,
-                   path='./../data/debug/',
-                   save=True, gt=None, probs=None):
+    def draw_batch(self, raw_batch, image_name, path='./../data/debug/', save=True, gt=None, probs=None):
         plot_images = []
         n_batches = min(10, raw_batch.shape[0])     # for visibility
         for b in range(n_batches):
@@ -1185,8 +1176,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         u.save_images(plot_images, path=path, name=image_name, column_size=4)
 
-    def draw_error_reconst(self, image_name, path='./../data/debug/',
-                           save=True):
+    def draw_error_reconst(self, image_name, path='./../data/debug/', save=True):
         for e_idx, error in self.global_error_dict.items():
             plot_images = []
             if not "draw_file" in error:
@@ -1245,8 +1235,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             else:
                 print "skipping ", e_idx
 
-    def draw_debug_image(self, image_name, path='./../data/debug/',
-                         save=True, b=0, inheritance=False,
+    def draw_debug_image(self, image_name, path='./../data/debug/', save=True, b=0, inheritance=False,
                          plot_height_pred=False):
 
         batch, claims = self.get_image_crops(b)
