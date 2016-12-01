@@ -44,6 +44,8 @@ class PokemonTrainer(object):
         if "val_options" in self.options:
             self.options.val_options.patch_len = self.builder.fov
             self.val_bm = self.BM(self.options.val_options)
+        else:
+            self.val_bm = None
 
         self.iterations = -1
         self.update_steps = 10
@@ -672,7 +674,7 @@ if __name__ == '__main__':
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
-            if epoch % 1 == 0:
+            if trainer.val_bm is not None and epoch % 1 == 0:
                 trainer.validate()
             epoch += 1
 
