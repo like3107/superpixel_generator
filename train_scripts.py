@@ -53,7 +53,7 @@ class PokemonTrainer(object):
         self.free_voxel = self.free_voxel_empty
         self.observation_counter = self.options.save_counter
         self.update_history = []
-        self.loss_history = []
+        self.loss_history = [[], []]
         self.val_loss_history = [[], []]
 
     def network_i_choose_you(self):
@@ -531,7 +531,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         self.bm.find_global_error_paths()
         if self.bm.count_new_path_errors() > 0:
-            error_b_type1, error_b_type2, dir1, dir2, rnn_mask_e1, rnn_mask_e2 = \
+            error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2 = \
                 self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
 
             batch_mask_ft = exp.stack_batch(rnn_mask_e1, rnn_mask_e2)
@@ -542,23 +542,30 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
             hid = np.zeros((batch_mask_ft.shape[0], options.n_recurrent_hidden), dtype=np.float32)
             sequ_len = self.options.backtrace_length
-            print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', hid.shape, \
-                'rnn mask', batch_mask_ft.shape
-            ft_loss_train, individual_loss_fine, _, heights = \
-                    self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :],
-                                                   hid, batch_mask_ft, 5)
+            print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', hid.shape, 'rnn mask', batch_mask_ft.shape
+            ft_loss_train, individual_loss_fine, heights, ft_loss_noreg = \
+                    self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], hid, batch_mask_ft, 5)
 
             if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)
-            print 'loss ft', ft_loss_train
-
+            print '\r loss ft', ft_loss_train,
+            self.draw_loss(ft_loss_train, ft_loss_noreg)
 
         if self.images_counter % 1 == 0:
             self.save_net()
             trainer.draw_debug(reset=True)
 
-        # self.bm.draw_error_reconst('err_rec%i' %self.iterations)
-            
+        if self.free_voxel == 0:
+            self.free_voxel = self.free_voxel_empty
+
+    def draw_loss(self, ft_loss_train, ft_loss_noreg):
+        self.update_history.append(self.iterations)
+        self.loss_history[0].append(ft_loss_train)
+        self.loss_history[1].append(ft_loss_noreg)
+        u.plot_train_val_errors([self.loss_history[0], self.loss_history[1]], self.update_history,
+                                self.save_net_path + '/ft_training.png', names=['loss', 'loss no reg'],
+                                log_scale=False)
+
 
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):

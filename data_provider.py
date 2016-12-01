@@ -300,7 +300,6 @@ class PolygonDataProvider(DataProvider):
         #     out.create_dataset("label",data=self.label.astype(np.float32)) 
         #     out.create_dataset("height",data=self.height_gt.astype(np.float32)) 
 
-
     def draw_voronoi(self, num_seeds = 5):
         
         self.label = np.zeros((self.bs,self.size, self.size), dtype=np.uint8)

@@ -128,8 +128,7 @@ class NetBuilder:
         # get last output of claims and static input net
         layers['l_merge_05'] = L.ConcatLayer([layers['Cross_slicer_stat'], layers['Cross_slicer']])
 
-        W_fc_07_stat = np.random.random((2048, 320, 1, 1)).astype('float32') / 10000.
-        # W_fc_07_stat = np.zeros((2048, 320, 1, 1)).astype('float32') / 10000.
+        W_fc_07_stat = np.random.random((2048, 320, 1, 1)).astype('float32') / 1000.
         W_fc_07_stat[:, :-64, 0, 0] = np.array(layers_static['fc_07'].W.eval()).swapaxes(0, 1)[:, :, 0, 0]
         layers['fc_06'] = L.Conv2DLayer(layers['l_merge_05'], 2048, filter_size=1, name='fc',
                                         W=shared(W_fc_07_stat.astype(np.float32)),
@@ -198,8 +197,6 @@ class NetBuilder:
 
     def loss_updates_hydra_v8(self, layers, L1_weight=10**-5, margin=0):
 
-        all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
-
         # theano funcs
         # precompute convs on raw till dense layer
         out_precomp = L.get_output(layers['static_conv_06'], deterministic=True)
@@ -244,8 +241,9 @@ class NetBuilder:
         layers['l_merge_05'].input_layers[1] = layers['dyn_conv_04']
         layers['l_merge_05'].input_shapes[1] = layers['dyn_conv_04'].output_shape
 
-        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=True)
-        l_out_train = L.get_output(layers['l_out_cross'], deterministic=True)
+        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=False)
+        l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
+        all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
         # this needs to be functional for different loss fcts
         bs = layers['l_in_dyn_00'].input_var.shape[0]
@@ -268,9 +266,9 @@ class NetBuilder:
                                                   layers['l_in_hid_08'].input_var,
                                                   layers['l_in_rec_mask_08'].input_var,
                                                   self.sequ_len],
-                                                 [loss_train, individual_batch,
-                                                  l_out_prediciton, l_out_train],
+                                                 [loss_train, individual_batch, l_out_prediciton, loss_valid],
                                                  updates=updates)
+        assert (updates is not None)
 
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
@@ -281,8 +279,8 @@ def get_update_rule(loss_train, all_params, optimizer=None):
     elif optimizer == "adam":
         updates = las.updates.adam(loss_train, all_params)
     else:
-        raise Exception("unknown optimizer %s" % self.options.optimizer)
-    return
+        raise Exception("unknown optimizer %s" % optimizer)
+    return updates
 
 if __name__ == '__main__':
 
