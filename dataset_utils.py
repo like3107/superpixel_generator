@@ -47,8 +47,7 @@ class HoneyBatcherPredict(object):
         self.seed_method = options.seed_method
         self.bs = options.batch_size
 
-        self.batch_data_provider = data_provider.\
-                get_dataset_provider(options.dataset)(options)
+        self.batch_data_provider = data_provider.get_dataset_provider(options.dataset)(options)
 
         self.batch_shape = self.batch_data_provider.get_batch_shape()
         self.image_shape = self.batch_data_provider.get_image_shape()

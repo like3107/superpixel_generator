@@ -1,6 +1,6 @@
 import configargparse
 
-def get_options(script='training'):
+def get_options(script='training', ignore_config=False):
     """
     config parser wrapper. Used to generate options object that can be 
     propagated throughout all member classes of the trainer class
@@ -11,10 +11,17 @@ def get_options(script='training'):
 
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
-    p.add('-c', '--my-config', is_config_file=True)
+
+    if ignore_config:
+        # do not use config specified by -c
+        p.add('-c', '--my-config')
+    else:
+        p.add('-c', '--my-config', is_config_file=True)
+
     p.add('--net_name', default=def_net_name)
     p.add('--net_arch', default="ID_v5_hydra_BN")
     p.add('--no-save_net', dest='save_net_b', action='store_false')
+    p.add('--val_name', default='')
 
     # reload existing net
     p.add('--load_net', dest='load_net_b', action='store_true')
@@ -124,6 +131,11 @@ def get_options(script='training'):
 
     options.save_net_path = './../data/nets/' + options.net_name + '/'
     print 'saving files to ', options.net_name
+
+    # parse validation config
+    if not ignore_config and options.val_name:
+        options.val_options = get_options(script=options.val_name, ignore_config=True)
+
     return options
 
 

@@ -20,6 +20,9 @@ from trainer_config_parser import get_options
 import progressbar
 from lasagne import layers as L
 
+import validation_scripts as vs
+
+
 # TODO: add allowed slices?
 
 class PokemonTrainer(object):
@@ -37,7 +40,10 @@ class PokemonTrainer(object):
 
         self.init_BM()
         self.bm = self.BM(self.options)
-        self.bm.init_batch()
+
+        if "val_options" in self.options:
+            self.options.val_options.patch_len = self.builder.fov
+            self.val_bm = self.BM(self.options.val_options)
 
         self.iterations = -1
         self.update_steps = 10
@@ -46,6 +52,7 @@ class PokemonTrainer(object):
         self.observation_counter = self.options.save_counter
         self.update_history = []
         self.loss_history = []
+        self.val_loss_history = [[], []]
 
     def network_i_choose_you(self):
         network = self.builder.get_net(self.options.net_arch)
@@ -70,11 +77,13 @@ class PokemonTrainer(object):
         self.debug_path = self.save_net_path + "/debug"
         self.image_path = self.save_net_path + '/images/pretrain/'
         self.image_path_reset = self.save_net_path + '/images/reset/'
+        self.image_path_validation = self.save_net_path + '/images/validation/'
         self.net_param_path = self.save_net_path + '/nets/'
         code_path = self.save_net_path + '/code/'
         paths = [self.save_net_path, self.debug_path,
                  self.save_net_path + '/images/', self.image_path,
-                 self.net_param_path, code_path, self.image_path_reset]
+                 self.net_param_path, code_path, self.image_path_reset,
+                 self.image_path_validation]
 
         for path in paths:
             if not os.path.exists(path):
@@ -119,7 +128,7 @@ class PokemonTrainer(object):
     def converged(self):
         return self.iterations >= self.options.pre_train_iter
 
-    def draw_debug(self, reset=False, image_path=None):
+    def draw_debug(self, reset=False, image_path=None, image_name='train'):
         if reset:
             image_path = self.image_path_reset
         elif image_path is None:
@@ -127,8 +136,8 @@ class PokemonTrainer(object):
 
         for b in range(1):
             self.bm.draw_debug_image(
-                "train_b_%03i_i_%08i_f_%i" %
-                (b, self.iterations, self.free_voxel),
+                "%s_b_%03i_i_%08i_f_%i" %
+                (image_name, b, self.iterations, self.free_voxel),
                 path=image_path, b=b)
 
     def save_net(self, path=None, name=None):
@@ -137,7 +146,7 @@ class PokemonTrainer(object):
         if name is None:
             name = 'net_%i' % self.iterations
 
-        u.save_network(path, self.l_out, name, add=self.options._get_kwargs())
+        u.save_network(path, self.l_out, name, options=self.options)
 
     def load_net(self, file_path=None):
         if file_path is None:
@@ -232,6 +241,7 @@ class FinePokemonTrainer(PokemonTrainer):
 
 
     def train(self):
+        self.bm.init_batch()
         self.free_voxel = self.free_voxel_empty
         bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         while (self.free_voxel > 0):
@@ -246,7 +256,6 @@ class FinePokemonTrainer(PokemonTrainer):
         ft_loss_train = 0
 
         self.bm.find_global_error_paths()
-        self.save_net()
         if self.bm.count_new_path_errors() > 0:
             error_b_type1, error_b_type2, dir1, dir2 = \
                         self.bm.reconstruct_path_error_inputs()
@@ -271,11 +280,7 @@ class FinePokemonTrainer(PokemonTrainer):
         print ""
 
         self.save_net()
-        if self.free_voxel == 0:
-            trainer.draw_debug(reset=True)
-            self.bm.init_batch()
-            self.free_voxel = self.free_voxel_empty
-        return 'loss train'
+        trainer.draw_debug(reset=True)
 
     def converged(self):
         return self.iterations >= self.options.max_iter
@@ -448,32 +453,63 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.BM = du.HoneyBatcherRec
         self.images_counter = -1
 
-    def update_BM(self):
-        inputs, gt, seeds, ids, hiddens = self.bm.get_batches()
+    def update_BM(self, bm=None):
+        if bm is None:
+            bm = self.bm
+        inputs, gt, seeds, ids, hiddens = bm.get_batches()
         seeds = np.array(seeds, dtype=np.int)
         n_c_prec = self.precomp_input.shape[1]
-        precomp_input_sliced = np.zeros((self.bm.bs, n_c_prec, 2, 2)).astype(np.float32)
+        precomp_input_sliced = np.zeros((bm.bs, n_c_prec, 2, 2)).astype(np.float32)
         for b, seed in enumerate(seeds):
-            cross_x, cross_y, _ = self.bm.get_cross_coords(seed)
+            cross_x, cross_y, _ = bm.get_cross_coords(seed)
             # + 1 because we face the FOV for the BM + 2 because the cross is a inherent FC conv formulation
             precomp_input_sliced[b, :, :, :] = \
                 self.precomp_input[b, :,
-                                   cross_x - self.bm.pad + 1,
-                                   cross_y - self.bm.pad + 1].swapaxes(0, 1).reshape(n_c_prec, 2, 2)
+                                   cross_x - bm.pad + 1,
+                                   cross_y - bm.pad + 1].swapaxes(0, 1).reshape(n_c_prec, 2, 2)
         sequ_len = 1
-        rnn_mask = np.ones((self.bm.bs*4, sequ_len), dtype=np.float32)
+        rnn_mask = np.ones((bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
         height_probs, hidden = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens, rnn_mask, 1)
 
 
-        hidden_new = hiddens.reshape((self.bm.bs, 4, self.options.n_recurrent_hidden))
-        height_probs = height_probs.reshape((self.bm.bs, 4))
-        self.bm.update_priority_queue(height_probs, seeds, ids, hidden_states=hidden_new)
-        return
+        hidden_new = hiddens.reshape((bm.bs, 4, self.options.n_recurrent_hidden))
+        height_probs = height_probs.reshape((bm.bs, 4))
+        bm.update_priority_queue(height_probs, seeds, ids, hidden_states=hidden_new)
+
+    def validate(self):
+        self.val_bm.init_batch()
+        inputs = self.val_bm.global_input_batch[:, :, :-1, :-1]
+        self.precomp_input = self.builder.fc_prec_conv_body(inputs)
+
+        total_free_voxel = self.val_bm.get_num_free_voxel()
+        bar = progressbar.ProgressBar(max_value=total_free_voxel)
+        for i in range(total_free_voxel):
+            self.update_BM(bm=self.val_bm)
+            bar.update(i)
+
+        score, _ = vs.validate_segmentation(self.val_bm.global_claims[:,
+                                            self.val_bm.pad:-self.val_bm.pad,
+                                            self.val_bm.pad:-self.val_bm.pad],
+                                            self.val_bm.global_label_batch)
+
+        self.val_loss_history[0].append(1-score['Adapted Rand error'])
+        self.val_loss_history[1].append(1-score['Adapted Rand error precision'])
+        u.plot_train_val_errors([self.val_loss_history[0],
+                                 self.val_loss_history[1]],
+                                 range(len(self.val_loss_history[0])),
+                                 self.save_net_path + '/validation.png',
+                 names=['Adapted Rand error', 'Adapted Rand error precision'])
+        self.val_bm.draw_debug_image(
+                "validation_b_%03i_i_%08i_f_%i" %
+                (0, self.iterations, self.free_voxel),
+                path=self.image_path_validation, b=0)
+        return score
 
     def train(self):
         self.observation_counter = 500
         self.bm.init_batch()
+        self.free_voxel = self.free_voxel_empty
         bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         inputs = self.update_BM_FC()
         # precompute fc partf
@@ -520,11 +556,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             self.save_net()
             trainer.draw_debug(reset=True)
 
-        if self.free_voxel == 0:
-
-            print 'init batch'
-            # self.bm.draw_error_reconst('err_rec%i' %self.iterations)
-            self.free_voxel = self.free_voxel_empty
+        # self.bm.draw_error_reconst('err_rec%i' %self.iterations)
+            
 
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
@@ -627,7 +660,6 @@ class RecurrentTrainer(FCFinePokemonTrainer):
 
 if __name__ == '__main__':
     options = get_options()
-
     # pret
     if options.net_arch == 'net_v8_dilated':
         trainer = GottaCatchemAllTrainer(options)
@@ -639,9 +671,14 @@ if __name__ == '__main__':
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
         options.fc_prec = True
         trainer = FCRecFinePokemonTrainer(options)
+        epoch = 0
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
+            if epoch % 1 == 0:
+                trainer.validate()
+            epoch += 1
+
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     # elif options.net_arch == 'v8_hydra_dilated_ft_joint':
     #     # from pycallgraph import PyCallGraph

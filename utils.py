@@ -138,7 +138,7 @@ def make_bash_executable(base_path, add_option=''):
 
 
 def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
-                 n_filter=None,add=[]):
+                 n_filter=None,options=None):
 
     h5_values = []
     h5_keys = []
@@ -164,7 +164,8 @@ def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
         h5_values.append(n_filter)
 
     dp.save_h5(save_path + net_name, h5_keys, h5_values, overwrite='w')
-    save_options(save_path + net_name, add)
+    if not options is None:
+        save_options(save_path + net_name, options)
 
 
 def get_stack_indices(name,network):
@@ -365,14 +366,25 @@ def load_options(load_path, options={}):
     return options
 
 
+def save_namespace(h5_file, op_list, path="options/"):
+    for op_key, op_val in op_list:
+        if op_val is None:
+            continue
+        elif op_key == 'theano':
+            continue
+        elif op_key == 'val_options':
+            continue
+        else:
+            if path+op_key in h5_file:
+                h5_file.__delitem__(path+op_key)
+            h5_file.create_dataset(path+op_key,data=op_val)
+
 def save_options(load_path, options):
-    if len(options) > 0:
-        with h5py.File(load_path, 'r+') as net_h5:
-            for op_key, op_val in options:
-                if not op_val is None and op_key != 'theano':
-                    if "options/"+op_key in net_h5:
-                        net_h5.__delitem__("options/"+op_key)
-                    net_h5.create_dataset("options/"+op_key,data=op_val)
+    with h5py.File(load_path, 'r+') as net_h5:
+        save_namespace(net_h5, options._get_kwargs(), path="options/")
+        if 'val_options' in options:
+            save_namespace(net_h5, options.val_options._get_kwargs(), path="val_options/")
+            print "saving validation"
 
 
 def print_options_for_net(options):
