@@ -479,6 +479,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         bm.update_priority_queue(height_probs, seeds, ids, hidden_states=hidden_new)
 
     def validate(self):
+        if self.options.val_options.quick_eval:
+            self.val_bm.set_preselect_batches(range(self.val_bm.bs))
         self.val_bm.init_batch()
         inputs = self.val_bm.global_input_batch[:, :, :-1, :-1]
         self.precomp_input = self.builder.fc_prec_conv_body(inputs)
@@ -674,7 +676,7 @@ if __name__ == '__main__':
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
-            if trainer.val_bm is not None and epoch % 1 == 0:
+            if trainer.val_bm is not None and epoch % 5 == 0:
                 trainer.validate()
             epoch += 1
 
