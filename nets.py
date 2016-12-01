@@ -238,10 +238,7 @@ class NetBuilder:
 
         # now the loss function s.t. the RNN can have sequence lenght >1 & only single direction is selected
         # changes onm graph:
-        layers['l_in_direction'] = L.InputLayer((None,), input_var=T.vector(dtype='int32'))
         # replace cross slicer by single
-        # layers['l_merge_05'] = L.ConcatLayer([layers['static_conv_06'], layers['dyn_conv_04']])
-
         layers['l_merge_05'].input_layers[0] = layers['static_conv_06']
         layers['l_merge_05'].input_shapes[0] = layers['static_conv_06'].output_shape
         layers['l_merge_05'].input_layers[1] = layers['dyn_conv_04']
@@ -250,8 +247,8 @@ class NetBuilder:
         l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=True)
         l_out_train = L.get_output(layers['l_out_cross'], deterministic=True)
 
-        bs = layers['l_in_dyn_00'].input_var.shape[0]
         # this needs to be functional for different loss fcts
+        bs = layers['l_in_dyn_00'].input_var.shape[0]
         step = self.options.backtrace_length
         sum_height = l_out_train[::step]
         for t in range(1, step):
@@ -264,26 +261,28 @@ class NetBuilder:
         if L1_weight > 0:
             loss_train = loss_valid + L1_weight * L1_norm
 
-        if self.options.optimizer == "nesterov":
-            print "using nesterov_momentum"
-            updates = las.updates.nesterov_momentum(loss_train, all_params, 0.001)
-        elif self.options.optimizer == "adam":
-            updates = las.updates.adam(loss_train, all_params)
-        else:
-            raise Exception("unknown optimizer %s" % self.options.optimizer)
+        updates = get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
 
         self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
-                                             layers['l_in_static_00'].input_var,
-                                             layers['l_in_direction'].input_var,
-                                             layers['l_in_hid_08'].input_var,
-                                             layers['l_in_rec_mask_08'].input_var,
-                                             self.sequ_len],
-                                            [loss_train, individual_batch,
-                                             l_out_prediciton, l_out_train],
-                                            updates=updates, on_unused_input='ignore')
+                                                  layers['l_in_static_00'].input_var,
+                                                  layers['l_in_hid_08'].input_var,
+                                                  layers['l_in_rec_mask_08'].input_var,
+                                                  self.sequ_len],
+                                                 [loss_train, individual_batch,
+                                                  l_out_prediciton, l_out_train],
+                                                 updates=updates)
 
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
+def get_update_rule(loss_train, all_params, optimizer=None):
+    if optimizer == "nesterov":
+        print "using nesterov_momentum"
+        updates = las.updates.nesterov_momentum(loss_train, all_params, 0.0001)
+    elif optimizer == "adam":
+        updates = las.updates.adam(loss_train, all_params)
+    else:
+        raise Exception("unknown optimizer %s" % self.options.optimizer)
+    return
 
 if __name__ == '__main__':
 
