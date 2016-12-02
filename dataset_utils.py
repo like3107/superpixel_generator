@@ -1007,11 +1007,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def count_new_path_errors(self):
         return len([v for v in self.global_error_dict.values() if self.check_error(v)])
 
-    def reverse_path(self, path, mask_key):
-        count_non_mask = np.sum([mask_key not in e for e in path])
-        path[:count_non_mask] = path[:count_non_mask][::-1]
-        return path
-
     def select_errors(self):
         # take approx this many errors or all
         n_batch_errors = 20
@@ -1431,6 +1426,10 @@ class HoneyBatcherRec(HoneyBatcherPath):
             hiddens[b] = self.get_hidden(b, center)
         return raw_batch, gts, centers, ids, hiddens
 
+    def reverse_path(self, path, mask_key):
+        count_non_mask = np.sum([mask_key not in e for e in path])
+        path[:count_non_mask] = path[:count_non_mask][::-1]
+        return path
 
     def backtrace_error(self, selection, backtrace_length, err_type, id_type):
         error_selection = []
@@ -1489,6 +1488,13 @@ class HoneyBatcherRec(HoneyBatcherPath):
             reconst_es.append(reconst_e)
             error_selections.append(error_selection)
             rnn_hidden_inits.append(np.array(rnn_hidden_init))
+
+        # debug
+        self.rnn_masks = rnn_masks
+        self.reconst_es = reconst_es
+        self.error_selections = error_selections
+        self.rnn_hidden_inits = rnn_hidden_inits
+        self.selection = selection
         return reconst_es[0], reconst_es[1], rnn_masks[0], rnn_masks[1], rnn_hidden_inits[0], rnn_hidden_inits[1]
 
 

@@ -205,12 +205,11 @@ class NetBuilder:
         l_out = L.get_output(layers['l_out_cross'], deterministic=True)
         l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
         conv6 = L.get_output(layers['Cross_slicer_stat'], deterministic=True)
-        self.probs_f = theano.function(
-            [layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
-             layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
-             self.sequ_len],
-           [l_out, l_out_hidden, conv6],
-            on_unused_input='ignore')
+        self.probs_f = theano.function([layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
+                                        layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
+                                        self.sequ_len],
+                                       [l_out, l_out_hidden, conv6],
+                                        on_unused_input='ignore')
 
         l_out_old = L.get_output(self.layers_static['l_out_cross'], deterministic=True)
         self.old_f = theano.function([self.layers['l_in_static_00'].input_var], [l_out_old],
@@ -241,24 +240,12 @@ class NetBuilder:
         layers['l_merge_05'].input_layers[1] = layers['dyn_conv_04']
         layers['l_merge_05'].input_shapes[1] = layers['dyn_conv_04'].output_shape
 
-        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=False)
-        l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
+        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=True)
+        l_out_train = L.get_output(layers['l_out_cross'], deterministic=True)
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
-        # this needs to be functional for different loss fcts
-        bs = layers['l_in_dyn_00'].input_var.shape[0]
-        step = self.options.backtrace_length
-        sum_height = l_out_train[::step]
-        for t in range(1, step):
-            sum_height += l_out_train[t::step]
-        individual_batch = (sum_height[bs / 2 / step:] - sum_height[:bs / 2 / step])
-
-        L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
-
-        loss_valid = T.mean(individual_batch)
-        if L1_weight > 0:
-            loss_train = loss_valid + L1_weight * L1_norm
-
+        loss_train, individual_batch, loss_valid = \
+            get_loss_fct(layers, self.options.backtrace_length, l_out_train, L1_weight)
         updates = get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
 
         self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
@@ -272,6 +259,22 @@ class NetBuilder:
 
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
+
+def get_loss_fct(layers, backtrace_length, l_out_train, L1_weight):
+    bs = layers['l_in_dyn_00'].input_var.shape[0]
+    step = backtrace_length
+    sum_height = l_out_train[::step]
+    for t in range(1, step):
+        sum_height += l_out_train[t::step]
+    individual_batch = (sum_height[bs / 2 / step:] - sum_height[:bs / 2 / step])
+
+    L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
+
+    loss_valid = T.mean(individual_batch)
+    if L1_weight > 0:
+        loss_train = loss_valid + L1_weight * L1_norm
+    return loss_train, individual_batch, loss_valid
+
 def get_update_rule(loss_train, all_params, optimizer=None):
     if optimizer == "nesterov":
         print "using nesterov_momentum"
@@ -281,6 +284,7 @@ def get_update_rule(loss_train, all_params, optimizer=None):
     else:
         raise Exception("unknown optimizer %s" % optimizer)
     return updates
+
 
 if __name__ == '__main__':
 

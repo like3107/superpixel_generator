@@ -66,9 +66,15 @@ def get_options(script='training', ignore_config=False):
                                       action='store_false')
     p.add('--create_holes', action='store_true', default=False)
 
-    p.add('--scale_height_factor', default=100,type=float)
+    p.add('--scale_height_factor', default=100, type=float)
     p.add('--ahp', dest='add_height_penalty', action='store_true')
     p.add('--max_penalty_pixel', default=3, type=float)
+
+    # RNN
+    p.add('--n_recurrent_hidden', default=128, type=int)
+    p.add('--backtrace_length', default=5, type=int)
+
+
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)
@@ -114,8 +120,6 @@ def get_options(script='training', ignore_config=False):
 
     options = p.parse_args()
     options.fc_prec = False
-    options.n_recurrent_hidden = 128
-    options.backtrace_length = 5
 
     if options.input_data_path == "None":
         options.input_data_path ='./../data/volumes/input_%s.h5' % options.train_version
