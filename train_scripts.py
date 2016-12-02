@@ -484,7 +484,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         #
         # hidden_new = hidden_out.reshape((bm.bs, 4, self.options.n_recurrent_hidden))
         # height_probs = height_probs.reshape((bm.bs, 4))
-        # bm.update_priority_queue(height_probs, centers, ids, hidden_states=hidden_new)
+        bm.update_priority_queue(height_probs, centers, ids, hidden_states=hidden_new)
 
     def validate(self):
         if self.options.val_options.quick_eval:
