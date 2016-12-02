@@ -488,7 +488,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
     def validate(self):
         if self.options.val_options.quick_eval:
-            self.val_bm.set_preselect_batches(range(self.val_bm.bs))
+            interesting_batches = [4*5,14*5,26*5,28*5] + range(self.val_bm.bs)
+            self.val_bm.set_preselect_batches(interesting_batches[:self.val_bm.bs])
         self.val_bm.init_batch()
         inputs = self.val_bm.global_input_batch[:, :, :-1, :-1]
         self.precomp_input = self.builder.fc_prec_conv_body(inputs)
