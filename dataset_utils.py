@@ -1009,7 +1009,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def select_errors(self):
         # take approx this many errors or all
-        n_batch_errors = 20
+        n_batch_errors = 40
         probs = np.array([self.global_error_dict[k]['importance'] for k in self.global_error_dict.keys()],dtype=float)
         probs /= np.sum(probs)
         selection = np.random.choice(self.global_error_dict.keys(), size=min(n_batch_errors, len(probs)), p=probs,

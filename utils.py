@@ -384,7 +384,6 @@ def save_options(load_path, options):
         save_namespace(net_h5, options._get_kwargs(), path="options/")
         if 'val_options' in options:
             save_namespace(net_h5, options.val_options._get_kwargs(), path="val_options/")
-            print "saving validation"
 
 
 def print_options_for_net(options):

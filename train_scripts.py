@@ -19,7 +19,7 @@ import time
 from trainer_config_parser import get_options
 import progressbar
 from lasagne import layers as L
-
+import glob
 import validation_scripts as vs
 
 
@@ -138,8 +138,8 @@ class PokemonTrainer(object):
 
         for b in range(1):
             self.bm.draw_debug_image(
-                "%s_b_%03i_i_%08i_f_%i" %
-                (image_name, b, self.iterations, self.free_voxel),
+                "%s_%i_b_%03i_i_%08i_f_%i" %
+                (image_name, os.getpid(), b, self.iterations, self.free_voxel),
                 path=image_path, b=b)
 
     def save_net(self, path=None, name=None):
@@ -455,6 +455,21 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.BM = du.HoneyBatcherRec
         self.images_counter = -1
 
+        master_file = self.save_net_path+"/master.txt"
+        self.exp_path = self.save_net_path+"/experiences/"
+        self.current_net_name = "masternet.h5"
+        if not os.path.exists(master_file):
+            self.iterations = 0
+            os.system("touch "+master_file)
+            if not os.path.exists(self.exp_path):
+                os.makedirs(self.exp_path)
+            self.master = True
+            self.save_net(name=self.current_net_name)
+            print "starting Master"
+        else: 
+            self.master = False
+            print "starting Slave"
+
     def update_BM(self, bm=None):
         if bm is None:
             bm = self.bm
@@ -482,8 +497,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         #         print 'av deviation', np.mean(diff), 'max dev', np.max(diff)
         #         print 'centers', coords
         #
-        # hidden_new = hidden_out.reshape((bm.bs, 4, self.options.n_recurrent_hidden))
-        # height_probs = height_probs.reshape((bm.bs, 4))
+        hidden_new = hidden_out.reshape((bm.bs, 4, self.options.n_recurrent_hidden))
+        height_probs = height_probs.reshape((bm.bs, 4))
         bm.update_priority_queue(height_probs, centers, ids, hidden_states=hidden_new)
 
     def validate(self):
@@ -518,43 +533,81 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         return score
 
     def train(self):
-        self.observation_counter = 500
-        self.bm.init_batch()
-        self.free_voxel = self.free_voxel_empty
-        bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
-        inputs = self.update_BM_FC()
-        # precompute fc partf
-        self.precomp_input = self.builder.fc_prec_conv_body(inputs)
+        if self.master:
+            print self.iterations,
+            sys.stdout.flush()
+            for f in glob.glob(self.exp_path+'*.h5'):
+                print "learning from ",f
+                with h5py.File(f,"r") as h5f:
+                    if 'done' in h5f:
 
-        self.images_counter += 1
-        while (self.free_voxel > 0):
-            self.iterations += 1
-            self.free_voxel -= 1
-            self.update_BM()
-            # if self.iterations % self.observation_counter == 0:
-            #     self.draw_debug(reset=False)
+                        batch_ft1 = np.array(h5f['batch_ft1'])
+                        batch_ft2 = np.array(h5f['batch_ft2'])
+                        batch_inits = np.array(h5f['batch_inits'])
+                        batch_mask_ft = np.array(h5f['batch_mask_ft'])
+                        length = h5f['options.backtrace_length'].value
 
-            if self.free_voxel % 100 == 0:
-                bar.update(self.free_voxel_empty - self.free_voxel)
+                        ft_loss_train, individual_loss_fine, heights, ft_loss_noreg = \
+                                self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft, length)
 
-        self.bm.find_global_error_paths()
-        if self.bm.count_new_path_errors() > 0:
-            error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
-                self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
+                        self.save_net(name=self.current_net_name)
+                        self.save_net()
+                        os.system('rm '+f)
+                        self.draw_loss(ft_loss_train, ft_loss_noreg)
+                        self.iterations += 1
+            time.sleep(5) 
 
-            batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
-            batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
-            batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
+        else:
+            np.random.seed(np.random.seed(int(time.time())))
+            # change seed so different images for retrain
+            print "loading network parameters from ", 
+            u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
 
-            sequ_len = self.options.backtrace_length
-            print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
-                'rnn mask', batch_mask_ft.shape
-            ft_loss_train, individual_loss_fine, heights, ft_loss_noreg = \
-                    self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
-                                                   batch_mask_ft, options.backtrace_length)
+            self.observation_counter = 500
+            self.bm.init_batch()
+            self.free_voxel = self.free_voxel_empty
+            bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
+            inputs = self.update_BM_FC()
+            # precompute fc partf
+            self.precomp_input = self.builder.fc_prec_conv_body(inputs)
+            # pics = [{"title": "precomp input %i"%b,'interpolation': 'none',"cmap":'gray',"im":self.precomp_input[b, 0, :, :]} for b in range(self.bm.bs)]
+            # pics += [{"title": "precomp input %i"%b,'interpolation': 'none',"cmap":'gray',"im":self.precomp_input[b, 1, :, :]} for b in range(self.bm.bs)]
+            # u.save_images(pics, './../data/debug/', 'precomp_%i'%self.iterations)
 
-            if np.any(individual_loss_fine < 0):
-                print 'any', min(individual_loss_fine)
+            self.images_counter += 1
+            while (self.free_voxel > 0):
+                self.iterations += 1
+                self.free_voxel -= 1
+                self.update_BM()
+                # if self.iterations % self.observation_counter == 0:
+                #     self.draw_debug(reset=False)
+
+                if self.free_voxel % 100 == 0:
+                    bar.update(self.free_voxel_empty - self.free_voxel)
+
+            self.bm.find_global_error_paths()
+            if self.bm.count_new_path_errors() > 0:
+                error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
+                    self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
+
+                batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
+                batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
+                batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
+
+                sequ_len = self.options.backtrace_length
+                print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
+                    'rnn mask', batch_mask_ft.shape
+
+                with h5py.File(self.exp_path+"/%i_%f.h5"%(os.getpid(), time.time()),"w") as f:
+                    f.create_dataset('batch_ft1',data=batch_ft[:, :2, :, :]) 
+                    f.create_dataset('batch_ft2',data=batch_ft[:, 2:, :, :]) 
+                    f.create_dataset('batch_inits',data=batch_inits) 
+                    f.create_dataset('batch_mask_ft',data=batch_mask_ft) 
+                    f.create_dataset('options.backtrace_length',data=options.backtrace_length)
+                    f.create_dataset('done',data=[1])
+
+                # if np.any(individual_loss_fine < 0):
+                #     print 'any', min(individual_loss_fine)
 
             #### debug
             # ts = self.options.backtrace_length
@@ -572,14 +625,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             #     print 'height is %.3f, internal prop is %.3f, diff %.3f' % (height, height_should, (height - height_should))
             ### debug
 
-            self.draw_loss(ft_loss_train, ft_loss_noreg)
-
-        if self.images_counter % 1 == 0:
-            self.save_net()
-            trainer.draw_debug(reset=True)
-
-        if self.free_voxel == 0:
-            self.free_voxel = self.free_voxel_empty
+            if self.images_counter % 1 == 0:
+                # self.save_net()
+                trainer.draw_debug(reset=True)
 
     def draw_loss(self, ft_loss_train, ft_loss_noreg):
         self.update_history.append(self.iterations)
@@ -703,9 +751,10 @@ if __name__ == '__main__':
         epoch = 0
         while not trainer.converged():
             trainer.train()
-            trainer.save_net()
-            if trainer.val_bm is not None and epoch % 10 == 0:
-                trainer.validate()
+            if trainer.master:
+                trainer.save_net(name=trainer.current_net_name)
+                if trainer.val_bm is not None and trainer.iterations % 20 == 0:
+                    trainer.validate()
             epoch += 1
 
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
