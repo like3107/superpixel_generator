@@ -473,19 +473,23 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
 
         # debug
-        # hiddens[:] = 0
-        # inputs[:, :2] = 0
+        hiddens[:] = 0
+        inputs[:, :2] = 0
+        inputs[:, 2:] = 0
+        precomp_input_sliced[:] = 0
         height_probs, hidden_out, _ = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens, rnn_mask, 1)
         ####
         # exit()
         # debug: is preprocessed input correctly reused
-        sum_hiddens = np.sum(np.abs(hiddens))
-        if sum_hiddens == 0:
-            print 'hiddens is only 0'
+        # sum_hiddens = np.sum(np.abs(hiddens))
+        # if sum_hiddens == 0:
+        #     print 'hiddens is only 0'
         d_height_probsd, d_hidden_outd, d_precomp_input_sliced = self.builder.probs_f(inputs[:, :2], inputs[:, 2:],
                                                                                       hiddens, rnn_mask, 1)
-
+        print 'hidden d', height_probs, 'd_height_probsd', d_height_probsd
+        diff = np.abs(height_probs - d_height_probsd)
         diff = np.abs(d_height_probsd - height_probs)
+        print 'hiddens average deviation', np.mean(diff), 'max', np.max(diff)
         if np.max(diff) > 0.1:
             coords = centers[int(np.where(diff == np.max(diff))[0][0]) / 4]
             # check for non boundary effects

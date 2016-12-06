@@ -1403,7 +1403,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
 
     def update_priority_queue_i(self, b, center, Id, height, hidden_states=None):
         self.global_hidden_states[b, :, center[0] - self.pad, center[1] - self.pad, :] = \
-            hidden_states[b, 0, :]
+            hidden_states[b, :, :]
         super(HoneyBatcherRec, self).update_priority_queue_i(b, center, Id, height)
 
     def get_hidden(self, b, center):
@@ -1413,8 +1413,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
         else:
             origin = self.update_position(center, self.global_directionmap_batch[b, center[0] - self.pad,
                                                                                     center[1] - self.pad])
-            return self.global_hidden_states[b, self.reverse_direction(direction), origin[0] - self.pad,
-                                                                                   origin[1] - self.pad, :]
+            return self.global_hidden_states[b, direction, origin[0] - self.pad, origin[1] - self.pad, :]
 
     def get_batches(self):
         raw_batch, gts, centers, ids = super(HoneyBatcherRec, self).get_batches()
