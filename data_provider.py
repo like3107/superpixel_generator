@@ -111,12 +111,16 @@ class DataProvider(object):
         # initialize two global batches = region where CNNs compete
         # against each other
         # get indices for global batches in raw/ label cubes
-        if preselect_batches is None:
-            ind_b = np.random.permutation(self.n_slices)[:self.bs]
-        else:
+        if preselect_batches is not None:
             print self.bs, preselect_batches
             assert(self.bs == len(preselect_batches))
             ind_b = preselect_batches
+        elif self.options.quick_eval:
+            print "using fixed batches"
+            ind_b = np.arange(self.bs)
+            print ind_b
+        else:
+            ind_b = np.random.permutation(self.n_slices)[:self.bs]
 
         # indices to raw, correct for label which edge len is -self.pl shorter
         if self.options.global_edge_len > 0:

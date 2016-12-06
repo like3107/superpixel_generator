@@ -329,6 +329,7 @@ class HoneyBatcherPredict(object):
         self.global_claims[b, center[0], center[1]] = idx
 
     def update_priority_queue(self, heights_batch, centers, ids, **kwargs):
+        assert(np.all(np.isfinite(heights_batch)))
         for b, center, Id, height in zip(range(self.bs), centers, ids, heights_batch):
             self.global_prediction_map_nq[b, center[0] - self.pad, center[1] - self.pad, :] = height
             self.update_priority_queue_i(b, center, Id, height, **kwargs)

@@ -136,7 +136,7 @@ class PokemonTrainer(object):
         elif image_path is None:
             image_path = self.image_path
 
-        for b in range(2):
+        for b in range(self.bm.bs):
             self.bm.draw_debug_image(
                 "%s_b_%03i_i_%08i_f_%i" %
                 (image_name, b, self.iterations, self.free_voxel),
@@ -585,7 +585,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                                                        cross_x - bm.pad + 1,
                                                                        cross_y - bm.pad + 1].swapaxes(0,1).reshape(n_c_prec, 2, 2)
             sequ_len = 1
-            old_stat = self.bm.crop_input(self.bm.e1_pos[1], 1)[None, ...].astype(np.float32)
+            old_stat = self.bm.crop_input(self.bm.e1_pos[1], self.bm.e1_b[1])[None, ...].astype(np.float32)
             hiddens = np.zeros((1, 128), dtype=np.float32)
             rnn_mask = np.ones((1 * 4, 1), dtype=np.float32)
             hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
@@ -620,7 +620,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)
 
-            print '\r loss ft', ft_loss_train,
+            print 'loss ft', ft_loss_train
 
             #### debug
             self.bm.draw_batch(batch_ft, 'batch_tmp')
@@ -640,7 +640,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     b= err['batch']
                     print 'e1', err, 'b', b
                     b_x = batch_ft.shape[-1]
-                    dir = self.bm.global_directionmap_batch[1, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
+                    dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
+                    if dir < 0:
+                        continue
                     old_pos = self.bm.update_position(pos, dir)
                     print 'orig pos', old_pos, 'dir', dir
                     err_h = self.bm.global_prediction_map_nq[b, old_pos[0] - self.bm.pad, old_pos[1] - self.bm.pad,
