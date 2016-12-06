@@ -2,6 +2,7 @@ import numpy as np
 import random
 import h5py
 
+
 class BatcherBatcherBatcher:
     """
     Remember training instances and create (stochastically prioritized) replay batches

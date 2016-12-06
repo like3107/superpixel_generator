@@ -72,7 +72,7 @@ class HoneyBatcherPredict(object):
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
         self.priority_queue = None
-        self.coordinate_offset = np.array([[-1,0],[0,-1],[1,0],[0,1]],dtype=np.int)
+        self.coordinate_offset = np.array([[-1, 0], [0, -1], [1, 0], [0, 1]], dtype=np.int)
         self.direction_array = np.arange(4)
         self.error_indicator_pass = np.zeros((self.bs))
         self.global_time = 0
@@ -439,6 +439,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.global_timemap = np.empty(self.image_shape, dtype=np.int)
         self.global_errormap = np.zeros(self.image_shape, dtype=np.int)
 
+        self.n_batch_errors = options.n_batch_errors
+
         self.global_error_dict = None
         self.crossing_errors = None
         self.find_errors_b = options.fine_tune_b and not options.rs_ft
@@ -486,13 +488,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # load new global batch data
         self.global_timemap.fill(0)     # zeros for masking in recurrent path reconstruction
         self.global_time = 0
-        self.global_errormap = np.zeros((self.bs, 3,
-                                         self.label_shape[1],
-                                         self.label_shape[2]),
-                                        dtype=np.bool)
+        self.global_errormap = np.zeros((self.bs, 3, self.label_shape[1], self.label_shape[2]), dtype=np.bool)
         self.global_error_dict = {}
-        self.global_directionmap_batch = \
-            np.zeros(self.batch_data_provider.get_label_shape(), dtype=np.int) - 1
+        self.global_directionmap_batch = np.zeros(self.batch_data_provider.get_label_shape(), dtype=np.int) - 1
 
     def get_batches(self):
         raw_batch, centers, ids = super(HoneyBatcherPath, self).get_batches()
@@ -986,7 +984,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         for i, error in enumerate(errors):
             batch, center, Id = [error['batch'], error[key_center], error[key_id]]
             # assert (self.global_timemap[batch, center[0], center[1]] == timepoints[i])
-            center = self.update_position(center, error[key_dir])
+            # center = self.update_position(center, error[key_dir])
             batches.append(batch)
             centers.append(center)
             timepoints.append(error[key_time])
@@ -1009,10 +1007,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def select_errors(self):
         # take approx this many errors or all
-        n_batch_errors = 20
         probs = np.array([self.global_error_dict[k]['importance'] for k in self.global_error_dict.keys()],dtype=float)
         probs /= np.sum(probs)
-        selection = np.random.choice(self.global_error_dict.keys(), size=min(n_batch_errors, len(probs)), p=probs,
+        selection = np.random.choice(self.global_error_dict.keys(), size=min(self.n_batch_errors, len(probs)), p=probs,
                                      replace=False)
 
         for k in self.global_error_dict:
@@ -1028,12 +1025,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         error_selections = []
         for err_type, id_type in zip(['e1', 'e2'], ['large', 'small']):
             error_selection = [global_error_dict[e] for e in selection]
-            self.pad -= 1
-            self.pl -= 2
             reconst_e = self.reconstruct_input_at_timepoint(error_selection, err_type + "_time", err_type + "_pos",
-                                                            id_type + "_id", err_type + "_direction")
-            self.pad += 1
-            self.pl += 2
+                                                            id_type + "_id", err_type + "_direction")[:, :, 1:-1, 1:-1]
             error_selections.append(error_selection)
         return reconst_es[0], reconst_es[1]
 
@@ -1404,6 +1397,10 @@ class HoneyBatcherRec(HoneyBatcherPath):
                                                   options.n_recurrent_hidden))
         self.n_recurrent_hidden = options.n_recurrent_hidden
 
+    def init_batch(self, start=None, allowed_slices=None):
+        super(HoneyBatcherRec, self).init_batch(start=start, allowed_slices=None)
+        self.global_hidden_states.fill(np.nan)
+
     def update_priority_queue_i(self, b, center, Id, height, hidden_states=None):
         self.global_hidden_states[b, :, center[0] - self.pad, center[1] - self.pad, :] = \
             hidden_states[b, 0, :]
@@ -1416,7 +1413,8 @@ class HoneyBatcherRec(HoneyBatcherPath):
         else:
             origin = self.update_position(center, self.global_directionmap_batch[b, center[0] - self.pad,
                                                                                     center[1] - self.pad])
-            return self.global_hidden_states[b, direction, origin[0] - self.pad, origin[1] - self.pad, :]
+            return self.global_hidden_states[b, self.reverse_direction(direction), origin[0] - self.pad,
+                                                                                   origin[1] - self.pad, :]
 
     def get_batches(self):
         raw_batch, gts, centers, ids = super(HoneyBatcherRec, self).get_batches()
@@ -1478,12 +1476,8 @@ class HoneyBatcherRec(HoneyBatcherPath):
             rnn_mask = [err_type + '_mask' not in e for e in error_selection]
             rnn_mask = np.array(rnn_mask, dtype=np.bool).reshape((-1, backtrace_length))
 
-            self.pad -= 1
-            self.pl -= 2
             reconst_e = self.reconstruct_input_at_timepoint(error_selection, err_type + "_time", err_type + "_pos",
-                                                            id_type + "_id", err_type + "_direction")
-            self.pad += 1
-            self.pl += 2
+                                                            id_type + "_id", err_type + "_direction")[:, :, 1:-1, 1:-1]
             rnn_masks.append(rnn_mask)
             reconst_es.append(reconst_e)
             error_selections.append(error_selection)
@@ -1509,7 +1503,6 @@ class HoneyBatcherERec(HoneyBatcherRec):
 
     def set_plateau_indicator(self):
         self.global_plateau_indicator = self.global_prediction_map_nq  == 0
-
 
 
 # TODO: make this loopy (maybe with lambdas and slices ???)

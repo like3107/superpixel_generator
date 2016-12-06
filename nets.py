@@ -126,7 +126,7 @@ class NetBuilder:
         layers['Cross_slicer_stat'] = cs.CrossSlicer(layers_static['conv_06'])
 
         # get last output of claims and static input net
-        layers['l_merge_05'] = L.ConcatLayer([layers['Cross_slicer_stat'], layers['Cross_slicer']])
+        layers['l_merge_05'] = L.ConcatLayer([layers['Cross_slicer_stat'], layers['Cross_slicer']], axis=1)
 
         W_fc_07_stat = np.random.random((2048, 320, 1, 1)).astype('float32') / 1000.
         W_fc_07_stat[:, :-64, 0, 0] = np.array(layers_static['fc_07'].W.eval()).swapaxes(0, 1)[:, :, 0, 0]
@@ -146,13 +146,15 @@ class NetBuilder:
         layers['l_in_rec_mask_08'] = L.InputLayer((None, self.options.backtrace_length))
 
         W_hid_to_hid = np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.
+        # debug
+        # W_hid_to_hid = np.zeros((rec_hidden, rec_hidden)).astype('float32') / 10000.
         layers['l_recurrent_09'] = L.RecurrentLayer(layers['l_resh_pred_07'], rec_hidden,
-                                                             hid_init=layers['l_in_hid_08'],
-                                                             mask_input=layers['l_in_rec_mask_08'],
-                                                             W_in_to_hid=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
-                                                             W_hid_to_hid=shared(W_hid_to_hid),
-                                                             b=shared(layers_static['fc_08'].b.eval()),
-                                                             only_return_final=False)
+                                                     hid_init=layers['l_in_hid_08'],
+                                                     mask_input=layers['l_in_rec_mask_08'],
+                                                     W_in_to_hid=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
+                                                     W_hid_to_hid=shared(W_hid_to_hid),
+                                                     b=shared(layers_static['fc_08'].b.eval()),
+                                                     only_return_final=False)
 
         #
         layers['l_reshape_fc_10'] = L.ReshapeLayer(layers['l_recurrent_09'], (-1, rec_hidden))
@@ -165,6 +167,8 @@ class NetBuilder:
 
         layers['l_out_cross'].params[layers['l_out_cross'].W].remove('regularizable')
         self.layers = layers
+        # debug
+        self.layers_static = layers_static
         return layers, fov, None
 
     def loss_updates_probs_v0(self, layers, target, L1_weight=10**-5,
@@ -173,7 +177,8 @@ class NetBuilder:
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
         # outputs
-        l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
+        # debug train det =False
+        l_out_train = L.get_output(layers['l_out_cross'], deterministic=True)
         l_out_valid = L.get_output(layers['l_out_cross'], deterministic=True)
 
         L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
@@ -226,7 +231,8 @@ class NetBuilder:
                                            layers['l_in_hid_08'].input_var,
                                            layers['l_in_rec_mask_08'].input_var,
                                            self.sequ_len],
-                                          [l_out_prediciton_prec, l_out_hidden],
+                                          [l_out_prediciton_prec, l_out_hidden,
+                                           L.get_output(layers['l_merge_05'])],  # debug
                                           on_unused_input='ignore')
         # reconnect graph again to save network later etc
         layers['l_merge_05'].input_layers[0] = layers['Cross_slicer_stat']
@@ -242,18 +248,28 @@ class NetBuilder:
 
         l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=True)
         l_out_train = L.get_output(layers['l_out_cross'], deterministic=True)
+        stat_conv = L.get_output(layers['static_conv_06'], deterministic=True)
+        stat_conv2 = L.get_output(self.layers_static['conv_06'], deterministic=True)
+        dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=True)
+        l_merge_05 = L.get_output(layers['l_merge_05'], deterministic=True)
+
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
-        loss_train, individual_batch, loss_valid = \
-            get_loss_fct(layers, self.options.backtrace_length, l_out_train, L1_weight)
+        loss_train, individual_batch, loss_valid = get_loss_fct(layers, self.options.backtrace_length, l_out_train,
+                                                                L1_weight)
         updates = get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
-
+        # debug
         self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
                                                   layers['l_in_static_00'].input_var,
                                                   layers['l_in_hid_08'].input_var,
                                                   layers['l_in_rec_mask_08'].input_var,
                                                   self.sequ_len],
-                                                 [loss_train, individual_batch, l_out_prediciton, loss_valid],
+                                                 [loss_train, individual_batch, l_out_prediciton, loss_valid,
+                                                  stat_conv,
+                                                  stat_conv2,
+                                                  l_merge_05,
+                                                  L.get_output(layers['static_conv_06'], deterministic=True),
+                                                  dyn_conv],
                                                  updates=updates)
         assert (updates is not None)
 
@@ -274,6 +290,7 @@ def get_loss_fct(layers, backtrace_length, l_out_train, L1_weight):
     if L1_weight > 0:
         loss_train = loss_valid + L1_weight * L1_norm
     return loss_train, individual_batch, loss_valid
+
 
 def get_update_rule(loss_train, all_params, optimizer=None):
     if optimizer == "nesterov":

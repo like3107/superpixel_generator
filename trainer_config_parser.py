@@ -73,6 +73,7 @@ def get_options(script='training', ignore_config=False):
     # RNN
     p.add('--n_recurrent_hidden', default=128, type=int)
     p.add('--backtrace_length', default=5, type=int)
+    p.add('--n_batch_errors', default=1, type=int)
 
 
 
@@ -123,7 +124,6 @@ def get_options(script='training', ignore_config=False):
 
     if options.input_data_path == "None":
         options.input_data_path ='./../data/volumes/input_%s.h5' % options.train_version
-
     if options.raw_path == "None":
         options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
     if options.membrane_path == "None":

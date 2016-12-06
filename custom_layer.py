@@ -41,7 +41,6 @@ class BatchChannelSlicer(las.layers.MergeLayer):
         return l_in[T.arange(batches), slices, None]
 
 
-
 class CrossSlicer(las.layers.Layer):
     """
     input: 2 Las layers:
@@ -51,18 +50,18 @@ class CrossSlicer(las.layers.Layer):
     """
     def __init__(self, incoming, **kwargs):
         super(CrossSlicer, self).__init__(incoming, **kwargs)
+        self.slices_x = theano.shared(np.array([[0, 1, 2, 1]], dtype=np.int32))  # up left down right
+        self.slices_y = theano.shared(np.array([[1, 0, 1, 2]], dtype=np.int32))  # up left down right
 
     def get_output_shape_for(self, input_shape):
         return tuple((input_shape[0], input_shape[1], None, None))
 
     def get_output_for(self, input, **kwargs):
         batches = input.shape[0]
-        slices_x = theano.shared(np.array([[0, 1, 2, 1]], dtype=np.int32))          # up left down right
-        slices_y = theano.shared(np.array([[1, 0, 1, 2]], dtype=np.int32))          # up left down right
         batches_list = T.extra_ops.repeat(T.arange(batches), 4, axis=0).flatten()
-        slices_x = T.extra_ops.repeat(slices_x, batches, axis=0).flatten()
-        slices_y = T.extra_ops.repeat(slices_y, batches, axis=0).flatten()
-        input = input[batches_list, :, slices_x, slices_y].reshape((batches, -1, 2, 2))
+        slices_x = T.extra_ops.repeat(self.slices_x, batches, axis=0).flatten()
+        slices_y = T.extra_ops.repeat(self.slices_y, batches, axis=0).flatten()
+        input = input.swapaxes(1, 0)[:, batches_list, slices_x, slices_y].reshape((-1, batches, 2, 2)).swapaxes(0, 1)
         return input
 
 
