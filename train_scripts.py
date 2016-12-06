@@ -473,10 +473,10 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
 
         # debug
-        hiddens[:] = 0
-        inputs[:, :2] = 0
-        inputs[:, 2:] = 0
-        precomp_input_sliced[:] = 0
+        # hiddens[:] = 0
+        # inputs[:, :2] = 0
+        # inputs[:, 2:] = 0
+        # precomp_input_sliced[:] = 0
         height_probs, hidden_out, _ = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens, rnn_mask, 1)
         ####
         # exit()
@@ -486,11 +486,19 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         #     print 'hiddens is only 0'
         d_height_probsd, d_hidden_outd, d_precomp_input_sliced = self.builder.probs_f(inputs[:, :2], inputs[:, 2:],
                                                                                       hiddens, rnn_mask, 1)
-        print 'hidden d', height_probs, 'd_height_probsd', d_height_probsd
-        diff = np.abs(height_probs - d_height_probsd)
+
+        # hidden diff
+        # print 'hidden d', hidden_out, 'd_height_probsd', d_hidden_outd
+        diff = np.abs(hidden_out - d_hidden_outd)
+        if np.max(diff) > 10**-4:
+            coords = centers[int(np.where(diff == np.max(diff))[0][0]) / 4]
+            # check for non boundary effects
+            if self.bm.pad not in coords and self.bm.image_shape[-1] - self.bm.pad - 1 not in coords:
+                print 'hiddens average deviation', np.mean(diff), 'max', np.max(diff)
+
+        # height diff
         diff = np.abs(d_height_probsd - height_probs)
-        print 'hiddens average deviation', np.mean(diff), 'max', np.max(diff)
-        if np.max(diff) > 0.1:
+        if np.max(diff) > 10**-4:
             coords = centers[int(np.where(diff == np.max(diff))[0][0]) / 4]
             # check for non boundary effects
             if self.bm.pad not in coords and self.bm.image_shape[-1] - self.bm.pad - 1 not in coords:
@@ -564,25 +572,25 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
                 'rnn mask', batch_mask_ft.shape
 
-
             ###  debug
             n_c_prec = self.precomp_input.shape[1]
             bm = self.bm
             precomp_input_sliced = np.zeros((1, n_c_prec, 2, 2)).astype(np.float32)
-            for b, seed in enumerate([[52, 36]]):
+            for b, seed in enumerate([self.bm.e1_pos[1]]):
+                print self.bm.e1_pos[1], 'b', b, 'seed', seed
                 cross_x, cross_y, _ = self.bm.get_cross_coords(seed)
                 # + 1 because we face the FOV for the BM + 2 because the cross is a inherent FC conv formulation
-                precomp_input_sliced[b, :, :, :] = self.precomp_input[[1]*4, :,
+                print 'whoot', [self.bm.e1_b[1]]*4
+                precomp_input_sliced[b, :, :, :] = self.precomp_input[[self.bm.e1_b[1]]*4, :,
                                                                        cross_x - bm.pad + 1,
                                                                        cross_y - bm.pad + 1].swapaxes(0,1).reshape(n_c_prec, 2, 2)
             sequ_len = 1
-
-            old_stat = self.bm.crop_input([52, 36], 1)[None, ...].astype(np.float32)
+            old_stat = self.bm.crop_input(self.bm.e1_pos[1], 1)[None, ...].astype(np.float32)
             hiddens = np.zeros((1, 128), dtype=np.float32)
             rnn_mask = np.ones((1 * 4, 1), dtype=np.float32)
             hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
             # debug
-            hiddens[:] = 0
+            # hiddens[:] = 0
             arange_prec_input = np.arange((np.prod(precomp_input_sliced.shape))).reshape(precomp_input_sliced.shape).astype(np.float32)
             print 'prec input sliced', arange_prec_input
             height_probs, hidden_out, mergeprec = self.builder.probs_f_fc(np.zeros_like(old_stat, dtype=np.float32),
@@ -593,8 +601,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             # debug
             print 'precomputed input', precomp_input_sliced[:, :, 0, 0]
             # debug
-            batch_inits[:] = 0
-            batch_ft[:, :2] = 0
+            # batch_inits[:] = 0
+            # batch_ft[:, :2] = 0
             ft_loss_train, individual_loss_fine, heights, ft_loss_noreg, stat_conv, stat_conv2, merge, conv06ft, dyn_conv = \
                     self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
                                                    batch_mask_ft, options.backtrace_length)

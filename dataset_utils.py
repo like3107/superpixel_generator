@@ -185,7 +185,6 @@ class HoneyBatcherPredict(object):
 
         self.global_prediction_map = np.empty((self.bs, self.label_shape[1], self.label_shape[2], 4))
         self.global_prediction_map.fill(np.inf)
-
         self.global_prediction_map_nq = np.empty((self.bs, self.label_shape[1], self.label_shape[2], 4))
         self.global_prediction_map_nq.fill(np.inf)
 
@@ -214,11 +213,9 @@ class HoneyBatcherPredict(object):
         self.global_seeds = []
         for b in range(self.bs):
             x, y = wsDtseeds(
-                self.global_input_batch[b, 0,
-                    self.pad:-self.pad, self.pad:-self.pad],
+                self.global_input_batch[b, 0, self.pad:-self.pad, self.pad:-self.pad],
                     thresh, self.timo_min_len, self.timo_sigma, groupSeeds=True)
-            seeds = \
-                [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
+            seeds = [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
             self.global_seeds.append(seeds)
 
     def get_seed_coords_grid(self, gridsize = 7):
@@ -483,8 +480,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         return rois
 
     def init_batch(self, start=None, allowed_slices = None):
-        super(HoneyBatcherPath, self).init_batch(start=start,
-                                                 allowed_slices=allowed_slices)
+        super(HoneyBatcherPath, self).init_batch(start=start, allowed_slices=allowed_slices)
         # load new global batch data
         self.global_timemap.fill(0)     # zeros for masking in recurrent path reconstruction
         self.global_time = 0
@@ -1402,8 +1398,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.global_hidden_states.fill(np.nan)
 
     def update_priority_queue_i(self, b, center, Id, height, hidden_states=None):
-        self.global_hidden_states[b, :, center[0] - self.pad, center[1] - self.pad, :] = \
-            hidden_states[b, :, :]
+        self.global_hidden_states[b, :, center[0] - self.pad, center[1] - self.pad, :] = hidden_states[b, :, :]
         super(HoneyBatcherRec, self).update_priority_queue_i(b, center, Id, height)
 
     def get_hidden(self, b, center):
@@ -1482,7 +1477,12 @@ class HoneyBatcherRec(HoneyBatcherPath):
             error_selections.append(error_selection)
             rnn_hidden_inits.append(np.array(rnn_hidden_init))
 
-        # debug
+            # debug
+            if err_type == 'e1':
+                self.e1_pos = [err['e1_pos'] for err in error_selection]
+                self.e1_b = [err['batch'] for err in error_selection]
+
+
         self.rnn_masks = rnn_masks
         self.reconst_es = reconst_es
         self.error_selections = error_selections
