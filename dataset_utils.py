@@ -258,6 +258,9 @@ class HoneyBatcherPredict(object):
             dist_trf[b, :, :] = \
                 data_provider.segmenation_to_membrane_core(
                                 padded_label)[1][1:-1, 1:-1]
+
+        print self.global_label_batch.shape, dist_trf.shape
+
         for b, ids in zip(range(self.bs), seed_ids):  # iterates over batches
             seeds = []
             for Id in ids:  # ids within each slice
@@ -265,6 +268,8 @@ class HoneyBatcherPredict(object):
                 seed_ind = np.argmax(dist_trf[b][regions])
                 seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) + self.pad
                 seeds.append([seed[0], seed[1]])
+                print "seed",b,Id,seed,seed_ind
+                print regions
             self.global_seeds.append(seeds)
 
     def find_hard_regions(self):
@@ -1035,6 +1040,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.pad += 1
             self.pl += 2
             error_selections.append(error_selection)
+
+       	self.draw_error_paths("paths")
         return reconst_es[0], reconst_es[1]
 
 
@@ -1265,7 +1272,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         cmap = u.random_color_map()
         MAXLENGTH = 200
 
-        for nume, error in enumerate(self.global_error_dict.values()):
+        for nume, error in enumerate([self.global_error_dict[s] for s in self.selection]):
             f, ax = plt.subplots(nrows=2)
             gt_label_image = ax[1].imshow(self.global_label_batch[error["batch"], :, :],
                          interpolation=None, cmap=cmap)

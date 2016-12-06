@@ -104,7 +104,6 @@ class DataProvider(object):
             data_shape[1] -= self.options.patch_len - 1
             data_shape[2] -= self.options.patch_len - 1
 
-
         return data_shape
 
     def prepare_input_batch(self, input, preselect_batches=None):
@@ -120,6 +119,7 @@ class DataProvider(object):
 
         # indices to raw, correct for label which edge len is -self.pl shorter
         if self.options.global_edge_len > 0:
+            input_shape = self.get_image_shape()
             if self.options.quick_eval:
                 print 'using fixed indices '
                 ind_x = np.empty(self.bs, dtype=int)
@@ -128,16 +128,16 @@ class DataProvider(object):
                 ind_y.fill(int(0))
             else:
                 ind_x = np.random.randint(0,
-                                          self.rl_x - self.options.global_input_len + 1,
+                                          self.rl_x - input_shape[1] + 1,
                                           size=self.bs)
                 ind_y = np.random.randint(0,
-                                          self.rl_y - self.options.global_input_len + 1,
+                                          self.rl_y - input_shape[2] + 1,
                                           size=self.bs)
             for b in range(self.bs):
                 input[b, :, :, :] = \
                     self.full_input[ind_b[b], :,
-                             ind_x[b]:ind_x[b] + self.options.global_input_len,
-                             ind_y[b]:ind_y[b] + self.options.global_input_len]
+                             ind_x[b]:ind_x[b] + input_shape[1],
+                             ind_y[b]:ind_y[b] + input_shape[2]]
             return [ind_b, ind_x, ind_y]
         else:
             print input.shape, self.full_input.shape
@@ -145,6 +145,7 @@ class DataProvider(object):
             return [ind_b, None, None]
 
     def prepare_label_batch(self, label, height, rois):
+        label_shape = self.get_label_shape()
         if self.options.global_edge_len > 0:
             ind_b, ind_x, ind_y = rois
             if not self.options.padding_b:
@@ -153,11 +154,11 @@ class DataProvider(object):
             for b in range(self.bs):
                 label_inp_len = self.options.global_input_len - self.options.patch_len + 1
                 height[b, :, :] = self.height_gt[ind_b[b],
-                                                 ind_x[b]:ind_x[b] + label_inp_len,
-                                                 ind_y[b]:ind_y[b] + label_inp_len]
+                                                 ind_x[b]:ind_x[b] + label_shape[1],
+                                                 ind_y[b]:ind_y[b] + label_shape[2]]
                 label[b, :, :] = self.label[ind_b[b],
-                                            ind_x[b]:ind_x[b] + label_inp_len,
-                                            ind_y[b]:ind_y[b] + label_inp_len]
+                                            ind_x[b]:ind_x[b] + label_shape[1],
+                                            ind_y[b]:ind_y[b] + label_shape[2]]
         else:
             for b in range(self.bs):
                 if self.options.padding_b:
@@ -251,6 +252,32 @@ class CremiDataProvider(DataProvider):
                 gt_id_map[s] = i+1
             segmentation[b] = gt_id_map[segmentation[b]]
         return segmentation != label_batch
+
+class FlatDataProvider(CremiDataProvider):
+    def get_batch_shape(self):
+        data_shape = list(self.full_input.shape)
+        data_shape[0] = self.bs
+        if self.options.global_edge_len > 0:
+            data_shape[2] = 2*self.pad + 1
+            data_shape[3] = self.options.global_input_len
+
+        return data_shape
+
+    def get_label_shape(self):
+        data_shape =  list(self.label.shape)
+        data_shape[0] = self.bs
+
+        if self.options.global_edge_len > 0:
+            data_shape[1] = 1
+            data_shape[2] = self.options.global_edge_len
+
+        if not self.options.padding_b:
+            data_shape[2] -= self.options.patch_len - 1
+
+        return data_shape
+
+    def find_timo_errors(self, label_batch, input_batch, seeds):
+        return label_batch
 
 class PolygonDataProvider(DataProvider):
     def __init__(self, options):
