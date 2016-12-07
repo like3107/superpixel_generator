@@ -145,17 +145,27 @@ class NetBuilder:
 
         layers['l_in_hid_08'] = L.InputLayer((None, rec_hidden))
         layers['l_in_rec_mask_08'] = L.InputLayer((None, self.options.backtrace_length))
-        # debug
-        W_hid_to_hid = np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.
-        # debug
-        # W_hid_to_hid = np.zeros((rec_hidden, rec_hidden)).astype('float32') / 10000.
-        layers['l_recurrent_09'] = L.RecurrentLayer(layers['l_resh_pred_07'], rec_hidden,
-                                                     hid_init=layers['l_in_hid_08'],
-                                                     mask_input=layers['l_in_rec_mask_08'],
-                                                     W_in_to_hid=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
-                                                     W_hid_to_hid=shared(W_hid_to_hid),
-                                                     b=shared(layers_static['fc_08'].b.eval()),
-                                                     only_return_final=False)
+
+        W_hid_to_hid_cell = np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.
+        layers['l_recurrent_09'] = L.GRULayer(
+            layers['l_resh_pred_07'], rec_hidden,
+            hid_init=layers['l_in_hid_08'],
+            mask_input=layers['l_in_rec_mask_08'],
+            hidden_update=L.Gate(W_in=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
+                                 W_hid=W_hid_to_hid_cell, b=shared(layers_static['fc_08'].b.eval()),
+                                 nonlinearity=las.nonlinearities.rectify),
+            updategate=L.Gate(b=las.init.Constant(1.)),
+            only_return_final=False)
+
+        # W_hid_to_hid = np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.
+        # layers['l_recurrent_09'] = L.RecurrentLayer(layers['l_resh_pred_07'], rec_hidden,
+        #                                              hid_init=layers['l_in_hid_08'],
+        #                                              mask_input=layers['l_in_rec_mask_08'],
+        #                                              W_in_to_hid=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
+        #                                              W_hid_to_hid=shared(W_hid_to_hid),
+        #                                              b=shared(layers_static['fc_08'].b.eval()),
+        #                                              only_return_final=False,
+        #                                              nonlinearity=las.nonlinearities.rectify)
         #
         layers['l_reshape_fc_10'] = L.ReshapeLayer(layers['l_recurrent_09'], (-1, rec_hidden))
         # last layer
