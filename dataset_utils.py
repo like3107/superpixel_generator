@@ -337,10 +337,8 @@ class HoneyBatcherPredict(object):
     def update_priority_queue_i(self, b, center, Id, height, **kwargs):
         # if possibly wrong
         cross_x, cross_y, cross_d = self.get_cross_coords(center)
-        lower_bound = self.global_heightmap_batch[b,
-                                                  center[0] - self.pad,
-                                                  center[1] - self.pad] + \
-                                                  self.lowercomplete_e
+        lower_bound = self.global_heightmap_batch[b, center[0] - self.pad,
+                                                     center[1] - self.pad] + self.lowercomplete_e
         if lower_bound == np.inf:
             print "encountered inf for prediction center !!!!", \
                 b, center, Id, height, lower_bound

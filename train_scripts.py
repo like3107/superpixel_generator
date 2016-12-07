@@ -574,100 +574,12 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             sequ_len = self.options.backtrace_length
             print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
                 'rnn mask', batch_mask_ft.shape
-
-            ###  debug
-            # n_c_prec = self.precomp_input.shape[1]
-            # bm = self.bm
-            # precomp_input_sliced = np.zeros((1, n_c_prec, 2, 2)).astype(np.float32)
-            # for b, seed in enumerate([self.bm.e1_pos[1]]):
-            #     print 'b', b, 'seed', seed
-            #     cross_x, cross_y, _ = self.bm.get_cross_coords(seed)
-            #     # + 1 because we face the FOV for the BM + 2 because the cross is a inherent FC conv formulation
-            #     precomp_input_sliced[b, :, :, :] = self.precomp_input[[self.bm.e1_b[1]]*4, :,
-            #                                                            cross_x - bm.pad + 1,
-            #                                                            cross_y - bm.pad + 1].swapaxes(0,1).reshape(n_c_prec, 2, 2)
-            # sequ_len = 1
-            # old_stat = self.bm.crop_input(self.bm.e1_pos[1], self.bm.e1_b[1])[None, ...].astype(np.float32)
-            # hiddens = np.zeros((1, 128), dtype=np.float32)
-            # rnn_mask = np.ones((1 * 4, 1), dtype=np.float32)
-            # hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
-            #
-            # height_probs, hidden_out, mergeprec = self.builder.probs_f_fc(np.zeros_like(old_stat, dtype=np.float32),
-            #                                                    precomp_input_sliced,
-            #                                                    hiddens,
-            #                                                    rnn_mask, 1)
-            # debug
-            # print 'precomputed input for pos ', b, 'seed', seed, precomp_input_sliced[0, :5, 0, 0]
-
-            ft_loss_train, individual_loss_fine, heights, ft_loss_noreg, stat_conv, stat_conv2, merge, conv06ft, dyn_conv, self.hiddens_rec = \
+            ft_loss_train, individual_loss_fine, heights, ft_loss_noreg, stat_conv, dyn_conv, hiddens_rec = \
                     self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
                                                    batch_mask_ft, options.backtrace_length)
-            # self.debug_plots(hiddens_rec=hiddens_rec)
-
-            # print 'merge vals', merge[1, :5, 0, 0]
-            # print 'mergeprec vals', mergeprec[0, :5, 0, 0]
-            # print 'height probs', height_probs[0]
-            # # print 'np where', np.where(conv06ft[0, 0, 0, 0] == self.precomp_input)
-            # print 'conv06ft', conv06ft[0, :5, 0, 0]
-            # if np.any(individual_loss_fine < 0):
-            #     print 'any', min(individual_loss_fine)
-            # print 'loss ft', ft_loss_train
-
-            #### debug
-
-
-            self.bm.draw_batch(batch_ft, 'batch_tmp')
-            ts = self.options.backtrace_length
-            n_err = len(self.bm.error_selections[0]) / ts
-            all_e1 = np.array(self.bm.error_selections[0]).reshape(n_err, ts)
-            all_e2 = np.array(self.bm.error_selections[1]).reshape(n_err, ts)
-            all_h1 = heights[:n_err * ts].reshape(n_err, ts)
-            all_h2 = heights[n_err * ts:].reshape(n_err, ts)
-
-            print
-            k = -1
-            for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
-                k += 1
-                for i, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
-                    for j, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
-                        pos = err_t[e_type + '_pos']
-                        b = err_t['batch']
-                        dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
-                        if dir < 0:
-                            continue
-
-                        old_pos = self.bm.update_position(pos, dir)
-
-                        # conv check
-                        orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
-                        diff = np.abs(orig_conv - stat_conv[i * ts + j + k * n_err * ts, :, 0, 0])
-                        verbose = False
-                        if np.max(diff) > 10**-4:
-                            verbose = True
-                            print 'conv comparison', np.max(diff), np.mean(diff), 'where', np.where(diff == np.max(diff))
-                            print 'orig conv', orig_conv[:5], 'rconst conv', stat_conv[j, :5, 0, 0]
-
-                        err_h = self.bm.global_prediction_map_nq[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad, dir]
-                        diff = h_t - err_h
-                        if diff > 10**-4:
-                            verbose = True
-                            print 'height differences %.3f err h %.3f, diff %.3f hiddens max %.3f' \
-                                  % (h_t, err_h,(h_t - err_h), np.max(self.hiddens_rec))
-
-                        # input check
-                        old_stat = self.bm.crop_input(pos, b)[None, ...][0, :, 1:-1, 1:-1]
-                        new_stat = batch_ft[i * ts + j + k * n_err * ts, 2:, :, :]
-                        stat_inp_diff = np.mean((old_stat - new_stat).astype(np.float))
-                        if stat_inp_diff > 10**-4:
-                            verbose = True
-                            print 'static inputs equals', np.mean(stat_inp_diff)
-                        if verbose:
-                            print 'type', e_type, 'pos', pos, 'b', b, 'orig pos', old_pos, 'dir', dir
-                            if self.bm.pad in pos or self.bm.image_shape[-1] - self.bm.pad - 1 in pos:
-                                print 'boundary case.............'
-                            print
-
             self.draw_loss(ft_loss_train, ft_loss_noreg)
+
+            # self.debug_plots(heights, batch_mask_ft, hiddens_rec)
 
         if self.images_counter % 1 == 0:
             self.save_net()
@@ -685,12 +597,78 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                 self.save_net_path + '/ft_training.png', names=['loss', 'loss no reg'],
                                 log_scale=False)
 
-    def debug_plots(self, hiddens=None):
-        to_debug_names = []
-        to_debug = []
-        if self.hidden_recs is not None:
-            to_debug_names.append('hidden reconstruct')
-            to_debug.append(np.max(hiddens), np.min(hiddens), np.mean(hiddens), np.std(hiddens))
+    def debug_plots(self, heights, masks, hiddens):
+        masks = np.array(masks.reshape((2, -1)), dtype=np.bool)
+        heights = heights.reshape((2, -1))
+        print 'shapes', heights.shape, masks.shape,  self.bm.error_selections.shape
+        for i, (ei, heights, mask, err_selection) in enumerate(zip(['e1', 'e2'], heights, masks,
+                                                                   self.bm.error_selections)):
+            err_selection = np.array(err_selection)[mask]
+            all_ei_pos = np.array([err[ei + '_pos'] for err in err_selection])
+            all_b = [err['batch'] for err in err_selection]
+            dirs = self.bm.global_directionmap_batch[all_b, all_ei_pos[:, 0] - self.bm.pad,
+                                                            all_ei_pos[:, 1] - self.bm.pad]
+
+            all_orig_h = self.bm.global_prediction_map_nq[all_b, all_ei_pos[:, 0] - self.bm.pad,
+                                                                 all_ei_pos[:, 1] - self.bm.pad, dirs]
+            all_rec_h = heights[mask]
+            print 'height diff', ei
+            print all_orig_h - all_rec_h
+        exit()
+        # self.bm.draw_batch(batch_ft, 'batch_tmp')
+        # ts = self.options.backtrace_length
+        n_err = len(self.bm.error_selections[0]) / ts
+        all_e1 = np.array(self.bm.error_selections[0]).reshape(n_err, ts)
+        all_e2 = np.array(self.bm.error_selections[1]).reshape(n_err, ts)
+        all_h1 = heights[:n_err * ts].reshape(n_err, ts)
+        all_h2 = heights[n_err * ts:].reshape(n_err, ts)
+        # height diffs, hiddens, hiddens rec, stat_convs
+        e1_pos = []
+
+    def debug_plot_e_i(self):
+
+        print
+        k = -1
+        for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
+            k += 1
+            for i, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
+                for j, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
+                    pos = err_t[e_type + '_pos']
+                    b = err_t['batch']
+                    dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
+                    if dir < 0:
+                        continue
+
+                    old_pos = self.bm.update_position(pos, dir)
+
+                    # conv check
+                    orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
+                    diff = np.abs(orig_conv - stat_conv[i * ts + j + k * n_err * ts, :, 0, 0])
+                    verbose = False
+                    if np.max(diff) > 10 ** -4:
+                        verbose = True
+                        print 'conv comparison', np.max(diff), np.mean(diff), 'where', np.where(diff == np.max(diff))
+                        print 'orig conv', orig_conv[:5], 'rconst conv', stat_conv[j, :5, 0, 0]
+
+                    err_h = self.bm.global_prediction_map_nq[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad, dir]
+                    diff = h_t - err_h
+                    if diff > 10 ** -4:
+                        verbose = True
+                        print 'height differences %.3f err h %.3f, diff %.3f hiddens max %.3f' \
+                              % (h_t, err_h, (h_t - err_h), np.max(self.hiddens_rec))
+
+                    # input check
+                    old_stat = self.bm.crop_input(pos, b)[None, ...][0, :, 1:-1, 1:-1]
+                    new_stat = batch_ft[i * ts + j + k * n_err * ts, 2:, :, :]
+                    stat_inp_diff = np.mean((old_stat - new_stat).astype(np.float))
+                    if stat_inp_diff > 10 ** -4:
+                        verbose = True
+                        print 'static inputs equals', np.mean(stat_inp_diff)
+                    if verbose:
+                        print 'type', e_type, 'pos', pos, 'b', b, 'orig pos', old_pos, 'dir', dir
+                        if self.bm.pad in pos or self.bm.image_shape[-1] - self.bm.pad - 1 in pos:
+                            print 'boundary case.............'
+                        print
 
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
@@ -803,6 +781,8 @@ if __name__ == '__main__':
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
         options.fc_prec = True
         trainer = FCRecFinePokemonTrainer(options)
+        trainer.bm.set_preselect_batches([0, 7])
+
         epoch = 0
         while not trainer.converged():
             trainer.train()
