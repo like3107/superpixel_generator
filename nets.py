@@ -253,6 +253,8 @@ class NetBuilder:
         stat_conv2 = L.get_output(self.layers_static['conv_06'], deterministic=True)
         dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=True)
         l_merge_05 = L.get_output(layers['l_merge_05'], deterministic=True)
+        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+
         mask = L.get_output(layers['l_in_rec_mask_08'], deterministic=True)
 
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
@@ -271,7 +273,7 @@ class NetBuilder:
                                                   stat_conv2,
                                                   l_merge_05,
                                                   L.get_output(layers['static_conv_06'], deterministic=True),
-                                                  dyn_conv],
+                                                  dyn_conv, l_out_hidden],
                                                  updates=updates)
         assert (updates is not None)
 

@@ -1479,10 +1479,9 @@ class HoneyBatcherRec(HoneyBatcherPath):
             rnn_hidden_inits.append(np.array(rnn_hidden_init))
 
             # debug
-            if err_type == 'e1':
-                self.e1_pos = [err['e1_pos'] for err in error_selection]
-                self.e1_b = [err['batch'] for err in error_selection]
-
+            # if err_type == 'e1':
+            #     self.e1_pos = [err['e1_pos'] for err in error_selection]
+            #     self.e1_b = [err['batch'] for err in error_selection]
 
         self.rnn_masks = rnn_masks
         self.reconst_es = reconst_es
