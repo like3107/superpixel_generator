@@ -112,13 +112,14 @@ class DataProvider(object):
         # against each other
         # get indices for global batches in raw/ label cubes
         if preselect_batches is not None:
+            print "using fixed batches"
             print self.bs, preselect_batches
             assert(self.bs == len(preselect_batches))
             ind_b = preselect_batches
         elif self.options.quick_eval:
-            print "using fixed batches"
-            ind_b = np.arange(self.bs)
-            print ind_b
+            print "using fixed batches euqally distributed"
+            n_z = self.full_input.shape[0]
+            ind_b = np.linspace(0, n_z, self.bs, dtype=np.int, endpoint=False)
         else:
             ind_b = np.random.permutation(self.n_slices)[:self.bs]
 
@@ -138,10 +139,9 @@ class DataProvider(object):
                                           self.rl_y - self.options.global_input_len + 1,
                                           size=self.bs)
             for b in range(self.bs):
-                input[b, :, :, :] = \
-                    self.full_input[ind_b[b], :,
-                             ind_x[b]:ind_x[b] + self.options.global_input_len,
-                             ind_y[b]:ind_y[b] + self.options.global_input_len]
+                input[b, :, :, :] = self.full_input[ind_b[b], :,
+                                                    ind_x[b]:ind_x[b] + self.options.global_input_len,
+                                                    ind_y[b]:ind_y[b] + self.options.global_input_len]
             return [ind_b, ind_x, ind_y]
         else:
             print input.shape, self.full_input.shape
