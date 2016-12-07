@@ -253,11 +253,12 @@ class NetBuilder:
         stat_conv2 = L.get_output(self.layers_static['conv_06'], deterministic=True)
         dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=True)
         l_merge_05 = L.get_output(layers['l_merge_05'], deterministic=True)
+        mask = L.get_output(layers['l_in_rec_mask_08'], deterministic=True)
 
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
         loss_train, individual_batch, loss_valid = get_loss_fct(layers, self.options.backtrace_length, l_out_train,
-                                                                L1_weight)
+                                                                mask, L1_weight)
         updates = get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
         # debug
         self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
@@ -277,12 +278,14 @@ class NetBuilder:
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
 
-def get_loss_fct(layers, backtrace_length, l_out_train, L1_weight):
+def get_loss_fct(layers, backtrace_length, l_out_train, mask, L1_weight):
     bs = layers['l_in_dyn_00'].input_var.shape[0]
     step = backtrace_length
-    sum_height = l_out_train[::step]
-    for t in range(1, step):
-        sum_height += l_out_train[t::step]
+    sum_height = l_out_train
+    if backtrace_length > 1:
+        sum_height *= mask
+        sum_height = T.sum(sum_height.reshape(bs, backtrace_length), axis=1)
+
     individual_batch = (sum_height[bs / 2 / step:] - sum_height[:bs / 2 / step])
 
     L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
@@ -296,7 +299,7 @@ def get_loss_fct(layers, backtrace_length, l_out_train, L1_weight):
 def get_update_rule(loss_train, all_params, optimizer=None):
     if optimizer == "nesterov":
         print "using nesterov_momentum"
-        updates = las.updates.nesterov_momentum(loss_train, all_params, 0.0001)
+        updates = las.updates.nesterov_momentum(loss_train, all_params, 0.01)
     elif optimizer == "adam":
         updates = las.updates.adam(loss_train, all_params)
     else:
