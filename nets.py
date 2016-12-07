@@ -279,14 +279,13 @@ class NetBuilder:
 
 
 def get_loss_fct(layers, backtrace_length, l_out_train, mask, L1_weight):
-    bs = layers['l_in_dyn_00'].input_var.shape[0]
+    bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
     step = backtrace_length
     sum_height = l_out_train
     if backtrace_length > 1:
-        sum_height *= mask
-        sum_height = T.sum(sum_height.reshape(bs, backtrace_length), axis=1)
+        sum_height = T.sum(sum_height.reshape((bs, backtrace_length))*mask, axis=1)
 
-    individual_batch = (sum_height[bs / 2 / step:] - sum_height[:bs / 2 / step])
+    individual_batch = (sum_height[bs / 2:] - sum_height[:bs / 2])
 
     L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
 
