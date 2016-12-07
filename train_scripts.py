@@ -623,9 +623,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             all_e2 = np.array(self.bm.error_selections[1]).reshape(n_err, ts)
             all_h1 = heights[:n_err * ts].reshape(n_err, ts)
             all_h2 = heights[n_err * ts:].reshape(n_err, ts)
-            print
 
+            print
+            k = -1
             for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
+                k += 1
                 for i, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
                     for j, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
                         pos = err_t[e_type + '_pos']
@@ -638,7 +640,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
                         # conv check
                         orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
-                        diff = np.abs(orig_conv - stat_conv[i * ts + j, :, 0, 0])
+                        diff = np.abs(orig_conv - stat_conv[i * ts + j + k * n_err * ts, :, 0, 0])
                         verbose = False
                         if np.max(diff) > 10**-4:
                             verbose = True
@@ -654,7 +656,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
                         # input check
                         old_stat = self.bm.crop_input(pos, b)[None, ...][0, :, 1:-1, 1:-1]
-                        new_stat = batch_ft[i * ts + j, 2:, :, :]
+                        new_stat = batch_ft[i * ts + j + k * n_err * ts, 2:, :, :]
                         stat_inp_diff = np.mean((old_stat - new_stat).astype(np.float))
                         if stat_inp_diff > 10**-4:
                             verbose = True

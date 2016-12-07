@@ -156,16 +156,13 @@ class NetBuilder:
                                                      W_hid_to_hid=shared(W_hid_to_hid),
                                                      b=shared(layers_static['fc_08'].b.eval()),
                                                      only_return_final=False)
-
         #
         layers['l_reshape_fc_10'] = L.ReshapeLayer(layers['l_recurrent_09'], (-1, rec_hidden))
-
         # last layer
         layers['l_out_cross'] = L.DenseLayer(layers['l_reshape_fc_10'], 1, name='fc',
                                              W=shared(layers_static['l_out_cross'].W[:, :, 0, 0].eval()),
                                              b=shared(layers_static['l_out_cross'].b.eval()),
                                              nonlinearity=las.nonlinearities.rectify)
-
         layers['l_out_cross'].params[layers['l_out_cross'].W].remove('regularizable')
         self.layers = layers
         # debug
