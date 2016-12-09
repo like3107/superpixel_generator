@@ -117,7 +117,7 @@ class DataProvider(object):
             assert(self.bs == len(preselect_batches))
             ind_b = preselect_batches
         elif self.options.quick_eval:
-            print "using fixed batches euqally distributed"
+            print "using fixed batches equally distributed"
             n_z = self.full_input.shape[0]
             ind_b = np.linspace(0, n_z, self.bs, dtype=np.int, endpoint=False)
         else:

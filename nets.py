@@ -201,7 +201,7 @@ class NetBuilder:
         if update == 'adam':
             updates = las.updates.adam(loss_train, all_params)
         if update == 'sgd':
-            updates = las.updates.sgd(loss_train, all_params, 0.0001)
+            updates = las.updates.sgd(loss_train, all_params, 0.001)
         loss_train_f = theano.function([layers['l_in_00'].input_var, target],
                                        [loss_train, loss_individual_batch, l_out_train],
                                        updates=updates)
@@ -309,7 +309,7 @@ def get_loss_fct(layers, backtrace_length, l_out_train, mask, L1_weight):
 def get_update_rule(loss_train, all_params, optimizer=None):
     if optimizer == "nesterov":
         print "using nesterov_momentum"
-        updates = las.updates.nesterov_momentum(loss_train, all_params, 0.01)
+        updates = las.updates.nesterov_momentum(loss_train, all_params, 0.0005)
     elif optimizer == "adam":
         updates = las.updates.adam(loss_train, all_params)
     else:

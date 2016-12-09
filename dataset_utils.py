@@ -18,7 +18,7 @@ import utils as u
 from scipy import ndimage
 from scipy import stats
 from scipy.ndimage import convolve, gaussian_filter
-from scipy.ndimage.morphology import distance_transform_edt, binary_erosion
+from scipy.ndimage.morphology import distance_transform_edt, binary_erosion, binary_dilation
 from skimage.feature import peak_local_max
 from skimage.morphology import label, watershed
 from itertools import product
@@ -668,7 +668,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             # find all boundary crossings
             path_fin_map =  np.logical_and(boundary[self.pad:-self.pad,
                                                     self.pad:-self.pad],
-                                           self.global_errormap[b, 1])
+                                           self.global_errormap[b, 0])
 
 
             # plot_images.append({"title": "path_fin_0",
@@ -819,6 +819,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def find_global_error_paths(self):
         print 'searching for hard regions'
+
+        for b in range(self.bs):
+            self.global_errormap[b,0] = np.logical_and(self.global_errormap[b,1] ,
+                            binary_dilation(binary_erosion(self.global_errormap[b,1])))
+
         self.find_hard_regions()
         self.locate_global_error_path_intersections()
         # now errors have been found so start and end of paths shall be found
@@ -858,6 +863,18 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                         error_I["e1_direction"] = current_direction
                         error_I["e1_length"] = e1_length
                         assert (error_I["large_id"] == self.global_claims[batch, pos[0], pos[1]])
+                        # plot_images = [{"title": "error",
+                        #         'cmap': "gray",
+                        #         'im': self.global_errormap[batch, 0]}]
+                        # plot_images.append({"title": "error",
+                        #         'cmap': "gray",
+                        #         'im': self.global_errormap[batch, 1]})
+                        # plot_images.append({"title": "error",
+                        #         'cmap': "gray",
+                        #         'im': self.global_errormap[batch, 2]})
+                        # u.save_images(plot_images, name="find_type_debug.png" ,path="./../data/debug/")
+                        # print "error_I[large_gtid]",error_I["large_gtid"]
+                        # print "gl",self.global_label_batch[batch, pos[0]-self.pad, pos[1]-self.pad]
                         assert (error_I["large_gtid"] == self.global_label_batch[batch, pos[0]-self.pad,
                                                                                         pos[1]-self.pad])
                         assert(current_direction >= 0)

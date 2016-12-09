@@ -55,6 +55,7 @@ class PokemonTrainer(object):
         self.update_history = []
         self.loss_history = [[], []]
         self.val_loss_history = [[], []]
+        self.val_update_history = []
 
     def network_i_choose_you(self):
         network = self.builder.get_net(self.options.net_arch)
@@ -511,8 +512,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         bm.update_priority_queue(height_probs, centers, ids, hidden_states=hidden_new)
 
     def validate(self):
-        if self.options.val_options.quick_eval:
-            self.val_bm.set_preselect_batches(range(self.val_bm.bs))
         self.val_bm.init_batch()
         inputs = self.val_bm.global_input_batch[:, :, :-1, :-1]
         self.precomp_input = self.builder.fc_prec_conv_body(inputs)
@@ -530,9 +529,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         self.val_loss_history[0].append(1-score['Adapted Rand error'])
         self.val_loss_history[1].append(1-score['Adapted Rand error precision'])
+        self.val_update_history.append(self.iterations)
+        
         u.plot_train_val_errors([self.val_loss_history[0],
                                  self.val_loss_history[1]],
-                                 range(len(self.val_loss_history[0])),
+                                 self.val_update_history,
                                  self.save_net_path + '/validation.png',
                  names=['Adapted Rand error', 'Adapted Rand error precision'])
         for b in range(min(5, self.bm.bs)):
@@ -561,7 +562,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 bar.update(self.free_voxel_empty - self.free_voxel)
 
         print 'hiddens mean', np.mean(self.bm.global_hidden_states), 'max', np.max(np.abs(self.bm.global_hidden_states))
-        print
         self.bm.find_global_error_paths()
         if self.bm.count_new_path_errors() > 0:
             error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
@@ -803,6 +803,7 @@ if __name__ == '__main__':
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
         options.fc_prec = True
         trainer = FCRecFinePokemonTrainer(options)
+        trainer.val_bm.set_preselect_batches([0,80,40,120,40,100,130,10,140][:trainer.val_bm.bs])
         epoch = 0
         while not trainer.converged():
             trainer.train()
