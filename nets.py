@@ -117,11 +117,11 @@ class NetBuilder:
             l_prev = l_next
 
 
-        f = theano.function([layers['l_in_dyn_00'].input_var],
-                            [L.get_output(layers['dyn_conv_01']),
-                             L.get_output(layers['dyn_conv_02']),
-                             L.get_output(layers['dyn_conv_03']),
-                             L.get_output(layers['dyn_conv_04'])])
+        # f = theano.function([layers['l_in_dyn_00'].input_var],
+        #                     [L.get_output(layers['dyn_conv_01']),
+        #                      L.get_output(layers['dyn_conv_02']),
+        #                      L.get_output(layers['dyn_conv_03']),
+        #                      L.get_output(layers['dyn_conv_04'])])
 
         # replace this for single cut during ft training here prediction
         layers['Cross_slicer'] = cs.CrossSlicer(layers['dyn_conv_04'])
@@ -148,7 +148,7 @@ class NetBuilder:
         layers['l_in_hid_08'] = L.InputLayer((None, rec_hidden))
         layers['l_in_rec_mask_08'] = L.InputLayer((None, self.options.backtrace_length))
 
-        W_hid_to_hid_cell = np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.
+        W_hid_to_hid_cell = shared(np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.)
         layers['l_recurrent_09'] = L.GRULayer(
             layers['l_resh_pred_07'], rec_hidden,
             hid_init=layers['l_in_hid_08'],
@@ -156,7 +156,7 @@ class NetBuilder:
             hidden_update=L.Gate(W_in=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
                                  W_hid=W_hid_to_hid_cell, b=shared(layers_static['fc_08'].b.eval()),
                                  nonlinearity=las.nonlinearities.rectify),
-            updategate=L.Gate(b=las.init.Constant(1.)),
+            updategate=L.Gate(b=las.init.Constant(2.)),
             only_return_final=False)
 
         # W_hid_to_hid = np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.
@@ -237,12 +237,14 @@ class NetBuilder:
 
         l_out_prediciton_prec = L.get_output(layers['l_out_cross'], deterministic=True)
         l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+        befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=True)
         self.probs_f_fc = theano.function([layers['l_in_dyn_00'].input_var, l_in_from_prec.input_var,
                                            layers['l_in_hid_08'].input_var,
                                            layers['l_in_rec_mask_08'].input_var,
                                            self.sequ_len],
                                           [l_out_prediciton_prec, l_out_hidden,
-                                           L.get_output(layers['l_merge_05'], deterministic =True)],  # debug
+                                           L.get_output(layers['l_merge_05'], deterministic =True),
+                                           befo_rec],  # debug
                                           on_unused_input='ignore')
         # reconnect graph again to save network later etc
         layers['l_merge_05'].input_layers[0] = layers['Cross_slicer_stat']
@@ -261,6 +263,9 @@ class NetBuilder:
         stat_conv = L.get_output(layers['static_conv_06'], deterministic=True)
         dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=True)
         l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+        # debug
+        reco_merges = L.get_output(layers['l_merge_05'], deterministic=True)
+        reco_befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=True)
 
         mask = L.get_output(layers['l_in_rec_mask_08'], deterministic=True)
 
@@ -277,7 +282,7 @@ class NetBuilder:
                                                   self.sequ_len],
                                                  [loss_train, individual_batch, l_out_prediciton, loss_valid,
                                                   stat_conv,
-                                                  dyn_conv, l_out_hidden],
+                                                  dyn_conv, l_out_hidden, reco_merges, reco_befo_rec],
                                                  updates=updates)
         assert (updates is not None)
 
