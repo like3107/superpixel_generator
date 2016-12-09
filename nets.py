@@ -259,9 +259,7 @@ class NetBuilder:
         l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=True)
         l_out_train = L.get_output(layers['l_out_cross'], deterministic=True)
         stat_conv = L.get_output(layers['static_conv_06'], deterministic=True)
-        stat_conv2 = L.get_output(self.layers_static['conv_06'], deterministic=True)
         dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=True)
-        l_merge_05 = L.get_output(layers['l_merge_05'], deterministic=True)
         l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
 
         mask = L.get_output(layers['l_in_rec_mask_08'], deterministic=True)
@@ -279,9 +277,6 @@ class NetBuilder:
                                                   self.sequ_len],
                                                  [loss_train, individual_batch, l_out_prediciton, loss_valid,
                                                   stat_conv,
-                                                  stat_conv2,
-                                                  l_merge_05,
-                                                  L.get_output(layers['static_conv_06'], deterministic=True),
                                                   dyn_conv, l_out_hidden],
                                                  updates=updates)
         assert (updates is not None)
