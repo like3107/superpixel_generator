@@ -8,6 +8,8 @@ import custom_layer as cs
 import utils as u
 from collections import OrderedDict
 
+ELUp = lambda x : theano.tensor.switch(x > 0, x+1, theano.tensor.exp(x))
+
 class NetBuilder:
     def __init__(self, options=None):
         self.net_name = None
@@ -57,7 +59,7 @@ class NetBuilder:
         ELU = las.nonlinearities.elu
         ReLU = las.nonlinearities.rectify
         ident = las.nonlinearities.identity
-        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU, ReLU,   ReLU]
+        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU, ReLU,   ELUp]
         names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc', 'fc', 'fc']
         assert(len(filts) == len(dils) and len(filts) == len(batch_norms) and len(filts) == len(regs) and
                len(filts) == len(n_filts) and len(names) == len(act_fcts) and len(filts) == len(names))
@@ -172,7 +174,7 @@ class NetBuilder:
         layers['l_out_cross'] = L.DenseLayer(layers['l_reshape_fc_10'], 1, name='fc',
                                              W=shared(layers_static['l_out_cross'].W[:, :, 0, 0].eval()),
                                              b=shared(layers_static['l_out_cross'].b.eval()),
-                                             nonlinearity=las.nonlinearities.rectify)
+                                             nonlinearity=ELUp)
         layers['l_out_cross'].params[layers['l_out_cross'].W].remove('regularizable')
         self.layers = layers
         # debug
