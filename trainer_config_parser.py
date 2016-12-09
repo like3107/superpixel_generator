@@ -53,6 +53,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--fast_reset', action='store_true')
     p.add('--clip_method', default='clip')
     p.add('--padding_b', action='store_true')
+    p.add('--master', action='store_true')
     p.add('--merge_seeds', dest='merge_seeds', action='store_true')
     p.add('--train_merge', dest='train_merge', action='store_true')
 

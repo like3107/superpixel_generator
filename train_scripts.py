@@ -19,6 +19,7 @@ import time
 from trainer_config_parser import get_options
 import progressbar
 from lasagne import layers as L
+import glob
 
 import validation_scripts as vs
 
@@ -39,10 +40,11 @@ class PokemonTrainer(object):
 
         self.options.patch_len = self.builder.fov
 
+        self.master = True
         self.init_BM()
         self.bm = self.BM(self.options)
 
-        if "val_options" in self.options:
+        if "val_options" in self.options and self.master:
             self.options.val_options.patch_len = self.builder.fov
             self.val_bm = self.BM(self.options.val_options)
         else:
@@ -57,6 +59,7 @@ class PokemonTrainer(object):
         self.loss_history = [[], []]
         self.val_loss_history = [[], []]
         self.val_update_history = []
+        self.epoch = 0
 
     def network_i_choose_you(self):
         network = self.builder.get_net(self.options.net_arch)
@@ -382,7 +385,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
         self.bm.update_priority_queue(heights, seeds, ids)
         return
 
-    def train(self):
+    def predict(self):
         self.bm.init_batch()
         bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         inputs = self.update_BM_FC()
@@ -398,6 +401,11 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
 
             if self.free_voxel % 100 == 0:
                 bar.update(self.free_voxel_empty - self.free_voxel)
+        self.epoch += 1
+
+    def train(self):
+
+        self.predict()
 
         self.bm.find_global_error_paths()
         if self.bm.count_new_path_errors() > 0:
@@ -739,6 +747,86 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         exit()
 
 
+class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
+    def init_BM(self):
+        self.BM = du.HoneyBatcherRec
+        self.images_counter = -1
+
+        master_file = self.save_net_path+"/master.txt"
+        self.exp_path = self.save_net_path+"/experiences/"
+        self.current_net_name = "masternet.h5"
+        if not os.path.exists(master_file):
+            self.iterations = 0
+            os.system("touch "+master_file)
+            if not os.path.exists(self.exp_path):
+                os.makedirs(self.exp_path)
+            self.master = True
+            self.save_net(name=self.current_net_name)
+            print "starting Master"
+        else: 
+            self.master = False
+            self.val_bm = None
+            print "starting Slave"
+
+    def train(self):
+        if self.master:
+            print self.iterations,
+            sys.stdout.flush()
+            for f in glob.glob(self.exp_path+'*.h5'):
+                print "learning from ",f
+                with h5py.File(f,"r") as h5f:
+                    if 'done' in h5f:
+
+                        batch_ft1 = np.array(h5f['batch_ft1'])
+                        batch_ft2 = np.array(h5f['batch_ft2'])
+                        batch_inits = np.array(h5f['batch_inits'])
+                        batch_mask_ft = np.array(h5f['batch_mask_ft'])
+                        length = h5f['options.backtrace_length'].value
+
+                        ft_loss_train, individual_loss_fine, heights, ft_loss_noreg = \
+                                self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft, length)
+
+                        self.save_net(name=self.current_net_name)
+                        self.save_net()
+                        os.system('rm '+f)
+                        self.draw_loss(ft_loss_train, ft_loss_noreg)
+                        self.iterations += 1
+                        self.epoch += 1
+            time.sleep(5) 
+
+        else:
+            np.random.seed(np.random.seed(int(time.time())))
+            # change seed so different images for retrain
+            print "loading network parameters from ", 
+            u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
+
+            self.observation_counter = 500
+            self.predict()
+
+            self.bm.find_global_error_paths()
+            if self.bm.count_new_path_errors() > 0:
+                error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
+                    self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
+
+                batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
+                batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
+                batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
+
+                sequ_len = self.options.backtrace_length
+                print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
+                    'rnn mask', batch_mask_ft.shape
+
+                with h5py.File(self.exp_path+"/%i_%f.h5"%(os.getpid(), time.time()),"w") as f:
+                    f.create_dataset('batch_ft1',data=batch_ft[:, :2, :, :]) 
+                    f.create_dataset('batch_ft2',data=batch_ft[:, 2:, :, :]) 
+                    f.create_dataset('batch_inits',data=batch_inits) 
+                    f.create_dataset('batch_mask_ft',data=batch_mask_ft) 
+                    f.create_dataset('options.backtrace_length',data=options.backtrace_length)
+                    f.create_dataset('done',data=[1])
+
+            if self.images_counter % 1 == 0:
+                trainer.draw_debug(reset=True)
+
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
     def init_BM(self):
         self.BM = du.HoneyBatcherERec
@@ -848,13 +936,23 @@ if __name__ == '__main__':
 
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
         options.fc_prec = True
-        trainer = FCRecFinePokemonTrainer(options)
-        trainer.val_bm.set_preselect_batches([0,80,40,120,40,100,130,10,140][:trainer.val_bm.bs])
-        epoch = 0
+
+        if options.master:
+            print "using master trainer"
+            trainer = FCRecMasterFinePokemonTrainer(options)
+        else:
+            print "using normal trainer"
+            trainer = FCRecFinePokemonTrainer(options)
+
+        if trainer.val_bm is not None:
+            trainer.val_bm.set_preselect_batches([0,80,40,120,40,100,130,10,140][:trainer.val_bm.bs])
+        
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
-            if trainer.val_bm is not None and epoch % 10 == 0:
+            print "trainer.val_bm",trainer.val_bm
+            print "---------------------------------------"
+            if trainer.val_bm is not None and trainer.epoch % 10 == 0:
                 trainer.validate()
             epoch += 1
 
