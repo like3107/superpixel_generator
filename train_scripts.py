@@ -865,7 +865,7 @@ class GottaCatchemAllTrainer(PokemonTrainer):
 
     def update_BM(self):
         self.bm.init_batch()
-        inputs = self.bm.global_input_batch[:, :, :-1, :-1]
+        inputs = self.bm.global_input_batch[:, :, :, :]
         heights_gt = self.bm.global_height_gt_batch[:, None, :, :]
         self.bm.edge_map_gt = heights_gt
         return inputs, None, heights_gt
