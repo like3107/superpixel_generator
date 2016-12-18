@@ -16,38 +16,6 @@ class indexgetter():
     def __call__(self, z,offset):
         return self.dex[self.maxoffset+z+offset]
 
-        # for y in range(height_data_rescaled.shape[1]):
-        #     ay = slice(max(0,y-max_height),y+max_height)
-        #     for x in range(height_data_rescaled.shape[2]):
-        #         ax = slice(max(0,x-max_height),x+max_height)
-        #         square_mask.fill(0)
-        #         square_mask[ay,ax] = 1
-        #         np.logical_and(square_mask,
-        #                        label_data[i] == label_data[i,y,x],
-        #                        out=square_mask)
-        #         square_mask.shape
-        #         hmin = np.min(height_data_rescaled[i][square_mask])
-        #         if hmin > 0 and hmin < max_height:
-        #             scale_mat[y,x] -= hmin
-        #             scale_mat[y,x] *= max_height/(float(max_height-hmin))
-
-# def get_hmin_array(image, label, out, max_height = 34):
-#     NumPy_type = scalar_spec.NumPy_to_blitz_type_mapping[type]
-#     code = """
-#     for(int y = 0;y < _Nimage[1]; y++)
-#         for(int x = 0;  x < _Nimage[0]; x++)
-#             float hmin = max_height;
-#             int o_label = label(y,x)
-#             for(int sy = max(0,y-max_height);sy < min(_Nimage[1], y+max_height); sy++)
-#                 for(int sx = max(0,x-max_height);sx < min(_Nimage[0], x+max_height); sx++)
-#                     if (label(sy,sx) == o_label && image(sy, sx) < hmin){
-#                         hmin = image(sy, sx);
-#                     }
-#             out(y,x) = hmin;
-#     """
-#     inline(code,['image','label','out','max_height'],
-#            type_factories = blitz_type_converters,compiler='gcc')
-
 
 if __name__ == '__main__':
     """
@@ -67,12 +35,19 @@ if __name__ == '__main__':
     max_height = 34
      
     if dataset_name == "noz_full":
-
-        dic_slices = {"test":{"a":slice(50),"b":slice(50),"c":slice(50)},
+        dic_slices = {"test":{"a":slice(0,50),"b":slice(0,50),"c":slice(0,50)},
                       "train":{"a":slice(50,125),"b":slice(50,125),"c":slice(50,125)}}
         x_slice = slice(None)
         y_slice = slice(None)
 
+    elif dataset_name == "noz_db":
+        fov = 68        # edge effects
+        gel = 200
+        gel += fov
+        # dic_slices = {"test":{"a":slice(0,50,5),"b":slice(0,50,5),"c":slice(0,50,5)}}
+        dic_slices = {"train":{"a":slice(50), "b":slice(50), "c":slice(50)}}
+        x_slice = slice(fov,fov+gel)
+        y_slice = slice(fov,fov+gel)     
     elif dataset_name == "noz_small":
         fov = 68        # edge effects
         gel = 400
@@ -105,7 +80,7 @@ if __name__ == '__main__':
         height_data  = np.empty((total_z_lenght,y_lenght,x_lenght),
                                 dtype=np.float32)
         height_data_rescaled  = np.empty((total_z_lenght,y_lenght,x_lenght),
-                                dtype=np.float32)       
+                                dtype=np.float32)
         boundary_data  = np.empty((total_z_lenght,y_lenght,x_lenght),
                                 dtype=np.float32)
 
@@ -146,26 +121,8 @@ if __name__ == '__main__':
                 height_data_rescaled[i] += maximum
 
                 scale_mat = np.empty_like(height_data_rescaled[i])
-                # square_mask = np.zeros(height_data_rescaled.shape[1:3],dtype=bool)
-
                 get_hmin.get_hmin_array(height_data_rescaled[i], label_data[i], scale_mat)
-                # for y in range(height_data_rescaled.shape[1]):
-                #     ay = slice(max(0,y-max_height),y+max_height)
-                #     for x in range(height_data_rescaled.shape[2]):
-                #         ax = slice(max(0,x-max_height),x+max_height)
-                #         square_mask.fill(0)
-                #         square_mask[ay,ax] = 1
-                #         np.logical_and(square_mask,
-                #                        label_data[i] == label_data[i,y,x],
-                #                        out=square_mask)
-                #         square_mask.shape
-                #         hmin = np.min(height_data_rescaled[i][square_mask])
-                #         if hmin > 0 and hmin < max_height:
-                #             scale_mat[y,x] -= hmin
-                #             scale_mat[y,x] *= max_height/(float(max_height-hmin))
-
                 height_data_rescaled[i] = scale_mat
-
                 i += 1
                 bar.update(i)
 
