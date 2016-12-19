@@ -747,21 +747,21 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         exit()
 
 
-class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
+class FCRecDDPGPokemonTrainer(FCRecFinePokemonTrainer):
     def init_BM(self):
         self.BM = du.HoneyBatcherRec
         self.images_counter = -1
 
-        master_file = self.save_net_path+"/master.txt"
         self.exp_path = self.save_net_path+"/experiences/"
         self.current_net_name = "masternet.h5"
-        if not os.path.exists(master_file):
+
+        if options.master:
             self.iterations = 0
-            os.system("touch "+master_file)
             if not os.path.exists(self.exp_path):
                 os.makedirs(self.exp_path)
             self.master = True
-            self.save_net(name=self.current_net_name)
+            if not os.path.exists(self.current_net_name):
+	            self.save_net(name=self.current_net_name)
             print "starting Master"
         else: 
             self.master = False
@@ -776,7 +776,6 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                 print "learning from ",f
                 with h5py.File(f,"r") as h5f:
                     if 'done' in h5f:
-
                         batch_ft1 = np.array(h5f['batch_ft1'])
                         batch_ft2 = np.array(h5f['batch_ft2'])
                         batch_inits = np.array(h5f['batch_inits'])
