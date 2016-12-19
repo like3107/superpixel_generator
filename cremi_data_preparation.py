@@ -31,14 +31,22 @@ if __name__ == '__main__':
     # define slices here if you want to reduce the size of the dataset
     # None means all slices
 
-    dataset_name = "noz_full"
+    dataset_name = "1z_full"
     max_height = 34
-     
+
     if dataset_name == "noz_full":
         dic_slices = {"test":{"a":slice(0,50),"b":slice(0,50),"c":slice(0,50)},
                       "train":{"a":slice(50,125),"b":slice(50,125),"c":slice(50,125)}}
         x_slice = slice(None)
         y_slice = slice(None)
+        z_range = [0]
+
+    elif dataset_name == "1z_full":
+        dic_slices = {"test":{"a":slice(0,50),"b":slice(0,50),"c":slice(0,50)},
+                      "train":{"a":slice(50,125),"b":slice(50,125),"c":slice(50,125)}}
+        x_slice = slice(None)
+        y_slice = slice(None)
+        z_range = [-1,0,1]
 
     elif dataset_name == "noz_db":
         fov = 68        # edge effects
@@ -47,7 +55,9 @@ if __name__ == '__main__':
         # dic_slices = {"test":{"a":slice(0,50,5),"b":slice(0,50,5),"c":slice(0,50,5)}}
         dic_slices = {"train":{"a":slice(50), "b":slice(50), "c":slice(50)}}
         x_slice = slice(fov,fov+gel)
-        y_slice = slice(fov,fov+gel)     
+        y_slice = slice(fov,fov+gel)
+        z_range = [0]
+
     elif dataset_name == "noz_small":
         fov = 68        # edge effects
         gel = 400
@@ -56,6 +66,8 @@ if __name__ == '__main__':
         dic_slices = {"train":{"a":slice(50,125),"b":slice(50,125),"c":slice(50,125)}}
         x_slice = slice(fov,fov+gel)
         y_slice = slice(fov,fov+gel)
+        z_range = [0]
+
     else:
         print "unknown dataset"
         exit()
@@ -72,8 +84,7 @@ if __name__ == '__main__':
         print "creating dataset for ",total_z_lenght,"zslices"
 
         i = 0
-
-        input_data = np.empty((total_z_lenght,2,y_lenght,x_lenght),
+        input_data = np.empty((total_z_lenght,2*len(z_range),y_lenght,x_lenght),
                                 dtype=np.float32)
         label_data = np.empty((total_z_lenght,y_lenght,x_lenght),
                                 dtype=np.uint64)
@@ -103,7 +114,7 @@ if __name__ == '__main__':
      
             gz = indexgetter(z_lenght)
             for z in range(z_lenght)[sl[ds]]:
-                for j in [0]:
+                for j in z_range:
                     input_data[i,0+j] = raw[gz(z,j),y_slice,x_slice]
                     input_data[i,1+j] = membrane[gz(z,j),y_slice,x_slice]
 
