@@ -545,7 +545,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.val_loss_history[0].append(1-score['Adapted Rand error'])
         self.val_loss_history[1].append(1-score['Adapted Rand error precision'])
         self.val_update_history.append(self.iterations)
-        
+
         u.plot_train_val_errors([self.val_loss_history[0],
                                  self.val_loss_history[1]],
                                  self.val_update_history,
@@ -557,8 +557,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         return score
 
     def train(self):
-        self.debug_pos = np.array([44, 39])
-        self.dir = 2
+        self.debug_pos = np.array([5, 63])
+        self.dir = 0
         self.debug_pos_orig = self.bm.update_position(self.debug_pos, self.dir)
 
         self.bm.init_batch()
@@ -580,6 +580,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 bar.update(self.free_voxel_empty - self.free_voxel)
 
         print 'hiddens mean', np.mean(self.bm.global_hidden_states), 'max', np.max(np.abs(self.bm.global_hidden_states))
+        print
+        print 'global seeds', self.bm.global_seeds
+
         self.bm.find_global_error_paths()
         if self.bm.count_new_path_errors() > 0:
             error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
@@ -619,31 +622,30 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         masks = np.array(masks.reshape((2, -1)), dtype=np.bool)
         all_heights_tmp = all_heights.reshape((2, -1))
         print 'shapes', all_heights_tmp.shape, masks.shape
-        for i, (ei, heights, mask, err_selection) in enumerate(zip(['e1', 'e2'], all_heights_tmp, masks,
-                                                                   self.bm.error_selections)):
-
-            print 'ei', ei, heights.shape, mask.shape, np.array(err_selection).shape
-            err_selection = np.array(err_selection)[mask]
-            print 'amsk', err_selection.shape
-            all_ei_pos = np.array([err[ei + '_pos'] for err in err_selection])
-            all_b = [err['batch'] for err in err_selection]
-            dirs = self.bm.global_directionmap_batch[all_b, all_ei_pos[:, 0] - self.bm.pad,
-                                                            all_ei_pos[:, 1] - self.bm.pad]
-            origins = [self.bm.update_position(pos, dir) if dir != -1 else pos for pos, dir in zip(all_ei_pos, dirs)]
-            origins = np.array(origins)
-            all_orig_h = self.bm.global_prediction_map_nq[all_b, all_ei_pos[:, 0] - self.bm.pad,
-                                                          all_ei_pos[:, 1] - self.bm.pad, dirs]
-            all_rec_h = heights[mask]
-            print 'dirs', dirs
-            print 'update height diff', ei
-            h_diffs = all_orig_h - all_rec_h
-            all_orig_h = self.bm.global_prediction_map_nq[all_b, origins[:, 0] - self.bm.pad,
-                                                                 origins[:, 1] - self.bm.pad, dirs]
-            all_rec_h = heights[mask]
-            print 'no height diff', ei
-            print 'pos', zip(all_ei_pos, origins)
-            print 'h_diffs', zip(h_diffs, all_orig_h - all_rec_h)
-        print 'global seeds', self.bm.global_seeds
+        # for i, (ei, heights, mask, err_selection) in enumerate(zip(['e1', 'e2'], all_heights_tmp, masks,
+        #                                                            self.bm.error_selections)):
+        #
+        #     print 'ei', ei, heights.shape, mask.shape, np.array(err_selection).shape
+        #     err_selection = np.array(err_selection)[mask]
+        #     print 'amsk', err_selection.shape
+        #     all_ei_pos = np.array([err[ei + '_pos'] for err in err_selection])
+        #     all_b = [err['batch'] for err in err_selection]
+        #     dirs = self.bm.global_directionmap_batch[all_b, all_ei_pos[:, 0] - self.bm.pad,
+        #                                                     all_ei_pos[:, 1] - self.bm.pad]
+        #     origins = [self.bm.update_position(pos, dir) if dir != -1 else pos for pos, dir in zip(all_ei_pos, dirs)]
+        #     origins = np.array(origins)
+        #     all_orig_h = self.bm.global_prediction_map_nq[all_b, all_ei_pos[:, 0] - self.bm.pad,
+        #                                                   all_ei_pos[:, 1] - self.bm.pad, dirs]
+        #     all_rec_h = heights[mask]
+        #     print 'dirs', dirs
+        #     print 'update height diff', ei
+        #     h_diffs = all_orig_h - all_rec_h
+        #     all_orig_h = self.bm.global_prediction_map_nq[all_b, origins[:, 0] - self.bm.pad,
+        #                                                          origins[:, 1] - self.bm.pad, dirs]
+        #     all_rec_h = heights[mask]
+        #     print 'no height diff', ei
+        #     print 'pos', zip(all_ei_pos, origins)
+        #     print 'h_diffs', zip(h_diffs, all_orig_h - all_rec_h)
         # exit()
         # exit()
         # self.bm.draw_batch(batch_ft, 'batch_tmp')
@@ -662,16 +664,15 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         k = -1
         for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
             k += 1
-            for i, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
-                for j, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
-                    number = i * ts + j + k * n_err * ts
-                    print 'number', number
+            for rec_b, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
+                for t, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
+                    number = t + rec_b * ts + k * n_err * ts
 
                     pos = err_t[e_type + '_pos']
                     b = err_t['batch']
                     dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
 
-                    if dir < 0:
+                    if dir < 0 or not masks[k, rec_b * ts + t]:
                         print 'continue', pos
                         continue
 
@@ -689,12 +690,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     err_h = self.bm.global_prediction_map_nq[b, old_pos[0] - self.bm.pad, old_pos[1] - self.bm.pad,
                                                              dir]
                     diff = np.abs(h_t - err_h)
-                    print 'diff', diff
-                    if diff > 10 ** -4 or np.all(pos == self.debug_pos):
+                    # print 'height diff', diff
+                    if diff > 10 ** -2 or np.all(pos == self.debug_pos) and not masks[k, rec_b * ts + t]:
                         verbose = True
                         print 'height differences %.5f err h %.5f, diff %.5f hiddens max %.5f' \
-                              % (h_t, err_h, (h_t - err_h), np.max(hiddens_rec))
-
+                              % (h_t, err_h, (h_t - err_h), np.max(hiddens_rec)), masks[k, rec_b * ts + t]
                     # input check
                     old_stat = self.bm.crop_input(pos, b)[None, ...][0, :, 1:-1, 1:-1]
                     new_stat = batch_ft[number, 2:, :, :]
@@ -721,30 +721,31 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                         print 'pred time', self.bm.global_timemap[0, self.debug_pos_orig[0], self.debug_pos_orig[1]]
                         verbose = True
                         # self.mem[0, 1, 1, 1] = 2
+                        print 'input comparison', np.sum(np.abs(self.mem[0, :, sx:ex, sy:ey] - batch_ft[number, :2, :, :]))
                         print 'stat comparison', np.sum(np.abs(self.mem_stat[0, :, 1:-1, 1:-1] - batch_ft[number, 2:, :, :]))
+                        print 'merge comparison', np.sum(np.abs(self.mem_merge[:, dx, dy] - reco_merges[number, :, 0, 0]))
+                        print 'merge diff stat', np.sum(np.abs(self.mem_merge[320-64:, dx, dy] - reco_merges[number, 320-64:, 0, 0]))
                         print 'befo rec comparison', np.sum(np.abs(self.mem_befo_rec[dir + b*4,0 , :] - reco_befo_rec[0, 0, :]))
 
-                        print 'input comparison', np.sum(np.abs(self.mem[0, :, sx:ex, sy:ey] - batch_ft[number, :2, :, :]))
-                        print 'merge comparison', np.sum(np.abs(self.mem_merge[:, dx, dy] - reco_merges[number, :, 0, 0]))
                         diff =np.abs(self.mem_rec_in[dir + b * 4 , :] - hiddens[0, 0, :])
                         print 'recurrent input differences', np.mean(diff), np.max(diff), np.where(diff == np.max(diff))
 
 
-                        print 'recurrent input mem', self.mem_rec_in[3 + b * 4 , :8]
-                        print 'recurrent input reconst', hiddens[0, 0, :8]
+                        # print 'recurrent input mem', self.mem_rec_in[3 + b * 4 , :8]
+                        # print 'recurrent input reconst', hiddens[0, 0, :8]
                         # print 'mem merges', self.mem_merge[320-64-2:, dx, dy][:4]
                         # print 'reco merges', reco_merges[number, 320-64-2:, 0, 0][:4]
                         # print 'reco_befo_rec', reco_befo_rec[0, 0, :5]
                         # print 'mem befo rec', self.mem_befo_rec[dir + b*4,0 , :5]
-                        # print 'merge', np.sum(np.abs(self.mem_merge[320-64:, dx, dy] - reco_merges[number, 320-64:, 0, 0]))
 
                     if verbose:
+                        print 'number', number
                         t_rec = self.bm.global_timemap[b, old_pos[0], old_pos[1]]
                         print 'type', e_type, 'pos', pos, 'b', b, 'orig pos', old_pos, 'dir', dir, 'trec', t_rec
                         if self.bm.pad in pos or self.bm.image_shape[-1] - self.bm.pad - 1 in pos:
                             print 'boundary case.............'
                         print
-        exit()
+
 
 
 class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
@@ -763,7 +764,7 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
             self.master = True
             self.save_net(name=self.current_net_name)
             print "starting Master"
-        else: 
+        else:
             self.master = False
             self.val_bm = None
             print "starting Slave"
@@ -792,12 +793,12 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                         self.draw_loss(ft_loss_train, ft_loss_noreg)
                         self.iterations += 1
                         self.epoch += 1
-            time.sleep(5) 
+            time.sleep(5)
 
         else:
             np.random.seed(np.random.seed(int(time.time())))
             # change seed so different images for retrain
-            print "loading network parameters from ", 
+            print "loading network parameters from ",
             u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
 
             self.observation_counter = 500
@@ -817,10 +818,10 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                     'rnn mask', batch_mask_ft.shape
 
                 with h5py.File(self.exp_path+"/%i_%f.h5"%(os.getpid(), time.time()),"w") as f:
-                    f.create_dataset('batch_ft1',data=batch_ft[:, :2, :, :]) 
-                    f.create_dataset('batch_ft2',data=batch_ft[:, 2:, :, :]) 
-                    f.create_dataset('batch_inits',data=batch_inits) 
-                    f.create_dataset('batch_mask_ft',data=batch_mask_ft) 
+                    f.create_dataset('batch_ft1',data=batch_ft[:, :2, :, :])
+                    f.create_dataset('batch_ft2',data=batch_ft[:, 2:, :, :])
+                    f.create_dataset('batch_inits',data=batch_inits)
+                    f.create_dataset('batch_mask_ft',data=batch_mask_ft)
                     f.create_dataset('options.backtrace_length',data=options.backtrace_length)
                     f.create_dataset('done',data=[1])
 
@@ -946,7 +947,7 @@ if __name__ == '__main__':
 
         if trainer.val_bm is not None:
             trainer.val_bm.set_preselect_batches([0,80,40,120,40,100,130,10,140][:trainer.val_bm.bs])
-        
+
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
@@ -954,7 +955,7 @@ if __name__ == '__main__':
             print "---------------------------------------"
             if trainer.val_bm is not None and trainer.epoch % 10 == 0:
                 trainer.validate()
-            epoch += 1
+            trainer.epoch += 1
 
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     # elif options.net_arch == 'v8_hydra_dilated_ft_joint':

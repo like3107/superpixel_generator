@@ -30,6 +30,7 @@ import time
 import copy
 from theano import tensor as T
 
+from IPython import embed
 
 class HoneyBatcherPredict(object):
     def __init__(self, options):
@@ -463,7 +464,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # fore lists to np.array so we can do array arithmetics
         centers = np.array(centers)
         for i, b in enumerate(batches):
-            print 'timepoint i', timepoint[i]
             mask[i, :, :][self.crop_timemap(centers[i], b) > timepoint[i]] = 1
         return mask
 
@@ -479,6 +479,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.global_time = 0
         self.global_errormap = np.zeros((self.bs, 3, self.label_shape[1], self.label_shape[2]), dtype=np.bool)
         self.global_error_dict = {}
+        # direction map post pq: [-><-]
         self.global_directionmap_batch = np.zeros(self.batch_data_provider.get_label_shape(), dtype=np.int) - 1
 
     def get_batches(self):
@@ -590,9 +591,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             else:
                 return len(self.global_error_dict.keys())
                 return b, min(id1, id2), max(id1, id2), time
-        def get_error_dict(b, x, y, center_x, center_y,
-                           reverse_direction, slow_intruder,
-                           touch_x, touch_y):
+        def get_error_dict(b, x, y, center_x, center_y, small_direction, slow_intruder, touch_x, touch_y):
             self.err_counter += 1
             new_error = \
                 {"Id":self.err_counter,
@@ -605,11 +604,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  "large_gtid": claim_projection[center_x, center_y],
                  "importance": 1,
                  "small_pos": [x, y],
-                 "small_direction": reverse_direction,
+                 "small_direction": small_direction,
                  "small_gtid": claim_projection[x, y],
                  "small_id": self.global_claims[b, x, y],
                  "slow_intruder": slow_intruder,
-                 "plateau":False} # debug
+                 "plateau":False,
+                 "first_rec":True} # debug
             assert (new_error["large_gtid"] != new_error["small_gtid"])
             assert (new_error["large_id"] != new_error["small_id"])
             return new_error
@@ -617,12 +617,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         for b in range(self.bs):
 
             # project claim id to ground truth id by lookup
-            gtmap = np.array([0]+self.global_id2gt[b].values())
-            claim_projection=gtmap[self.global_claims[b].astype(int)]
-            claim_projection[self.pad-1,:]=claim_projection[self.pad,:]
-            claim_projection[-self.pad,:]=claim_projection[-self.pad-1,:]
-            claim_projection[:,self.pad-1]=claim_projection[:,self.pad]
-            claim_projection[:,-self.pad]=claim_projection[:,-self.pad-1]
+            gtmap = np.array([0] + self.global_id2gt[b].values())
+            claim_projection = gtmap[self.global_claims[b].astype(int)]
+            claim_projection[self.pad - 1,:] = claim_projection[self.pad, :]
+            claim_projection[-self.pad, :] = claim_projection[-self.pad - 1, :]
+            claim_projection[:, self.pad - 1] = claim_projection[:, self.pad]
+            claim_projection[:, -self.pad] = claim_projection[:, -self.pad - 1]
             not_found = np.zeros_like(claim_projection)
             
             # plot_images = []
@@ -647,18 +647,14 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             gy = convolve(claim_projection + 1, np.array([-1., 0., 1.]).reshape(3, 1))
             boundary = np.float32((gx ** 2 + gy ** 2) > 0)
             # find all boundary crossings
-            path_fin_map =  np.logical_and(boundary[self.pad:-self.pad,
-                                                    self.pad:-self.pad],
-                                           self.global_errormap[b, 0])
+            path_fin_map = np.logical_and(boundary[self.pad:-self.pad, self.pad:-self.pad], self.global_errormap[b, 0])
 
 
             # plot_images.append({"title": "path_fin_0",
             #             'cmap': "gray",
             #             'im': path_fin_map})
-            np.logical_and(path_fin_map,
-                           (self.global_claims[b,
-                                               self.pad:-self.pad,
-                                               self.pad:-self.pad] > 0),
+            #
+            np.logical_and(path_fin_map, (self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad] > 0),
                            out=path_fin_map)
             # plot_images.append({"title": "path_fin_1",
             #                         'cmap': "gray",
@@ -673,60 +669,54 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             wrong_path_ends = np.transpose(np.where(path_fin_map)) + self.pad
             for center_x, center_y in wrong_path_ends:
                 # check around intruder, claim pred = large pred = intruder
-                claim_height = self.global_heightmap_batch[b,
-                                                         center_x - self.pad,
-                                                         center_y - self.pad]
+                claim_height = self.global_heightmap_batch[b, center_x - self.pad, center_y - self.pad]
                 large_time = self.global_timemap[b, center_x, center_y]
-                small_pred = np.inf
+                smallest_pred = np.inf
                 small_height_old = np.inf
                 touch_time_old = np.inf
                 fast_intruder_found = False
                 new_error = {}
-                for x, y, direction in self.walk_cross_coords([center_x,
-                                                               center_y]):
+                for x, y, direction in self.walk_cross_coords([center_x, center_y]):
                     assert (x - self.pad >= 0)
                     assert (center_x - self.pad >= 0)
                     assert (y - self.pad >= 0)
                     assert (center_y - self.pad >= 0)
 
-                    label_large = self.global_label_batch[b,
-                                                           center_x - self.pad,
-                                                           center_y - self.pad]
-                    claim_projection_large = claim_projection[center_x,
-                                                              center_y]
-                    label_small = self.global_label_batch[b,
-                                                          x - self.pad,
-                                                          y - self.pad]
+                    label_large = self.global_label_batch[b, center_x - self.pad, center_y - self.pad]
+                    claim_projection_large = claim_projection[center_x, center_y]
+                    label_small = self.global_label_batch[b, x - self.pad, y - self.pad]
                     claim_projection_small = claim_projection[x, y]
+
                     # if type3 true: A and B meet in C --> no penalty
                     type_3_error = (label_small != claim_projection_small)
-                    # only penalize on on lowest prediction
-                    if claim_projection_small != claim_projection_large \
-                            and not type_3_error:
+
+                    # is neighborpixel same ID, if no -> error
+                    if claim_projection_small != claim_projection_large and not type_3_error:
                         reverse_direction = self.reverse_direction(direction)
                         # on center pixel of intruder
                         prediction = self.global_prediction_map[b, x - self.pad,  y - self.pad, reverse_direction]
                         small_time = self.global_timemap[b, x, y]
                         if prediction < claim_height:
                             raise Exception('this violates PQ structure')
+
+                        # fast intruder
                         # intruder runs into resident (fast intruder)
                         # find lowest prediction on intruder claimed pixel
-                        elif prediction < small_pred and \
-                                small_time < large_time:
+                        elif prediction < smallest_pred and small_time < large_time:
                             fast_intruder_found = True      # prioritized
-                            small_pred = prediction
-                            new_error = get_error_dict(b, x, y, center_x, center_y, reverse_direction,
-                                                      False, center_x, center_y)
-                        # slow intruder find lowest claimed height
-                        # a) fast intuder prioritized,
-                        # b) ignore type 3#  other is prioritized
-                        elif not fast_intruder_found:
+                            smallest_pred = prediction
+                            new_error = get_error_dict(b, x, y, center_x, center_y, reverse_direction, False,
+                                                       center_x, center_y)
 
+                        # slow intruder find lowest claimed height
+                        elif not fast_intruder_found:
                             small_height = self.global_heightmap_batch[b, x - self.pad, y - self.pad]
                             if small_height >= claim_height and  small_height <= small_height_old:
                                 small_height_old = small_height
-                                assert (large_time < small_time)
-                                new_error = get_error_dict(b, x, y, center_x, center_y, reverse_direction, True, x, y)
+                                assert (small_time > large_time)
+                                small_direction = self.global_directionmap_batch[b, x - self.pad, y - self.pad]
+                                new_error = get_error_dict(b, x, y, center_x, center_y, small_direction, True,
+                                                           x, y)
 
                 if new_error != {}:
                     e_index = error_index(b, new_error["small_gtid"], new_error["large_gtid"], time=time.time())
@@ -847,47 +837,48 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
                 e1_length = error_I["e1_length"]
 
-    def find_end_of_plateau(self, start_position, prediction_direction, batch, error_dict=None):
-        assert(prediction_direction >= 0)
-        if not self.global_plateau_indicator[batch,
-                                              start_position[0]- self.pad,
-                                              start_position[1]- self.pad,
-                                              prediction_direction]:
-            return start_position, prediction_direction
+    def find_end_of_plateau(self, start_pos, prediction_dir, batch, error_dict=None):
+        assert(prediction_dir >= 0)
+        node_direction = self.global_directionmap_batch[batch, start_pos[0] - self.pad, start_pos[1] - self.pad]
+        step_back_pos = self.update_position(start_pos, node_direction)
+
+        if not self.global_plateau_indicator[batch, step_back_pos[0] - self.pad, step_back_pos[1] - self.pad,
+                                             node_direction]:
+            return start_pos, prediction_dir
         else:
             if error_dict is not None:
                 error_dict["plateau"] = True
-
-            node_direction = self.global_directionmap_batch[batch, start_position[0]- self.pad,
-                                                                   start_position[1]- self.pad]
-            if node_direction == -1:
-                return start_position, prediction_direction
-
-            step_back_pos = self.update_position(start_position, node_direction)
+            assert(node_direction != -1)
             return self.find_end_of_plateau(step_back_pos, node_direction, batch, error_dict=None)
 
     def find_source_of_II_error(self):
         for error in self.global_error_dict.values():
             if "e2_pos" not in error:
                 batch = error["batch"]
-                start_position = error["small_pos"]
-                start_direction = error["small_direction"]
                 if error["slow_intruder"]:
+                    start_position = error["small_pos"]
+                    start_direction = error["small_direction"]
+                    assert (self.global_directionmap_batch[batch,
+                                                           start_position[0] - self.pad,
+                                                           start_position[1] - self.pad] == start_direction)
                     small_height = self.global_heightmap_batch[batch,
-                                                               start_position[0]-self.pad,
-                                                               start_position[1]-self.pad]
-                    start_direction = self.global_directionmap_batch[batch,
-                                                                     start_position[0] - self.pad,
-                                                                     start_position[1] - self.pad]
+                                                               start_position[0] - self.pad,
+                                                               start_position[1] - self.pad]
+
                     # go one step back
-                    start_position = self.update_position(start_position, start_direction)
+                    # start_position = self.update_position(start_position, start_direction)
                     error["e2_pos"], error["e2_direction"] = self.find_end_of_plateau(start_position, start_direction,
                                                                                       batch, error)
                     # slow intruder never reaches root
                     assert(self.global_directionmap_batch[error["batch"], error["small_pos"][0] - self.pad,
                                                                           error["small_pos"][1] - self.pad] != -1)
-                else:
-                    error["e2_pos"], error["e2_direction"] = start_position, start_direction
+                else:       # fast intuder
+                    e2_direction = error["small_direction"]
+                    e2_pos = error["large_pos"]
+                    assert(self.global_directionmap_batch[batch,
+                                                          e2_pos[0] - self.pad,
+                                                          e2_pos[1] - self.pad] != e2_direction)
+                    error["e2_pos"], error["e2_direction"] = e2_pos, e2_direction
                 assert (error["e2_direction"] >= 0)
                 pos = error["e2_pos"]
                 dir = error["e2_direction"]
@@ -1314,7 +1305,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
     def __init__(self, options):
         super(HoneyBatcherRec, self).__init__(options)
         self.global_hidden_states = np.empty((options.batch_size, 4, self.label_shape[1], self.label_shape[2],
-                                                  options.n_recurrent_hidden))
+                                                  options.n_recurrent_hidden))      # pre pq [<-->]
         self.n_recurrent_hidden = options.n_recurrent_hidden
 
     def init_batch(self, start=None, allowed_slices=None):
@@ -1350,8 +1341,8 @@ class HoneyBatcherRec(HoneyBatcherPath):
     def backtrace_error(self, selection, backtrace_length, err_type, id_type):
         error_selection = []
         hidden_coords = []
-        for s in selection:
-            current_error = copy.copy(self.global_error_dict[s])
+        for sel in selection:
+            current_error = copy.copy(self.global_error_dict[sel])
             new_path_error = []
             new_path_error.append(current_error)
             for t_back in range(1, backtrace_length):
@@ -1360,18 +1351,35 @@ class HoneyBatcherRec(HoneyBatcherPath):
                 new_path_error.append(current_error)
             new_path_error = self.reverse_path(new_path_error, err_type + "_mask")
             error_selection += new_path_error
-            hidden_coords.append([current_error["batch"], current_error[err_type + "_pos"]])
+            init_err_pos = current_error[err_type + "_pos"]
+            init_err_dir = current_error[err_type + "_direction"]
+            origin = self.update_position(init_err_pos, init_err_dir)
+            hidden_coords.append([current_error["batch"], origin])
         return error_selection, hidden_coords
 
     def backtrace_error_step(self, error, key_time, key_center, key_id, key_direction, key_mask):
         bt_error = copy.copy(error)
         batch, center, Id = [error['batch'], error[key_center], error[key_id]]
-        direction = self.global_directionmap_batch[batch, center[0] - self.pad, center[1] - self.pad]
+
+        if error["slow_intruder"] and error["first_rec"]:
+            direction = error[key_direction]
+            error["first_rec"] = False
+        else:
+            direction = self.global_directionmap_batch[batch, center[0] - self.pad, center[1] - self.pad]
+
         if direction == -1:
+            print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
+            raise Exception("")
+        bt_pos = self.update_position(center, direction)
+        if -1 in bt_pos or self.image_shape[-1] in bt_pos:
+            print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
+            embed()
+
+        bt_direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
+        if bt_direction == -1:      # stop 1 step before reaching seed (seed is given)
             bt_error[key_mask] = True
             return bt_error
         else:
-            bt_pos = self.update_position(center, direction)
             bt_error[key_center] = bt_pos
             direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
             old_pos = self.update_position(bt_pos, direction)
