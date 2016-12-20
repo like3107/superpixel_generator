@@ -122,9 +122,9 @@ class HoneyBatcherPredict(object):
         assert (center[0] >= self.pad and center[0] < self.image_shape[-2] - self.pad)
         assert (center[1] >= self.pad and center[1] < self.image_shape[-1] - self.pad)
         coords = self.coordinate_offset + center
-        np.clip(coords[:,0], self.pad, self.label_shape[1] + self.pad - 1, out=coords[:,0])
-        np.clip(coords[:,1], self.pad, self.label_shape[2] + self.pad - 1, out=coords[:,1])
-        return coords[:,0], coords[:,1], self.direction_array
+        np.clip(coords[:, 0], self.pad, self.label_shape[1] + self.pad - 1, out=coords[:,0])
+        np.clip(coords[:, 1], self.pad, self.label_shape[2] + self.pad - 1, out=coords[:,1])
+        return coords[:, 0], coords[:, 1], self.direction_array
 
     def get_cross_coords_offset(self, center):
         coords = self.coordinate_offset + center - self.pad
@@ -132,20 +132,20 @@ class HoneyBatcherPredict(object):
         np.clip(coords[:, 1], 0, self.label_shape[2] - 1, out=coords[:, 1])
         return coords[:, 0], coords[:, 1], self.direction_array
 
-    def crop_input(self, seed, b, out=None):
+    def crop_input(self, center, b, out=None):
         if out is None:
             return self.global_input_batch[b, :,
-                                           seed[0] - self.pad:seed[0] + self.pad + 1,
-                                           seed[1] - self.pad:seed[1] + self.pad + 1]
+                                           center[0] - self.pad:center[0] + self.pad + 1,
+                                           center[1] - self.pad:center[1] + self.pad + 1]
         else:
             out[:] = self.global_input_batch[b, :,
-                                             seed[0] - self.pad:seed[0] + self.pad + 1,
-                                             seed[1] - self.pad:seed[1] + self.pad + 1]
+                                             center[0] - self.pad:center[0] + self.pad + 1,
+                                             center[1] - self.pad:center[1] + self.pad + 1]
 
-    def crop_mask_claimed(self, seed, b, Id, out=None):
+    def crop_mask_claimed(self, center, b, Id, out=None):
         labels = self.global_claims[b,
-                                    seed[0] - self.pad:seed[0] + self.pad + 1,
-                                    seed[1] - self.pad:seed[1] + self.pad + 1]
+                                    center[0] - self.pad:center[0] + self.pad + 1,
+                                    center[1] - self.pad:center[1] + self.pad + 1]
         if out is None:
             out = np.zeros((2, self.pl, self.pl), dtype='float32')
         else:
@@ -155,10 +155,10 @@ class HoneyBatcherPredict(object):
         out[1, :, :][labels == Id] = 1                    # me
         return out
 
-    def crop_height_map(self, seed, b):
+    def crop_height_map(self, center, b):
         height = self.global_heightmap_batch[b,
-              seed[0] - self.pad:seed[0] + self.pad,
-              seed[1] - self.pad:seed[1] + self.pad]
+                                             center[0] - self.pad:center[0] + self.pad + 1,
+                                             center[1] - self.pad:center[1] + self.pad + 1]
         return height
 
     def prepare_global_batch(self):
@@ -368,7 +368,8 @@ class HoneyBatcherPredict(object):
         return np.sum([self.global_claims[0] == 0])
 
     def get_image_crops(self, b):
-        return self.global_input_batch[b, :, self.pad:-self.pad, self.pad:-self.pad], self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad]
+        return self.global_input_batch[b, :, self.pad:-self.pad, self.pad:-self.pad], \
+               self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad]
 
 
     def draw_debug_image(self, image_name,
@@ -445,9 +446,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                              self.global_seeds)):
             id2gt = {}
             for Id, seed in zip(ids, seeds):
-                id2gt[Id] = self.global_label_batch[b,
-                                                    seed[0] - self.pad,
-                                                    seed[1] - self.pad]
+                id2gt[Id] = self.global_label_batch[b, seed[0] - self.pad, seed[1] - self.pad]
             self.global_id2gt.append(id2gt)
 
     def crop_timemap(self, center, b):
@@ -535,16 +534,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # pass on if type I error already occured
         if error_indicator > 0:
             # went back into own territory --> reset error counter
-            if self.global_id2gt[b][Id] == \
-                self.global_label_batch[b,
-                                        center_x - self.pad,
-                                        center_y - self.pad]:
+            if self.global_id2gt[b][Id] == self.global_label_batch[b, center_x - self.pad, center_y - self.pad]:
                 self.error_indicator_pass[b] = 0.
             else:   # remember to pass on
                 self.error_indicator_pass[b] = 1
-            self.global_errormap[b, 1,
-                                 center_x - self.pad,
-                                 center_y - self.pad] = 1
+            self.global_errormap[b, 1, center_x - self.pad, center_y - self.pad] = 1
         # check for type I errors
         elif self.global_id2gt[b][Id] != \
                 self.global_label_batch[b, center_x - self.pad, center_y - self.pad]:
@@ -681,6 +675,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     assert (center_x - self.pad >= 0)
                     assert (y - self.pad >= 0)
                     assert (center_y - self.pad >= 0)
+
+                    if np.all([center_x, center_y] == [x, y]):
+                        continue    # ignore predictions which are out of bounds
 
                     label_large = self.global_label_batch[b, center_x - self.pad, center_y - self.pad]
                     claim_projection_large = claim_projection[center_x, center_y]
@@ -1361,16 +1358,20 @@ class HoneyBatcherRec(HoneyBatcherPath):
         bt_error = copy.copy(error)
         batch, center, Id = [error['batch'], error[key_center], error[key_id]]
 
-        if error["slow_intruder"] and error["first_rec"]:
+        if not error["slow_intruder"] and error["first_rec"] and 'e2' in key_time:
             direction = error[key_direction]
             error["first_rec"] = False
         else:
             direction = self.global_directionmap_batch[batch, center[0] - self.pad, center[1] - self.pad]
 
+        # debug
         if direction == -1:
             print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
             raise Exception("")
+
         bt_pos = self.update_position(center, direction)
+
+        # debug
         if -1 in bt_pos or self.image_shape[-1] in bt_pos:
             print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
             embed()

@@ -23,6 +23,7 @@ import glob
 
 import validation_scripts as vs
 
+from IPython import embed
 
 
 # TODO: add allowed slices?
@@ -619,6 +620,10 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                 log_scale=False)
 
     def debug_plots(self, all_heights, masks, hiddens, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec):
+
+        for mask in masks:
+            if not np.any(mask):
+                embed()
         masks = np.array(masks.reshape((2, -1)), dtype=np.bool)
         all_heights_tmp = all_heights.reshape((2, -1))
         print 'shapes', all_heights_tmp.shape, masks.shape
@@ -660,11 +665,13 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         # height diffs, hiddens, hiddens rec, stat_convs
         # e1_pos = []
 
+
         print
         k = -1
         for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
             k += 1
             for rec_b, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
+                print 'next error', e_type
                 for t, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
                     number = t + rec_b * ts + k * n_err * ts
 
@@ -673,7 +680,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
 
                     if dir < 0 or not masks[k, rec_b * ts + t]:
-                        print 'continue', pos
+                        print 'continue', pos, dir , masks[k, rec_b * ts + t]
                         continue
 
                     old_pos = self.bm.update_position(pos, dir)
@@ -681,7 +688,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     # conv check
                     orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
                     diff = np.abs(orig_conv - stat_conv[number, :, 0, 0])
-                    verbose = False
+                    verbose = True
                     if np.max(diff) > 10 ** -4 or np.all(pos == self.debug_pos):
                         verbose = True
                         print 'conv comparison', np.max(diff), np.mean(diff), 'where', np.where(diff == np.max(diff))
@@ -745,7 +752,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                         if self.bm.pad in pos or self.bm.image_shape[-1] - self.bm.pad - 1 in pos:
                             print 'boundary case.............'
                         print
-
 
 
 class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
@@ -827,6 +833,7 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
 
             if self.images_counter % 1 == 0:
                 trainer.draw_debug(reset=True)
+
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
     def init_BM(self):

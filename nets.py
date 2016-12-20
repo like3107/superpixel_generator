@@ -8,7 +8,7 @@ import custom_layer as cs
 import utils as u
 from collections import OrderedDict
 
-`
+
 class NetBuilder:
     def __init__(self, options=None):
         self.net_name = None
