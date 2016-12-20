@@ -311,6 +311,8 @@ def get_update_rule(loss_train, all_params, optimizer=None):
         updates = las.updates.nesterov_momentum(loss_train, all_params, 0.0005)
     elif optimizer == "adam":
         updates = las.updates.adam(loss_train, all_params)
+    elif optimizer == "sgd":
+        updates = las.updates.sgd(loss_train, all_params, 0.00005)
     else:
         raise Exception("unknown optimizer %s" % optimizer)
     return updates

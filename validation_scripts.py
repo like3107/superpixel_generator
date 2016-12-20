@@ -53,7 +53,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         print 'Adapted Rand error precision :, %.3f ,+- %.3f' % (all_means[3], all_vars[3])
         print 'Adapted Rand error recall    :, %.3f ,+- %.3f' % (all_means[4], all_vars[4])
         # string for easy copy to google doc
-    	print ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
+        print ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
         text = ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
 
         return make_val_dic(all_means, all_vars), text
@@ -69,6 +69,9 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         print 'Adapted Rand error precision :       ', precision
         print 'Adapted Rand error recall    :       ', recall
 
+def validate_claims(seg, gt):
+    err = [adapted_rand(seg[i], gt[i]) for i in range(seg.shape[0])]
+    return np.mean(err)
 
 # Evaluation code courtesy of Juan Nunez-Iglesias, taken from
 # https://github.com/janelia-flyem/gala/blob/master/gala/evaluate.py

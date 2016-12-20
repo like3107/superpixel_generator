@@ -782,6 +782,39 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.find_source_of_II_error()
         self.weitght_importance_by_hard_regions()
 
+    def plot_h1h2_errors(self, image_file, hist_file):
+
+        h_pairs = []
+        for error in self.global_error_dict.values():
+            h1 = self.global_heightmap_batch[error["batch"],
+                                                    error["e1_pos"][0] - self.pad,
+                                                    error["e1_pos"][1] - self.pad]
+            h2 = self.global_heightmap_batch[error["batch"],
+                                                    error["e2_pos"][0] - self.pad,
+                                                    error["e2_pos"][1] - self.pad]
+            h_pairs.append([h1,h2])
+            # print error["e1_pos"], h1, error["e2_pos"], h2
+
+        data = np.array(h_pairs)
+        col = ['g' if 'used' in e and e['used'] else 'r' for e in self.global_error_dict.values()]
+        plt.xlabel('h1 error')
+        plt.ylabel('h2 error')
+        limit = max(np.max(data), 35)
+
+        plt.xlim(xmin=0, xmax=limit*1.1)
+        plt.ylim(ymin=0, ymax=limit*1.1)
+
+        plt.scatter(data[:,0], data[:,1], c=col)
+        plt.savefig(image_file)
+        plt.clf()
+        hmap = np.array(self.global_heightmap_batch)
+        hmap[hmap<0] = 0
+        plt.hist(hmap.flatten())
+        plt.savefig(hist_file)
+        plt.clf()
+        # from IPython import embed; embed()
+
+
     def set_plateau_indicator(self):
         self.global_plateau_indicator = self.global_prediction_map_nq  < self.global_prediction_map
 
@@ -955,8 +988,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
             for error_name,error in self.global_error_dict.items():
                 for n,info in error.items():
-                    out_h5.create_dataset("error/"+str(error_name[0])+"_"+str(error_name[1])+"_"
-                                          +str(error_name[2])+"/"+n,data=np.array(info))
+                    out_h5.create_dataset("error/"+str(error_name)+"/"+n,data=np.array(info))
 
     def save_quick_eval(self, name, path, score=True):
         print "name, path",name, path

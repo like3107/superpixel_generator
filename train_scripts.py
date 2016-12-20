@@ -388,20 +388,17 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
 
     def predict(self):
         self.bm.init_batch()
-        bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         inputs = self.update_BM_FC()
         # precompute fc part
         self.precomp_input = self.fc_prec_conv_body(inputs)
         self.images_counter += 1
-        while (self.free_voxel > 0):
-            self.iterations += 1
-            self.free_voxel -= 1
-            self.update_BM()
-            # if self.iterations % self.observation_counter == 0:
-            #     self.draw_debug(reset=False)
-
-            if self.free_voxel % 100 == 0:
-                bar.update(self.free_voxel_empty - self.free_voxel)
+        with progressbar.ProgressBar(max_value=self.free_voxel_empty) as bar:
+            while (self.free_voxel > 0):
+                self.iterations += 1
+                self.free_voxel -= 1
+                self.update_BM()
+                if self.free_voxel % 100 == 0:
+                    bar.update(self.free_voxel_empty - self.free_voxel)
         self.epoch += 1
 
     def train(self):
@@ -491,8 +488,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         height_probs, hidden_out, merges, befo_rec = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens,
                                                                    rnn_mask, 1)
         sum_hiddens = np.sum(np.abs(hiddens))
-        if sum_hiddens == 0:
-            print 'hiddens is only 0'
         # d_height_probsd, d_hidden_outd, d_precomp_input_sliced = self.builder.probs_f(inputs[:, :2], inputs[:, 2:],
         #                                                                               hiddens, rnn_mask, 1)
         if np.all(centers == self.debug_pos):
@@ -564,21 +559,23 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         self.bm.init_batch()
         self.free_voxel = self.free_voxel_empty
-        bar = progressbar.ProgressBar(max_value=self.free_voxel_empty)
         inputs = self.update_BM_FC()
         # precompute fc partf
         self.precomp_input = self.builder.fc_prec_conv_body(inputs)
 
         self.images_counter += 1
-        while (self.free_voxel > 0):
-            self.iterations += 1
-            self.free_voxel -= 1
-            self.update_BM()
-            # if self.iterations % self.observation_counter == 0:
-            #     self.draw_debug(reset=False)
 
-            if self.free_voxel % 100 == 0:
-                bar.update(self.free_voxel_empty - self.free_voxel)
+
+        with progressbar.ProgressBar(max_value=self.free_voxel_empty) as bar:
+            while (self.free_voxel > 0):
+                self.iterations += 1
+                self.free_voxel -= 1
+                self.update_BM()
+                # if self.iterations % self.observation_counter == 0:
+                #     self.draw_debug(reset=False)
+
+                if self.free_voxel % 100 == 0:
+                    bar.update(self.free_voxel_empty - self.free_voxel)
 
         print 'hiddens mean', np.mean(self.bm.global_hidden_states), 'max', np.max(np.abs(self.bm.global_hidden_states))
         print
@@ -607,6 +604,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             self.save_net()
             trainer.draw_debug(reset=True)
         # exit();
+        self.epoch += 1
 
         if self.free_voxel == 0:
             self.free_voxel = self.free_voxel_empty
@@ -962,7 +960,6 @@ if __name__ == '__main__':
             print "---------------------------------------"
             if trainer.val_bm is not None and trainer.epoch % 10 == 0:
                 trainer.validate()
-            trainer.epoch += 1
 
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     # elif options.net_arch == 'v8_hydra_dilated_ft_joint':
