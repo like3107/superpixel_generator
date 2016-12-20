@@ -582,6 +582,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         print 'global seeds', self.bm.global_seeds
 
         self.bm.find_global_error_paths()
+        print "plotting h12", self.image_path+"/errorheights_i_%08i.png" % (self.iterations)
+        self.bm.plot_h1h2_errors(self.image_path+"/errorheights_i_%08i.png" % (self.iterations), self.image_path+"/hist_heights_i_%08i.png" % (self.iterations))
         if self.bm.count_new_path_errors() > 0:
             error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
                 self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
@@ -596,6 +598,10 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             ft_loss_train, individual_loss_fine, heights, ft_loss_noreg, stat_conv, dyn_conv, hiddens_rec, reco_merges, reco_befo_rec = \
                     self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
                                                    batch_mask_ft, options.backtrace_length)
+            claims = self.bm.global_claims[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad]
+            print claims.shape, self.bm.global_label_batch.shape
+            ft_loss_noreg = vs.validate_claims(claims, self.bm.global_label_batch)
+            ft_loss_train = ft_loss_noreg 
             self.draw_loss(ft_loss_train, ft_loss_noreg)
 
             # self.debug_plots(heights, batch_mask_ft, hiddens_rec, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec)
