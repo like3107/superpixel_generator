@@ -222,12 +222,12 @@ class NetBuilder:
         self.probs_f = theano.function([layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
                                         layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
                                         self.sequ_len],
-                                       [l_out, l_out_hidden, conv6],
-                                        on_unused_input='ignore')
+                                       [l_out, l_out_hidden, conv6])
+                                        # on_unused_input='ignore')
 
         l_out_old = L.get_output(self.layers_static['l_out_cross'], deterministic=True)
-        self.old_f = theano.function([self.layers['l_in_static_00'].input_var], [l_out_old],
-                                     on_unused_input='ignore')
+        self.old_f = theano.function([self.layers['l_in_static_00'].input_var], [l_out_old])
+                                     # on_unused_input='ignore')
 
         # disconnect graph temporarely
         l_in_from_prec = las.layers.InputLayer((None, 64, 1, 1))
@@ -243,8 +243,8 @@ class NetBuilder:
                                            self.sequ_len],
                                           [l_out_prediciton_prec, l_out_hidden,
                                            L.get_output(layers['l_merge_05'], deterministic =True),
-                                           befo_rec],  # debug
-                                          on_unused_input='ignore')
+                                           befo_rec])  # debug
+                                          # on_unused_input='ignore')
         # reconnect graph again to save network later etc
         layers['l_merge_05'].input_layers[0] = layers['Cross_slicer_stat']
         layers['l_merge_05'].input_shapes[0] = layers['Cross_slicer_stat'].output_shape
@@ -288,13 +288,18 @@ class NetBuilder:
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
 
-    def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight):
+    def get_loss_fct(layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True):
         bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
         step = backtrace_length
         sum_height = l_out_train
-        if backtrace_length > 1:
-            sum_height = T.sum(sum_height.reshape((bs, backtrace_length))*mask, axis=1)
 
+        if backtrace_length > 1:
+            if discount_factor:
+                # automatically broadcasts
+                disc_vec = (np.zeros(backtrace_length, dtype=np.float32) + 0.9) ** np.arange(backtrace_length - 1, -1, -1,
+                                                                                             dtype=np.float32)
+
+            sum_height = T.sum(sum_height.reshape((bs, backtrace_length)) * disc_vec * mask, axis=1)
         individual_batch = (sum_height[bs / 2:] - sum_height[:bs / 2])
 
         L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
