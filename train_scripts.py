@@ -962,8 +962,6 @@ if __name__ == '__main__':
         while not trainer.converged():
             trainer.train()
             trainer.save_net()
-            print "trainer.val_bm",trainer.val_bm
-            print "---------------------------------------"
             if trainer.val_bm is not None and trainer.epoch % 10 == 0:
                 trainer.validate()
 

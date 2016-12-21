@@ -270,9 +270,9 @@ class NetBuilder:
 
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
-        loss_train, individual_batch, loss_valid = get_loss_fct(layers, self.options.backtrace_length, l_out_train,
+        loss_train, individual_batch, loss_valid = self.get_loss_fct(layers, self.options.backtrace_length, l_out_train,
                                                                 mask, L1_weight)
-        updates = get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
+        updates = self.get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
         # debug
         self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
                                                   layers['l_in_static_00'].input_var,
@@ -288,34 +288,34 @@ class NetBuilder:
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
 
-def get_loss_fct(layers, backtrace_length, l_out_train, mask, L1_weight):
-    bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
-    step = backtrace_length
-    sum_height = l_out_train
-    if backtrace_length > 1:
-        sum_height = T.sum(sum_height.reshape((bs, backtrace_length))*mask, axis=1)
+    def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight):
+        bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
+        step = backtrace_length
+        sum_height = l_out_train
+        if backtrace_length > 1:
+            sum_height = T.sum(sum_height.reshape((bs, backtrace_length))*mask, axis=1)
 
-    individual_batch = (sum_height[bs / 2:] - sum_height[:bs / 2])
+        individual_batch = (sum_height[bs / 2:] - sum_height[:bs / 2])
 
-    L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
+        L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
 
-    loss_valid = T.mean(individual_batch)
-    if L1_weight > 0:
-        loss_train = loss_valid + L1_weight * L1_norm
-    return loss_train, individual_batch, loss_valid
+        loss_valid = T.mean(individual_batch)
+        if L1_weight > 0:
+            loss_train = loss_valid + L1_weight * L1_norm
+        return loss_train, individual_batch, loss_valid
 
 
-def get_update_rule(loss_train, all_params, optimizer=None):
-    if optimizer == "nesterov":
-        print "using nesterov_momentum"
-        updates = las.updates.nesterov_momentum(loss_train, all_params, 0.0005)
-    elif optimizer == "adam":
-        updates = las.updates.adam(loss_train, all_params)
-    elif optimizer == "sgd":
-        updates = las.updates.sgd(loss_train, all_params, 0.00005)
-    else:
-        raise Exception("unknown optimizer %s" % optimizer)
-    return updates
+    def get_update_rule(self, loss_train, all_params, optimizer=None):
+        if optimizer == "nesterov":
+            print "using nesterov_momentum"
+            updates = las.updates.nesterov_momentum(loss_train, all_params, self.options.learningrate)
+        elif optimizer == "adam":
+            updates = las.updates.adam(loss_train, all_params)
+        elif optimizer == "sgd":
+            updates = las.updates.sgd(loss_train, all_params, self.options.learningrate)
+        else:
+            raise Exception("unknown optimizer %s" % optimizer)
+        return updates
 
 
 if __name__ == '__main__':

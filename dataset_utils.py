@@ -62,7 +62,7 @@ class HoneyBatcherPredict(object):
 
         # private
         self.n_channels = options.network_channels + 2
-
+        self.options = options
         self.lowercomplete_e = options.lowercomplete_e
         self.max_penalty_pixel = options.max_penalty_pixel
 
@@ -196,7 +196,7 @@ class HoneyBatcherPredict(object):
         """
         # print "using seed method:", self.seed_method
         if self.seed_method == "gt":
-            self.get_seed_coords_gt()
+            self.get_seed_coords_gt(self.options.s_minsize)
         elif self.seed_method == "over":
             self.get_seed_coords_grid()
         elif self.seed_method == "timo":
@@ -234,7 +234,7 @@ class HoneyBatcherPredict(object):
                         xrange(offset_y,shape[1],gridsize))]
             self.global_seeds.append(seeds_b)
 
-    def get_seed_coords_gt(self):
+    def get_seed_coords_gt(self, minsize = 0):
         self.global_seeds = []
         seed_ids = []
         dist_trf = np.zeros(self.batch_data_provider.get_label_shape())
@@ -259,6 +259,10 @@ class HoneyBatcherPredict(object):
         for b, ids in zip(range(self.bs), seed_ids):  # iterates over batches
             seeds = []
             for Id in ids:  # ids within each slice
+                if minsize > 0 and np.sum(self.global_label_batch[b, :, :] == Id) < minsize:
+                    print "removing seed for small(<%i) region with id %i" % (minsize, Id)
+                    continue
+
                 regions = np.where(self.global_label_batch[b, :, :] == Id)
                 seed_ind = np.argmax(dist_trf[b][regions])
                 seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) + self.pad

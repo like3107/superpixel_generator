@@ -38,6 +38,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--seed_method', type=str, default="timo",
           help='available metods: gt, timo, grid',
           dest='seed_method')
+    p.add('--s_minsize',type=int, default=0)    
     p.add('--input_data_path',type=str, default="None")
 
     # valid data paths
@@ -87,6 +88,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--margin', default=0.5, type=float)
     p.add('--no-aug-ft', dest='augment_ft', action='store_false')
     p.add('--optimizer', default="nesterov", type=str)
+    p.add('--learningrate', default=0.000001, type=float)
     # experience replay
     # clip_method="exp20"
     p.add('--exp_bs', default=16, type=int)
