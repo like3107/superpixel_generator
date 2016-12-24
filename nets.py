@@ -288,7 +288,7 @@ class NetBuilder:
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
 
-    def get_loss_fct(layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True):
+    def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True):
         bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
         step = backtrace_length
         sum_height = l_out_train

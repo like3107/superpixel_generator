@@ -817,6 +817,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         plt.savefig(hist_file)
         plt.clf()
         # from IPython import embed; embed()
+        return np.mean(h1), np.mean(h2)
 
 
     def set_plateau_indicator(self):
