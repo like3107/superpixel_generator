@@ -384,7 +384,6 @@ def save_options(load_path, options):
         save_namespace(net_h5, options._get_kwargs(), path="options/")
         if 'val_options' in options:
             save_namespace(net_h5, options.val_options._get_kwargs(), path="val_options/")
-            print "saving validation"
 
 
 def print_options_for_net(options):
@@ -420,6 +419,24 @@ def plot_train_val_errors(all_y_values, x_values, save_path, names,
     plt.close(fig)
     return
 
+def plot_val_errors(all_y_values, x_values, save_path, names,
+                          log_scale=True):
+    fig = plt.figure()
+    plots = []
+    for i, y_values in enumerate(all_y_values):
+        plot, = plt.plot(x_values, y_values)
+        if i == 0:
+	        best_index = np.argmin(y_values)
+	        plt.axhline(y=y_values[best_index])
+	        plt.axvline(x=x_values[best_index])
+	        plt.title('best validation at '+str(x_values[best_index])+" with "+str((1-y_values[best_index])*100.)+"\%")
+        if log_scale:
+            plt.yscale('log')
+
+        plots.append(plot)
+    fig.legend(plots, names)
+    fig.savefig(save_path)
+    plt.close(fig)
 
 if __name__ == '__main__':
     path = './data/nets/cnn_v5/preds_0'

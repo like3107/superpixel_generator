@@ -388,6 +388,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
 
     def predict(self):
         self.bm.init_batch()
+        self.free_voxel = self.free_voxel_empty
         inputs = self.update_BM_FC()
         # precompute fc part
         self.precomp_input = self.fc_prec_conv_body(inputs)
@@ -484,20 +485,19 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         rnn_mask = np.ones((bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
 
-
         height_probs, hidden_out, merges, befo_rec = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens,
                                                                    rnn_mask, 1)
         sum_hiddens = np.sum(np.abs(hiddens))
         # d_height_probsd, d_hidden_outd, d_precomp_input_sliced = self.builder.probs_f(inputs[:, :2], inputs[:, 2:],
         #                                                                               hiddens, rnn_mask, 1)
-        if np.all(centers == self.debug_pos):
-            verbose = True
-            self.mem_stat = inputs[:, 2:]
-        if np.all(centers == self.debug_pos_orig):
-            self.mem_merge = merges[0]
-            self.mem_befo_rec = befo_rec
-            self.mem = inputs[:, :2]
-            self.mem_rec_in = hidden_out[:, 0, :]
+        # if np.all(centers == self.debug_pos):
+        #     verbose = True
+        #     self.mem_stat = inputs[:, 2:]
+        # if np.all(centers == self.debug_pos_orig):
+        #     self.mem_merge = merges[0]
+        #     self.mem_befo_rec = befo_rec
+        #     self.mem = inputs[:, :2]
+        #     self.mem_rec_in = hidden_out[:, 0, :]
 
         # hidden diff
         # print 'hidden d', hidden_out, 'd_height_probsd', d_hidden_outd
@@ -542,7 +542,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.val_loss_history[1].append(1-score['Adapted Rand error precision'])
         self.val_update_history.append(self.iterations)
 
-        u.plot_train_val_errors([self.val_loss_history[0],
+        u.plot_val_errors([self.val_loss_history[0],
                                  self.val_loss_history[1]],
                                  self.val_update_history,
                                  self.save_net_path + '/validation.png',
@@ -763,20 +763,24 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
         self.BM = du.HoneyBatcherRec
         self.images_counter = -1
 
-        master_file = self.save_net_path+"/master.txt"
         self.exp_path = self.save_net_path+"/experiences/"
         self.current_net_name = "masternet.h5"
-        if not os.path.exists(master_file):
+        if self.options.master:
             self.iterations = 0
-            os.system("touch "+master_file)
             if not os.path.exists(self.exp_path):
                 os.makedirs(self.exp_path)
             self.master = True
-            self.save_net(name=self.current_net_name)
+            if os.path.exists(self.save_net_path+"/nets/"+self.current_net_name):
+                print "continue with existing master file"
+                u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
+            else:
+                
+                self.save_net(name=self.current_net_name)
             print "starting Master"
         else:
             self.master = False
             self.val_bm = None
+            np.random.seed(np.random.seed(int(time.time())))
             print "starting Slave"
 
     def train(self):
@@ -785,31 +789,37 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
             sys.stdout.flush()
             for f in glob.glob(self.exp_path+'*.h5'):
                 print "learning from ",f
-                with h5py.File(f,"r") as h5f:
-                    if 'done' in h5f:
+                try:
+                    with h5py.File(f,"r") as h5f:
+                        if 'done' in h5f:
 
-                        batch_ft1 = np.array(h5f['batch_ft1'])
-                        batch_ft2 = np.array(h5f['batch_ft2'])
-                        batch_inits = np.array(h5f['batch_inits'])
-                        batch_mask_ft = np.array(h5f['batch_mask_ft'])
-                        length = h5f['options.backtrace_length'].value
+                            batch_ft1 = np.array(h5f['batch_ft1'])
+                            batch_ft2 = np.array(h5f['batch_ft2'])
+                            batch_inits = np.array(h5f['batch_inits'])
+                            batch_mask_ft = np.array(h5f['batch_mask_ft'])
+                            length = h5f['options.backtrace_length'].value
 
-                        ft_loss_train, individual_loss_fine, heights, ft_loss_noreg = \
-                                self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft, length)
+                            ft_loss_train, individual_loss_fine, heights, ft_loss_noreg, stat_conv, dyn_conv, hiddens_rec, reco_merges, reco_befo_rec = \
+                                        self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft, options.backtrace_length)
 
-                        self.save_net(name=self.current_net_name)
-                        self.save_net()
-                        os.system('rm '+f)
-                        self.draw_loss(ft_loss_train, ft_loss_noreg)
-                        self.iterations += 1
-                        self.epoch += 1
+                            self.save_net(name=self.current_net_name)
+                            self.save_net()
+                            os.system('rm '+f)
+                            self.draw_loss(ft_loss_train, ft_loss_noreg)
+                            self.iterations += 1
+                            self.epoch += 1
+                except IOError:
+                    print "unable to read ",f
             time.sleep(5)
 
         else:
             np.random.seed(np.random.seed(int(time.time())))
             # change seed so different images for retrain
             print "loading network parameters from ",
-            u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
+            try:
+                u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
+            except:
+                print "unable to load network, predicting with previous parameters"
 
             self.observation_counter = 500
             self.predict()
@@ -949,7 +959,7 @@ if __name__ == '__main__':
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':
         options.fc_prec = True
 
-        if options.master:
+        if options.master_training:
             print "using master trainer"
             trainer = FCRecMasterFinePokemonTrainer(options)
         else:
@@ -957,11 +967,10 @@ if __name__ == '__main__':
             trainer = FCRecFinePokemonTrainer(options)
 
         if trainer.val_bm is not None:
-            trainer.val_bm.set_preselect_batches([0,80,40,120,40,100,130,10,140][:trainer.val_bm.bs])
+            trainer.val_bm.set_preselect_batches([0,70,40,120,40,100,130,10,140][:trainer.val_bm.bs])
 
         while not trainer.converged():
             trainer.train()
-            trainer.save_net()
             if trainer.val_bm is not None and trainer.epoch % 10 == 0:
                 trainer.validate()
 

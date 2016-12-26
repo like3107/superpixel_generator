@@ -234,15 +234,15 @@ class NetBuilder:
         layers['l_merge_05'].input_layers[0] = l_in_from_prec
         layers['l_merge_05'].input_shapes[0] = l_in_from_prec.output_shape
 
-        l_out_prediciton_prec = L.get_output(layers['l_out_cross'], deterministic=True)
-        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
-        befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=True)
+        l_out_prediciton_prec = L.get_output(layers['l_out_cross'], deterministic=False)
+        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=False)
+        befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=False)
         self.probs_f_fc = theano.function([layers['l_in_dyn_00'].input_var, l_in_from_prec.input_var,
                                            layers['l_in_hid_08'].input_var,
                                            layers['l_in_rec_mask_08'].input_var,
                                            self.sequ_len],
                                           [l_out_prediciton_prec, l_out_hidden,
-                                           L.get_output(layers['l_merge_05'], deterministic =True),
+                                           L.get_output(layers['l_merge_05'], deterministic=False),
                                            befo_rec])  # debug
                                           # on_unused_input='ignore')
         # reconnect graph again to save network later etc
@@ -257,16 +257,16 @@ class NetBuilder:
         layers['l_merge_05'].input_layers[1] = layers['dyn_conv_04']
         layers['l_merge_05'].input_shapes[1] = layers['dyn_conv_04'].output_shape
 
-        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=True)
-        l_out_train = L.get_output(layers['l_out_cross'], deterministic=True)
-        stat_conv = L.get_output(layers['static_conv_06'], deterministic=True)
-        dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=True)
-        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=False)
+        l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
+        stat_conv = L.get_output(layers['static_conv_06'], deterministic=False)
+        dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=False)
+        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=False)
         # debug
-        reco_merges = L.get_output(layers['l_merge_05'], deterministic=True)
-        reco_befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=True)
+        reco_merges = L.get_output(layers['l_merge_05'], deterministic=False)
+        reco_befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=False)
 
-        mask = L.get_output(layers['l_in_rec_mask_08'], deterministic=True)
+        mask = L.get_output(layers['l_in_rec_mask_08'], deterministic=False)
 
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
@@ -288,7 +288,7 @@ class NetBuilder:
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
 
-    def get_loss_fct(layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True):
+    def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True):
         bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
         step = backtrace_length
         sum_height = l_out_train
@@ -312,7 +312,7 @@ class NetBuilder:
 
     def get_update_rule(self, loss_train, all_params, optimizer=None):
         if optimizer == "nesterov":
-            print "using nesterov_momentum"
+            print "using nesterov_momentum with learningrate", self.options.learningrate
             updates = las.updates.nesterov_momentum(loss_train, all_params, self.options.learningrate)
         elif optimizer == "adam":
             updates = las.updates.adam(loss_train, all_params)
