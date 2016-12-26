@@ -463,6 +463,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def __init__(self, options):
         super(FCRecFinePokemonTrainer, self).__init__(options)
         self.observation_counter = 500
+        self.h1s = []
+        self.h2s = []
 
     def init_BM(self):
         self.BM = du.HoneyBatcherRec
@@ -553,6 +555,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         return score
 
     def train(self):
+        self.epoch += 1
         self.debug_pos = np.array([5, 63])
         self.dir = 0
         self.debug_pos_orig = self.bm.update_position(self.debug_pos, self.dir)
@@ -582,9 +585,12 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         print 'global seeds', self.bm.global_seeds
 
         self.bm.find_global_error_paths()
-        print "plotting h12", self.image_path+"/errorheights_i_%08i.png" % (self.iterations)
-        self.bm.plot_h1h2_errors(self.image_path+"/errorheights_i_%08i.png" % (self.iterations), self.image_path+"/hist_heights_i_%08i.png" % (self.iterations))
         if self.bm.count_new_path_errors() > 0:
+            print "plotting h12", self.image_path+"/errorheights_i_%08i.png" % (self.iterations)
+            h1, h2 = self.bm.plot_h1h2_errors(self.image_path+"/errorheights_i_%08i.png" %
+                                              (self.iterations), self.image_path+"/hist_heights_i_%08i.png" %
+                                              (self.iterations))
+
             error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
                 self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
 
@@ -603,14 +609,14 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             ft_loss_noreg = vs.validate_claims(claims, self.bm.global_label_batch)
             ft_loss_train = ft_loss_noreg 
             self.draw_loss(ft_loss_train, ft_loss_noreg)
+            self.draw_heights(h1, h2)
 
             # self.debug_plots(heights, batch_mask_ft, hiddens_rec, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec)
 
-        if self.images_counter % 1 == 0:
+        if self.images_counter % self.epoch == 0:
             self.save_net()
             trainer.draw_debug(reset=True)
         # exit();
-        self.epoch += 1
 
         if self.free_voxel == 0:
             self.free_voxel = self.free_voxel_empty
@@ -623,6 +629,13 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                 self.save_net_path + '/ft_training.png', names=['loss', 'loss no reg'],
                                 log_scale=False)
 
+    def draw_heights(self, h1, h2):
+        self.h1s.append(h1)
+        self.h2s.append(h2)
+
+        u.plot_train_val_errors([self.h1s, self.h2s], self.update_history,
+                                self.save_net_path + '/heights.png', names=['h1s', 'h2s'],
+                                log_scale=False)
     def debug_plots(self, all_heights, masks, hiddens, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec):
 
         for mask in masks:
