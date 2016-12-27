@@ -6,14 +6,16 @@ from copy import copy
 import progressbar
 
 
-class Predictor(train_scripts.FCFinePokemonTrainer):
+class Predictor(train_scripts.FCRecFinePokemonTrainer):
     def __init__(self, options):
         self.get_options_from_net_file(options)
+        super(Predictor, self).__init__(options)
+
         self.set_prediction_options(options)
         self.builder = nets.NetBuilder(self.options)
         self.define_loss()
         self.network_i_choose_you()
-        # options.patch_len = 68
+        options.patch_len = self.builder.fov
         self.init_BM()
         self.bm = self.BM(self.options)
         self.bm.set_preselect_batches(range(len(self.options.slices)))

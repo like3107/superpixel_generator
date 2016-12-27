@@ -382,7 +382,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                                            seeds[:, 0] - self.bm.pad,
                                            seeds[:, 1] - self.bm.pad]
         precomp_input = precomp_input[:, :, None, None]
-        heights = self.prediction_f(claims[:, :2], precomp_input)
+        heights = self.builder.probs_f_fc(claims[:, :2], precomp_input)
         self.bm.update_priority_queue(heights, seeds, ids)
         return
 
@@ -418,7 +418,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
 
             ft_loss_train, individual_loss_fine, _, heights = \
-                    self.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:],
+                    self.builder.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:],
                                            batch_dir_ft)
             if np.any(individual_loss_fine <0):
                 print 'any', min(individual_loss_fine)
@@ -554,12 +554,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                         path=self.image_path_validation, b=b)
         return score
 
-    def train(self):
-        self.epoch += 1
-        self.debug_pos = np.array([5, 63])
-        self.dir = 0
-        self.debug_pos_orig = self.bm.update_position(self.debug_pos, self.dir)
-
+    def predict(self):
         self.bm.init_batch()
         self.free_voxel = self.free_voxel_empty
         inputs = self.update_BM_FC()
@@ -568,17 +563,22 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         self.images_counter += 1
 
-
         with progressbar.ProgressBar(max_value=self.free_voxel_empty) as bar:
             while (self.free_voxel > 0):
                 self.iterations += 1
                 self.free_voxel -= 1
                 self.update_BM()
-                # if self.iterations % self.observation_counter == 0:
-                #     self.draw_debug(reset=False)
 
                 if self.free_voxel % 100 == 0:
                     bar.update(self.free_voxel_empty - self.free_voxel)
+
+    def train(self):
+        self.epoch += 1
+        self.predict()
+
+        self.debug_pos = np.array([5, 63])
+        self.dir = 0
+        self.debug_pos_orig = self.bm.update_position(self.debug_pos, self.dir)
 
         print 'hiddens mean', np.mean(self.bm.global_hidden_states), 'max', np.max(np.abs(self.bm.global_hidden_states))
         print
