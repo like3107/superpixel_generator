@@ -106,7 +106,7 @@ if __name__ == '__main__':
         options.global_edge_len = 1250
 
     if not options.padding_b:
-        options.global_edge_len -= 68
+        options.global_edge_len -= 70
 
     concat_h5_in_folder(options.save_net_path,
                         options.batch_size,
