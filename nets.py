@@ -287,7 +287,123 @@ class NetBuilder:
 
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
+# loss_train_fine_f(inputs, hiddens, gts, batch_mask_ft, length)
+    def loss_updates_pretrain_v8(self, layers, target, L1_weight=10**-5, margin=0):
 
+        # theano funcs
+        # precompute convs on raw till dense layer
+        out_precomp = L.get_output(layers['static_conv_06'], deterministic=True)
+        self.fc_prec_conv_body = theano.function([layers['l_in_static_00'].input_var], out_precomp)
+
+        l_out = L.get_output(layers['l_out_cross'], deterministic=True)
+        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+        conv6 = L.get_output(layers['Cross_slicer_stat'], deterministic=True)
+        self.probs_f = theano.function([layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
+                                        layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
+                                        self.sequ_len],
+                                       [l_out, l_out_hidden, conv6])
+                                        # on_unused_input='ignore')
+
+        l_out_old = L.get_output(self.layers_static['l_out_cross'], deterministic=True)
+        l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
+        self.old_f = theano.function([self.layers['l_in_static_00'].input_var], [l_out_old])
+                                     # on_unused_input='ignore')
+
+        mask = L.get_output(layers['l_in_rec_mask_08'], deterministic=False)
+
+        all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
+
+        loss_train, individual_batch, loss_valid = self.get_loss_pre_fct(layers, target, self.options.backtrace_length, l_out_train,
+                                                                mask, L1_weight)
+        updates = self.get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
+        # debug
+
+
+        # self.loss_deb_f = theano.function([layers['l_in_dyn_00'].input_var,
+        #                                           layers['l_in_static_00'].input_var,
+        #                                           layers['l_in_hid_08'].input_var,
+        #                                           layers['l_in_rec_mask_08'].input_var,
+        #                                           # target,
+        #                                           self.sequ_len],
+        #                                          [l_out_prediciton],
+        #                                          on_unused_input='ignore')
+
+        self.loss_pre_f = theano.function([layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
+                                        layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
+                                        target,
+                                        self.sequ_len],
+                                       # [l_out_train], on_unused_input='ignore')
+                                       [loss_train], updates=updates)
+
+
+        # disconnect graph temporarely
+        l_in_from_prec = las.layers.InputLayer((None, 64, 1, 1))
+        layers['l_merge_05'].input_layers[0] = l_in_from_prec
+        layers['l_merge_05'].input_shapes[0] = l_in_from_prec.output_shape
+
+        l_out_prediciton_prec = L.get_output(layers['l_out_cross'], deterministic=False)
+        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=False)
+        befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=False)
+        self.probs_f_fc = theano.function([layers['l_in_dyn_00'].input_var, l_in_from_prec.input_var,
+                                           layers['l_in_hid_08'].input_var,
+                                           layers['l_in_rec_mask_08'].input_var,
+                                           self.sequ_len],
+                                          [l_out_prediciton_prec, l_out_hidden,
+                                           L.get_output(layers['l_merge_05'], deterministic=False),
+                                           befo_rec])  # debug
+                                          # on_unused_input='ignore')
+        # reconnect graph again to save network later etc
+        layers['l_merge_05'].input_layers[0] = layers['Cross_slicer_stat']
+        layers['l_merge_05'].input_shapes[0] = layers['Cross_slicer_stat'].output_shape
+
+        # now the loss function s.t. the RNN can have sequence lenght >1 & only single direction is selected
+        # changes onm graph:
+        # replace cross slicer by single
+        layers['l_merge_05'].input_layers[0] = layers['static_conv_06']
+        layers['l_merge_05'].input_shapes[0] = layers['static_conv_06'].output_shape
+        layers['l_merge_05'].input_layers[1] = layers['dyn_conv_04']
+        layers['l_merge_05'].input_shapes[1] = layers['dyn_conv_04'].output_shape
+
+        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=False)
+        l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
+        stat_conv = L.get_output(layers['static_conv_06'], deterministic=False)
+        dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=False)
+        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=False)
+        # debug
+        reco_merges = L.get_output(layers['l_merge_05'], deterministic=False)
+        reco_befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=False)
+
+        self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
+                                                  layers['l_in_static_00'].input_var,
+                                                  layers['l_in_hid_08'].input_var,
+                                                  layers['l_in_rec_mask_08'].input_var,
+                                                  target,
+                                                  self.sequ_len],
+                                                 [loss_train, individual_batch, l_out_prediciton, loss_valid,
+                                                  stat_conv,
+                                                  dyn_conv, l_out_hidden, reco_merges, reco_befo_rec],
+                                                 updates=updates)
+
+        assert (updates is not None)
+
+        return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
+
+    def get_loss_pre_fct(self, layers, target, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True):
+
+        # # outputs
+        # l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
+        # l_out_valid = L.get_output(layers['l_out_cross'], deterministic=True)
+
+        L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
+
+        loss_individual_batch = (l_out_train - target)**2
+        loss_valid = T.mean(loss_individual_batch)
+
+        if L1_weight > 0:
+            loss_train = loss_valid + L1_weight * L1_norm
+
+        return loss_train, loss_individual_batch, loss_valid
+        
     def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True):
         bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
         step = backtrace_length

@@ -13,6 +13,7 @@ from theano.sandbox import cuda as c
 import experience_replay as exp
 import h5py
 import sys
+import random
 import configargparse
 from copy import copy
 import time
@@ -487,9 +488,15 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         rnn_mask = np.ones((bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
 
+        # with h5py.File("debug_%i.h5"%self.iterations,"w") as f:
+        #     f.create_dataset('inputs',data=inputs)
+        #     f.create_dataset('precomp_input_sliced',data=precomp_input_sliced)
+        #     f.create_dataset('hiddens',data=hiddens)
+        #     f.create_dataset('rnn_mask',data=rnn_mask)
+
         height_probs, hidden_out, merges, befo_rec = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens,
                                                                    rnn_mask, 1)
-        sum_hiddens = np.sum(np.abs(hiddens))
+        # sum_hiddens = np.sum(np.abs(hiddens))
         # d_height_probsd, d_hidden_outd, d_precomp_input_sliced = self.builder.probs_f(inputs[:, :2], inputs[:, 2:],
         #                                                                               hiddens, rnn_mask, 1)
         # if np.all(centers == self.debug_pos):
@@ -523,6 +530,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         hidden_new = hidden_out.reshape((bm.bs, 4, self.options.n_recurrent_hidden))
         height_probs = height_probs.reshape((bm.bs, 4))
         bm.update_priority_queue(height_probs, centers, ids, hidden_states=hidden_new)
+        return inputs, gt, centers, ids, hiddens, precomp_input_sliced
 
     def validate(self):
         self.val_bm.init_batch()
@@ -778,10 +786,10 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
 
         self.exp_path = self.save_net_path+"/experiences/"
         self.current_net_name = "masternet.h5"
+        if not os.path.exists(self.exp_path):
+            os.makedirs(self.exp_path)
         if self.options.master:
             self.iterations = 0
-            if not os.path.exists(self.exp_path):
-                os.makedirs(self.exp_path)
             self.master = True
             if os.path.exists(self.save_net_path+"/nets/"+self.current_net_name):
                 print "continue with existing master file"
@@ -860,6 +868,149 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
 
             if self.images_counter % 1 == 0:
                 trainer.draw_debug(reset=True)
+
+
+class FCRecMasterPrePokemonTrainer(FCRecMasterFinePokemonTrainer):
+
+    def define_loss(self):
+        self.loss = self.builder.get_loss('updates_pretrain_v8')
+        # self.loss = self.builder.get_loss('updates_hydra_v8')
+
+    def network_i_choose_you(self):
+        network = self.builder.get_net(self.options.net_arch)
+        c.use(self.options.gpu)
+        layers, self.options.patch_len, _ = network()
+        self.l_out = layers["l_out_cross"]
+        target_t = T.fmatrix()
+        # self.options.network_channels = layers['l_in_claims'].shape[1]
+
+        if self.options.load_net_b:
+            np.random.seed(np.random.seed(int(time.time())))
+            # change seed so different images for retrain
+            print "loading network parameters from ", self.options.load_net_path
+            u.load_network(self.options.load_net_path, self.l_out)
+
+        self.prediction_f,  self.fc_prec_conv_body, self.loss_train_fine_f, \
+            self.debug_f, self.debug_singe_out = \
+             self.loss(layers, target_t, L1_weight=self.options.regularization)
+             # self.loss(layers, L1_weight=self.options.regularization)
+
+    def predict(self):
+        self.bm.init_batch()
+        self.free_voxel = self.free_voxel_empty
+        inputs = self.update_BM_FC()
+        # precompute fc partf
+        self.precomp_input = self.builder.fc_prec_conv_body(inputs)
+        self.images_counter += 1
+
+        self.observation_counter = 0
+        selection_p = float(self.max_observation_counter) / self.free_voxel_empty
+
+        with progressbar.ProgressBar(max_value=self.free_voxel_empty) as bar:
+            while (self.free_voxel > 0):
+                self.iterations += 1
+                self.free_voxel -= 1
+                inputs, gt, centers, ids, hiddens, precomp_input_sliced = self.update_BM()
+
+                if float(self.free_voxel) / self.free_voxel_empty <  float(self.observation_counter) / self.max_observation_counter:
+                    if np.random.choice([True, False],p=[selection_p, 1-selection_p]):
+                        print "saving experience", self.iterations
+                        with h5py.File(self.exp_path+"/%i_%i_%f.h5"%(os.getpid(), self.free_voxel, time.time()),"w") as f:
+                            f.create_dataset('inputs',data=inputs)
+                            f.create_dataset('gt',data=gt)
+                            f.create_dataset('centers',data=centers)
+                            f.create_dataset('ids',data=ids)
+                            f.create_dataset('hiddens',data=hiddens)
+                            f.create_dataset('precomp_input_sliced',data=precomp_input_sliced)
+                            f.create_dataset('done',data=[1])
+                self.observation_counter += 1
+
+                if self.free_voxel % 100 == 0:
+                    bar.update(self.free_voxel_empty - self.free_voxel)
+
+    def train(self):
+        if self.master:
+            print self.iterations,
+            sys.stdout.flush()
+
+            exp_files = [f for f in glob.glob(self.exp_path+'*.h5')]
+            random.shuffle(exp_files)
+
+            # create batch
+            inputs = []
+            gts = []
+            hiddens = []
+            precomp = []
+            length = 1
+
+            if len(exp_files) > 2*self.options.batch_size:
+                for f in exp_files:
+                    # print "learning from ",f
+                    try:
+                        with h5py.File(f,"r") as h5f:
+                            if 'done' in h5f:
+                                inputs.append(np.array(h5f['inputs'], dtype='float32'))
+                                gts.append(np.array(h5f['gt'], dtype='float32'))
+                                hiddens.append(np.array(h5f['hiddens'], dtype='float32'))
+                                precomp.append(np.array(h5f['precomp_input_sliced'], dtype='float32'))
+
+                                # print np.array(h5f['inputs']).shape, h5f['precomp_input_sliced'].shape, h5f['hiddens'].shape
+                                # print (self.bm.bs*4, length)
+                                # print self.builder.probs_f_fc(np.array(h5f['inputs'], dtype='float32')[:, :2], 
+                                #                 np.array(h5f['precomp_input_sliced']), np.array(h5f['hiddens']),
+                                #                 np.ones((self.bm.bs*4, length), dtype='float32'), 1)
+
+                                # print self.builder.probs_f(np.array(h5f['inputs'], dtype='float32')[:, :2], 
+                                #                 np.array(h5f['inputs'], dtype='float32')[:, 2:], np.array(h5f['hiddens'], dtype='float32'),
+                                #                 np.ones((self.bm.bs*4, length), dtype='float32'), 1)
+                                # x = self.builder.loss_pre_f(np.array(h5f['inputs'], dtype='float32')[:, :2], 
+                                #                 np.array(h5f['inputs'], dtype='float32')[:, 2:], np.array(h5f['hiddens'], dtype='float32'),
+                                #                 np.ones((self.bm.bs*4, length), dtype='float32'), np.array(h5f['gt'], dtype='float32').reshape((-1,1)), 1)
+                                # print x[0].shape
+                                                                                # np.ones((self.bm.bs*4, length), dtype='float32'), 1)
+                        os.system('rm '+f)
+                    except IOError:
+                        print "unable to read ",f
+                    if len(inputs) >= self.options.batch_size:
+                        break
+
+
+                inputs = np.concatenate(inputs).astype('float32')
+                gts = np.concatenate(gts).astype('float32').reshape((-1,1))
+                hiddens = np.concatenate(hiddens).astype('float32')
+                precomp = np.concatenate(precomp).astype('float32')
+                mask = np.ones((len(gts), length), dtype='float32')
+
+                # print inputs.shape, gts.shape, hiddens.shape, mask.shape
+                # print self.builder.probs_f_fc(inputs[:, :2], precomp, hiddens, mask, 1)
+                # print self.builder.probs_f(inputs[:, :2], inputs[:, 2:], hiddens, mask, 1)
+                # print self.builder.loss_pre_f(inputs[:, :2], inputs[:, 2:], hiddens, mask, gts, length)[0].shape
+                y = self.builder.loss_pre_f(inputs[:, :2], inputs[:, 2:], hiddens, mask, gts, length)
+                # self.builder.loss_train_fine_f(inputs[:, :2], inputs[:, 2:], hiddens, mask, gts, length)
+
+                self.save_net(name=self.current_net_name)
+                if self.epoch % 100 == 0:
+                    print "saving ",self.epoch, " ", y[0]
+                    self.save_net()
+                self.draw_loss(y[0], y[0])
+                self.iterations += 1
+                self.epoch += 1
+            else:
+                time.sleep(5)
+
+        else:
+            np.random.seed(np.random.seed(int(time.time())))
+            # change seed so different images for retrain
+            print "loading network parameters from ",
+            try:
+                u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
+            except:
+                print "unable to load network, predicting with previous parameters"
+         
+            self.max_observation_counter = 50
+
+            self.predict()
+            
 
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
@@ -974,7 +1125,7 @@ if __name__ == '__main__':
 
         if options.master_training:
             print "using master trainer"
-            trainer = FCRecMasterFinePokemonTrainer(options)
+            trainer = FCRecMasterPrePokemonTrainer(options)
         else:
             print "using normal trainer"
             trainer = FCRecFinePokemonTrainer(options)
