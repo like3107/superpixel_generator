@@ -1135,7 +1135,7 @@ if __name__ == '__main__':
 
         while not trainer.converged():
             trainer.train()
-            if trainer.val_bm is not None and trainer.epoch % 10 == 0:
+            if trainer.val_bm is not None and trainer.epoch % 500 == 0:
                 trainer.validate()
 
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
