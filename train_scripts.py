@@ -943,7 +943,7 @@ class FCRecMasterPrePokemonTrainer(FCRecMasterFinePokemonTrainer):
             precomp = []
             length = 1
 
-            if len(exp_files) > 2*self.options.batch_size:
+            if len(exp_files) > 2*self.options.n_batch_errors:
                 for f in exp_files:
                     # print "learning from ",f
                     try:
@@ -971,7 +971,7 @@ class FCRecMasterPrePokemonTrainer(FCRecMasterFinePokemonTrainer):
                         os.system('rm '+f)
                     except IOError:
                         print "unable to read ",f
-                    if len(inputs) >= self.options.batch_size:
+                    if len(inputs) >= self.options.n_batch_errors:
                         break
 
 
