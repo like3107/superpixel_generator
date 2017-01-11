@@ -181,7 +181,7 @@ class NetBuilder:
         return layers, fov, None
 
     def loss_updates_probs_v0(self, layers, target, L1_weight=10**-5,
-                              update='adam'):
+                              update='nesterov'):
 
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
@@ -199,8 +199,14 @@ class NetBuilder:
             loss_train = loss_valid + L1_weight * L1_norm
         if update == 'adam':
             updates = las.updates.adam(loss_train, all_params)
-        if update == 'sgd':
+        elif update == 'sgd':
             updates = las.updates.sgd(loss_train, all_params, 0.001)
+        elif update == 'nesterov':
+            print "using nesterov_momentum with learningrate", self.options.learningrate
+            lr = theano.shared(np.array(self.options.learningrate, dtype=np.float32))
+            self.options.learningrate_shared = lr
+            updates = las.updates.nesterov_momentum(loss_train, all_params, lr)
+
         loss_train_f = theano.function([layers['l_in_00'].input_var, target],
                                        [loss_train, loss_individual_batch, l_out_train],
                                        updates=updates)
@@ -311,9 +317,12 @@ class NetBuilder:
 
 
     def get_update_rule(self, loss_train, all_params, optimizer=None):
+        self.options.learningrate_shared = None
         if optimizer == "nesterov":
             print "using nesterov_momentum with learningrate", self.options.learningrate
-            updates = las.updates.nesterov_momentum(loss_train, all_params, self.options.learningrate)
+            lr = theano.shared(np.array(self.options.learningrate, dtype=np.float32))
+            self.options.learningrate_shared = lr
+            updates = las.updates.nesterov_momentum(loss_train, all_params, lr)
         elif optimizer == "adam":
             updates = las.updates.adam(loss_train, all_params)
         elif optimizer == "sgd":

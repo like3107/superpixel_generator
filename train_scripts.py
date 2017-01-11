@@ -920,8 +920,14 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         loss_train, individual_loss, _ = self.loss_train_f(inputs, heights)
         loss_no_reg = np.mean(individual_loss)
 
-        if self.iterations % 500 == 0:
+        if self.iterations % self.observation_counter == 0:
             self.save_net()
+
+        if self.iterations % 100 == 0 and self.options.learningrate_shared is not None:
+            dec = np.array(0.95, dtype=np.float32)
+            lr = self.options.learningrate_shared
+            lr.set_value(lr.get_value() * dec)
+            print "reducing learningrate by ",dec, "to ", lr.get_value()
 
         # update parameters once
         self.update_history.append(self.iterations)
@@ -967,6 +973,7 @@ if __name__ == '__main__':
         while not trainer.converged():
             print "\r pretrain %0.4f iteration %i free voxel %i" \
                   %(trainer.train(), trainer.iterations, trainer.free_voxel),
+
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
 
     elif options.net_arch == 'v8_hydra_dilated_ft_joint':

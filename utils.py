@@ -374,6 +374,8 @@ def save_namespace(h5_file, op_list, path="options/"):
             continue
         elif op_key == 'val_options':
             continue
+        elif op_key == 'learningrate_shared':
+            continue
         else:
             if path+op_key in h5_file:
                 h5_file.__delitem__(path+op_key)
