@@ -551,7 +551,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                  self.val_update_history,
                                  self.save_net_path + '/validation.png',
                  names=['Adapted Rand error', 'Adapted Rand error precision'])
-        for b in range(min(5, self.bm.bs)):
+        for b in range(min(5, self.val_bm.bs)):
             self.val_bm.draw_debug_image("%i_validation_b_%03i_i_%08i_f_%i" % (b, 0, self.iterations, self.free_voxel),
                                         path=self.image_path_validation, b=b)
         return score
@@ -991,8 +991,13 @@ if __name__ == '__main__':
         if trainer.val_bm is not None:
             trainer.val_bm.set_preselect_batches([12, 101, 53, 98, 138, 60, 20, 131, 35, 119][:trainer.val_bm.bs])
 
+
+        last_val_epoch = -1
         while not trainer.converged():
-            if trainer.val_bm is not None and trainer.epoch % 10 == 0:
+            if trainer.val_bm is not None \
+                                and trainer.epoch % 10 == 0 \
+                                and trainer.epoch != last_val_epoch:
+                last_val_epoch = trainer.epoch
                 trainer.validate()
             trainer.train()
 
