@@ -45,6 +45,11 @@ def get_dataset_provider(datasetname):
     print 'using dataset: ', datasetname
     return getattr(sys.modules[__name__], datasetname+"DataProvider")
 
+def transpose_last(arr):
+    order = np.arange(len(arr.shape))
+    order[-2:] = order[-2:][::-1]
+    return np.transpose(arr, tuple(order))
+
 
 class DataProvider(object):
     def __init__(self, options):
@@ -69,6 +74,21 @@ class DataProvider(object):
         # assert (patch_len <= global_edge_len)
         assert (options.global_input_len <= self.rl_x)
          # (options.global_input_len <=  self.rl_y)
+
+        self.augmenttations = [ lambda x: x, 
+                                lambda x: x[..., ::-1, :], 
+                                lambda x: x[...,:,::-1], 
+                                lambda x: x[...,::-1,::-1], 
+                                lambda x: transpose_last(x), 
+                                lambda x: transpose_last(x)[...,::-1,:], 
+                                lambda x: transpose_last(x)[...,:,::-1]]
+        self.pick_augmentation()
+
+    def pick_augmentation(self):
+        self.sel_aug_f = random.choice(self.augmenttations)
+
+    def apply_augmentation(self, input):
+        input[:] = self.sel_aug_f(input) 
 
     def set_slices(self, o):
         print o
@@ -122,6 +142,10 @@ class DataProvider(object):
             ind_b = np.linspace(0, n_z, self.bs, dtype=np.int, endpoint=False)
         else:
             ind_b = np.random.permutation(self.n_slices)[:self.bs]
+            if self.options.augment_ft:
+                print "using new augmentation"
+                self.pick_augmentation()
+
 
         # indices to raw, correct for label which edge len is -self.pl shorter
         if self.options.global_edge_len > 0:
@@ -142,10 +166,15 @@ class DataProvider(object):
                 input[b, :, :, :] = self.full_input[ind_b[b], :,
                                                     ind_x[b]:ind_x[b] + self.options.global_input_len,
                                                     ind_y[b]:ind_y[b] + self.options.global_input_len]
+            if self.options.augment_ft:
+                self.apply_augmentation(input)
+
             return [ind_b, ind_x, ind_y]
         else:
             print input.shape, self.full_input.shape
             input[range(self.bs)] = self.full_input[ind_b]
+            if self.options.augment_ft:
+                self.apply_augmentation(input)
             return [ind_b, None, None]
 
     def prepare_label_batch(self, label, height, rois):
@@ -162,6 +191,9 @@ class DataProvider(object):
                 label[b, :, :] = self.label[ind_b[b],
                                             ind_x[b]:ind_x[b] + label_inp_len,
                                             ind_y[b]:ind_y[b] + label_inp_len]
+            if self.options.augment_ft:
+                self.apply_augmentation(height)
+                self.apply_augmentation(label)
         else:
             for b in range(self.bs):
                 if self.options.padding_b:
@@ -172,6 +204,9 @@ class DataProvider(object):
                                              self.pad:-self.pad]
                     height[b] = self.height_gt[b,self.pad:-self.pad,
                                                  self.pad:-self.pad]
+            if self.options.augment_ft:
+                self.apply_augmentation(height)
+                self.apply_augmentation(label)
 
     def get_seed_coords_from_file(global_seeds):
         # clear global_seeds but keep empty list reference
