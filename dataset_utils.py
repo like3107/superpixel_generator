@@ -32,6 +32,7 @@ from theano import tensor as T
 
 from IPython import embed
 
+
 class HoneyBatcherPredict(object):
     def __init__(self, options):
         """
@@ -85,7 +86,6 @@ class HoneyBatcherPredict(object):
         self.timo_min_len = 5
         self.timo_sigma = 0.3
         assert(self.pl == self.pad * 2 + 1)
-
 
     def get_seed_ids(self):
         assert (self.global_seeds is not None)  # call get seeds first
@@ -375,7 +375,6 @@ class HoneyBatcherPredict(object):
     def get_image_crops(self, b):
         return self.global_input_batch[b, :, self.pad:-self.pad, self.pad:-self.pad], \
                self.global_claims[b, self.pad:-self.pad, self.pad:-self.pad]
-
 
     def draw_debug_image(self, image_name,
                          path='./../data/debug/images/',

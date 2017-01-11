@@ -218,44 +218,25 @@ class DataProvider(object):
     def load_data(self, options):
         # print self.options.input_data_path
         # self.full_input = load_h5(self.options.input_data_path,
-        self.full_input = load_h5(str(self.options.input_data_path),
-                                    h5_key=None,
-                                    slices=self.slices)[0]
-        self.height_gt = load_h5(self.options.height_gt_path,
-                                    h5_key=None,
-                                    slices=self.slices)[0]
-        self.label = load_h5(self.options.label_path,
-                                    h5_key=None,
-                                    slices=self.slices)[0]
+        self.full_input = load_h5(str(self.options.input_data_path), h5_key=None, slices=self.slices)[0]
+        self.height_gt = load_h5(self.options.height_gt_path, h5_key=None, slices=self.slices)[0]
+        self.label = load_h5(self.options.label_path, h5_key=None, slices=self.slices)[0]
 
 
 class CremiDataProvider(DataProvider):
     def load_data(self, options):
-        self.full_input = load_h5(str(self.options.input_data_path),
-                                h5_key=None,
-                                slices=self.slices)[0]
-        self.height_gt = load_h5(self.options.height_gt_path,
-                                    h5_key=None,
-                                    slices=self.slices)[0]
-
-        self.label = load_h5(self.options.label_path,
-                                    h5_key=None,
-                                    slices=self.slices)[0]
+        super(CremiDataProvider, self).load_data(options)
         
         max_height = self.pad
         # generate height with clipping method from distance transform
         if self.options.clip_method=='clip':
-            self.height_gt = load_h5(self.options.height_gt_path,
-                        h5_key=None,
-                        slices=self.slices)[0]
+            self.height_gt = load_h5(self.options.height_gt_path, h5_key=None,slices=self.slices)[0]
             np.clip(self.height_gt, 0, max_height, out=self.height_gt)
             maximum = np.max(self.height_gt)
             self.height_gt *= -1.
             self.height_gt += maximum
         if self.options.clip_method=='rescale':
-            self.height_gt = load_h5(self.options.height_gt_path,
-                        h5_key='rescaled',
-                        slices=self.slices)[0]
+            self.height_gt = load_h5(self.options.height_gt_path, h5_key='rescaled',  slices=self.slices)[0]
         elif self.options.clip_method=='exp':
             self.height_gt = load_h5(self.options.height_gt_path,
                         h5_key=None,
@@ -354,8 +335,7 @@ class PolygonDataProvider(DataProvider):
     def draw_voronoi(self, num_seeds = 5):
         
         self.label = np.zeros((self.bs,self.size, self.size), dtype=np.uint8)
-        self.full_input = np.zeros((self.bs, 1, self.size, self.size),
-                                   dtype=np.float32)
+        self.full_input = np.zeros((self.bs, 1, self.size, self.size), dtype=np.float32)
         
         b = 0
         while b < self.bs:

@@ -440,6 +440,9 @@ def plot_val_errors(all_y_values, x_values, save_path, names,
     fig.savefig(save_path)
     plt.close(fig)
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
 if __name__ == '__main__':
     path = './data/nets/cnn_v5/preds_0'
     concat_h5_in_folder(path, 8, 64, 300)

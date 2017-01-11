@@ -52,7 +52,7 @@ class NetBuilder:
         dils  =         [1,     1,      2,      4,      8,      16,     1,      1,      1,      1]
         n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048,     128,    n_classes]
         # debug
-        batch_norms =   [True, True,   True,   True,   True,   True,   True,   False,  False,   False]
+        dropouts =   [True, True,   True,   True,   True,   True,   True,   False,  False,   False]
         regs        =   [True, True,   True,   True,   True,   True,   True,   True,   True,    False]
         # batch_norms = [False] * len(n_filt)
         ELU = las.nonlinearities.elu
@@ -60,7 +60,7 @@ class NetBuilder:
         ident = las.nonlinearities.identity
         act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU, ReLU,   cs.elup1]
         names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc', 'fc', 'fc']
-        assert(len(filts) == len(dils) and len(filts) == len(batch_norms) and len(filts) == len(regs) and
+        assert(len(filts) == len(dils) and len(filts) == len(dropouts) and len(filts) == len(regs) and
                len(filts) == len(n_filts) and len(names) == len(act_fcts) and len(filts) == len(names))
         if l_image_in is None:
             layers['l_in_00'] = L.InputLayer((None, n_channels, None, None))
@@ -69,11 +69,11 @@ class NetBuilder:
         l_prev = layers['l_in_00']
         i = -1
         l_seconds_last = None
-        for filt, dil, n_filt, batch_norm, act_fct, reg, name in \
-                zip(filts, dils, n_filts, batch_norms, act_fcts, regs, names):
+        for filt, dil, n_filt, dropout, act_fct, reg, name in \
+                zip(filts, dils, n_filts, dropouts, act_fcts, regs, names):
             i += 1
-            if batch_norm:
-                l_next = L.batch_norm(
+            if dropout:
+                l_next = L.DropoutLayer(
                     L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), name=name, nonlinearity=act_fct))
             else:
                 l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), name=name,
@@ -111,7 +111,7 @@ class NetBuilder:
         layers['l_in_dyn_00'] = L.InputLayer((None, n_channels_dynamic, None, None))
         l_prev = layers['l_in_dyn_00']
         for i, (filt, dil, n_filt, name) in enumerate(zip(filts, dils, n_filts, names)):
-            l_next = L.batch_norm(L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil)), name=name)
+            l_next = L.DropoutLayer(L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil)), name=name)
             layers['dyn_conv_%02i' % (i + 1)] = l_next
             l_prev = l_next
 
@@ -149,14 +149,14 @@ class NetBuilder:
 
         W_hid_to_hid_cell = shared(np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.)
         layers['l_recurrent_09'] = L.GRULayer(
-            layers['l_resh_pred_07'], rec_hidden,
-            hid_init=layers['l_in_hid_08'],
-            mask_input=layers['l_in_rec_mask_08'],
-            hidden_update=L.Gate(W_in=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
-                                 W_hid=W_hid_to_hid_cell, b=shared(layers_static['fc_08'].b.eval()),
-                                 nonlinearity=las.nonlinearities.rectify),
-            updategate=L.Gate(b=las.init.Constant(2.)),
-            only_return_final=False)
+                    layers['l_resh_pred_07'], rec_hidden,
+                    hid_init=layers['l_in_hid_08'],
+                    mask_input=layers['l_in_rec_mask_08'],
+                    hidden_update=L.Gate(W_in=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
+                                         W_hid=W_hid_to_hid_cell, b=shared(layers_static['fc_08'].b.eval()),
+                                         nonlinearity=las.nonlinearities.rectify),
+                    updategate=L.Gate(b=las.init.Constant(2.)),
+                    only_return_final=False)
 
         # W_hid_to_hid = np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.
         # layers['l_recurrent_09'] = L.RecurrentLayer(layers['l_resh_pred_07'], rec_hidden,
@@ -187,7 +187,7 @@ class NetBuilder:
 
         # outputs
         # debug train det =False
-        l_out_train = L.get_output(layers['l_out_cross'], deterministic=True)
+        l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
         l_out_valid = L.get_output(layers['l_out_cross'], deterministic=True)
 
         L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
@@ -240,16 +240,17 @@ class NetBuilder:
         layers['l_merge_05'].input_layers[0] = l_in_from_prec
         layers['l_merge_05'].input_shapes[0] = l_in_from_prec.output_shape
 
-        l_out_prediciton_prec = L.get_output(layers['l_out_cross'], deterministic=False)
-        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=False)
-        befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=False)
+        l_out_prediciton_prec = L.get_output(layers['l_out_cross'], deterministic=True)
+        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+
+        # debug
+        # befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=True)
+
         self.probs_f_fc = theano.function([layers['l_in_dyn_00'].input_var, l_in_from_prec.input_var,
                                            layers['l_in_hid_08'].input_var,
                                            layers['l_in_rec_mask_08'].input_var,
                                            self.sequ_len],
-                                          [l_out_prediciton_prec, l_out_hidden,
-                                           L.get_output(layers['l_merge_05'], deterministic=False),
-                                           befo_rec])  # debug
+                                          [l_out_prediciton_prec, l_out_hidden])  # debug
                                           # on_unused_input='ignore')
         # reconnect graph again to save network later etc
         layers['l_merge_05'].input_layers[0] = layers['Cross_slicer_stat']
@@ -263,21 +264,23 @@ class NetBuilder:
         layers['l_merge_05'].input_layers[1] = layers['dyn_conv_04']
         layers['l_merge_05'].input_shapes[1] = layers['dyn_conv_04'].output_shape
 
-        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=False)
+        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=True)
         l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
-        stat_conv = L.get_output(layers['static_conv_06'], deterministic=False)
-        dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=False)
-        l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=False)
+
         # debug
-        reco_merges = L.get_output(layers['l_merge_05'], deterministic=False)
-        reco_befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=False)
+        # stat_conv = L.get_output(layers['static_conv_06'], deterministic=False)
+        # dyn_conv = L.get_output(self.layers['dyn_conv_04'], deterministic=False)
+        # l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=False)
+        # reco_merges = L.get_output(layers['l_merge_05'], deterministic=False)
+        # reco_befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=False)
 
         mask = L.get_output(layers['l_in_rec_mask_08'], deterministic=False)
 
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
-        loss_train, individual_batch, loss_valid = self.get_loss_fct(layers, self.options.backtrace_length, l_out_train,
-                                                                mask, L1_weight)
+        loss_train, individual_batch, loss_valid = self.get_loss_fct(layers, self.options.backtrace_length,
+                                                                     l_out_train, mask, L1_weight)
+
         updates = self.get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
         # debug
         self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
@@ -285,16 +288,15 @@ class NetBuilder:
                                                   layers['l_in_hid_08'].input_var,
                                                   layers['l_in_rec_mask_08'].input_var,
                                                   self.sequ_len],
-                                                 [loss_train, individual_batch, l_out_prediciton, loss_valid,
-                                                  stat_conv,
-                                                  dyn_conv, l_out_hidden, reco_merges, reco_befo_rec],
+                                                 [loss_train, individual_batch, l_out_prediciton],
                                                  updates=updates)
         assert (updates is not None)
 
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
 
-    def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True):
+    def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True,
+                     dist_vector=1):
         bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
         step = backtrace_length
         sum_height = l_out_train
@@ -304,14 +306,14 @@ class NetBuilder:
                 # automatically broadcasts
                 disc_vec = (np.zeros(backtrace_length, dtype=np.float32) + 0.9) ** np.arange(backtrace_length - 1, -1, -1,
                                                                                              dtype=np.float32)
-
-            sum_height = T.sum(sum_height.reshape((bs, backtrace_length)) * disc_vec * mask, axis=1)
+            sum_height = T.sum(sum_height.reshape((bs, backtrace_length)) * disc_vec * mask, axis=1) * dist_vector
         individual_batch = (sum_height[bs / 2:] - sum_height[:bs / 2])
 
         L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
 
         loss_valid = T.mean(individual_batch)
         if L1_weight > 0:
+            print 'reguralizing with', L1_weight
             loss_train = loss_valid + L1_weight * L1_norm
         return loss_train, individual_batch, loss_valid
 
@@ -324,8 +326,10 @@ class NetBuilder:
             self.options.learningrate_shared = lr
             updates = las.updates.nesterov_momentum(loss_train, all_params, lr)
         elif optimizer == "adam":
+            print 'using adam'
             updates = las.updates.adam(loss_train, all_params)
         elif optimizer == "sgd":
+            print 'sgd lr', self.options.learningrate
             updates = las.updates.sgd(loss_train, all_params, self.options.learningrate)
         else:
             raise Exception("unknown optimizer %s" % optimizer)

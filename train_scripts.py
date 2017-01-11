@@ -220,8 +220,7 @@ class FusionPokemonTrainer(PokemonTrainer):
 
 class FinePokemonTrainer(PokemonTrainer):
     def init_BM(self):
-        print "using edge based prediction method"
-        self.BM = du.HoneyBatcherE
+        self.BM = du.HoneyBatcherPath
 
     def define_loss(self):
         self.loss = self.builder.get_loss('updates_hydra_v8')
@@ -348,8 +347,7 @@ class SpeedyPokemonTrainer(FinePokemonTrainer):
 class FCFinePokemonTrainer(FinePokemonTrainer):
 
     def init_BM(self):
-        print "using edge based prediction"
-        self.BM = du.HoneyBatcherE
+        self.BM = du.HoneyBatcherPath
         self.images_counter = -1
 
     def define_loss(self):
@@ -370,8 +368,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             u.load_network(self.options.load_net_path, self.l_out)
 
         self.prediction_f,  self.fc_prec_conv_body, self.loss_train_fine_f, \
-            self.debug_f, self.debug_singe_out = \
-             self.loss(layers, L1_weight=self.options.regularization)
+            self.debug_f, self.debug_singe_out = self.loss(layers, L1_weight=self.options.regularization)
 
     def update_BM_FC(self):
         inputs = self.bm.global_input_batch[:, :, :-1, :-1]
@@ -464,7 +461,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
 class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def __init__(self, options):
         super(FCRecFinePokemonTrainer, self).__init__(options)
-        self.observation_counter = 500
+        self.observation_counter = self.options.save_counter
         self.h1s = []
         self.h2s = []
 
@@ -489,11 +486,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         rnn_mask = np.ones((bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
 
-        height_probs, hidden_out, merges, befo_rec = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced, hiddens,
-                                                                   rnn_mask, 1)
-        sum_hiddens = np.sum(np.abs(hiddens))
-        # d_height_probsd, d_hidden_outd, d_precomp_input_sliced = self.builder.probs_f(inputs[:, :2], inputs[:, 2:],
-        #                                                                               hiddens, rnn_mask, 1)
+        height_probs, hidden_out = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced,  hiddens, rnn_mask, 1)
+
         # if np.all(centers == self.debug_pos):
         #     verbose = True
         #     self.mem_stat = inputs[:, 2:]
@@ -502,25 +496,27 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         #     self.mem_befo_rec = befo_rec
         #     self.mem = inputs[:, :2]
         #     self.mem_rec_in = hidden_out[:, 0, :]
-
+        #
         # hidden diff
-        # print 'hidden d', hidden_out, 'd_height_probsd', d_hidden_outd
+        # d_height_probsd, d_hidden_outd, d_precomp_input_sliced = self.builder.probs_f(inputs[:, :2], inputs[:, 2:],
+        #                                                                                   hiddens, rnn_mask, 1)
         # diff = np.abs(hidden_out - d_hidden_outd)
-        # if np.max(diff) > 10**-4:
+        # if np.max(diff) > 10**-1:
         #     coords = centers[int(np.where(diff == np.max(diff))[0][0]) / 4]
         #     # check for non boundary effects
         #     if self.bm.pad not in coords and self.bm.image_shape[-1] - self.bm.pad - 1 not in coords:
-        #         print 'hiddens average deviation', np.mean(diff), 'max', np.max(diff)
+        #         print 'hiddens average deviation', np.mean(diff), 'max', np.max(diff), \
+        #             np.nanmax(self.bm.global_hidden_states)
         #
         # # height diff
         # diff = np.abs(d_height_probsd - height_probs)
-        # if np.max(diff) > 10**-3:
+        # if np.max(diff) > 10**-1:
         #     coords = centers[int(np.where(diff == np.max(diff))[0][0]) / 4]
         #     # check for non boundary effects
         #     if self.bm.pad not in coords and self.bm.image_shape[-1] - self.bm.pad - 1 not in coords:
         #         print 'av deviation', np.mean(diff), 'max dev', np.max(diff)
         #         print 'centers', coords
-
+        #
 
         hidden_new = hidden_out.reshape((bm.bs, 4, self.options.n_recurrent_hidden))
         height_probs = height_probs.reshape((bm.bs, 4))
@@ -571,16 +567,18 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 self.free_voxel -= 1
                 self.update_BM()
 
-                if self.free_voxel % 100 == 0:
+                if self.free_voxel % 400 == 0:
                     bar.update(self.free_voxel_empty - self.free_voxel)
 
     def train(self):
         self.epoch += 1
+
+        # self.debug_pos = np.array([98, 41])
+        # self.dir = 2
+        # self.debug_pos_orig = self.bm.update_position(self.debug_pos, self.dir)
+
         self.predict()
 
-        self.debug_pos = np.array([5, 63])
-        self.dir = 0
-        self.debug_pos_orig = self.bm.update_position(self.debug_pos, self.dir)
 
         print 'hiddens mean', np.mean(self.bm.global_hidden_states), 'max', np.max(np.abs(self.bm.global_hidden_states))
         print
@@ -607,15 +605,14 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
                                                    batch_mask_ft, options.backtrace_length)
             claims = self.bm.global_claims[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad]
-            print claims.shape, self.bm.global_label_batch.shape
+            # print claims.shape, self.bm.global_label_batch.shape
             ft_loss_noreg = vs.validate_claims(claims, self.bm.global_label_batch)
-            ft_loss_train = ft_loss_noreg 
-            self.draw_loss(ft_loss_train, ft_loss_noreg)
-            self.draw_heights(h1, h2)
+            self.draw_loss(ft_loss_noreg, ft_loss_noreg)
+            # self.draw_heights(h1, h2)
 
             # self.debug_plots(heights, batch_mask_ft, hiddens_rec, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec)
 
-        if self.images_counter % self.epoch == 0:
+        if self.images_counter % self.observation_counter == 0:
             self.save_net()
             trainer.draw_debug(reset=True)
         # exit();
@@ -684,7 +681,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         # height diffs, hiddens, hiddens rec, stat_convs
         # e1_pos = []
 
-
         print
         k = -1
         for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
@@ -699,19 +695,20 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
 
                     if dir < 0 or not masks[k, rec_b * ts + t]:
-                        print 'continue', pos, dir , masks[k, rec_b * ts + t]
+                        print 'continue', pos, dir, masks[k, rec_b * ts + t]
                         continue
 
                     old_pos = self.bm.update_position(pos, dir)
 
                     # conv check
+                    stat_conv_masks = [stat_conv[number, :, 0, 0] != 0]
                     orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
-                    diff = np.abs(orig_conv - stat_conv[number, :, 0, 0])
+                    diff = np.abs(orig_conv[stat_conv_masks] - stat_conv[number, :, 0, 0][stat_conv_masks]*2)
                     verbose = True
                     if np.max(diff) > 10 ** -4 or np.all(pos == self.debug_pos):
                         verbose = True
                         print 'conv comparison', np.max(diff), np.mean(diff), 'where', np.where(diff == np.max(diff))
-                        print 'orig conv', orig_conv[:5], 'rconst conv', stat_conv[j, :5, 0, 0]
+                        print 'orig conv', orig_conv[:5], 'rconst conv', stat_conv[number, :5, 0, 0] / 2
 
                     err_h = self.bm.global_prediction_map_nq[b, old_pos[0] - self.bm.pad, old_pos[1] - self.bm.pad,
                                                              dir]
@@ -789,7 +786,6 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                 print "continue with existing master file"
                 u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
             else:
-                
                 self.save_net(name=self.current_net_name)
             print "starting Master"
         else:
@@ -946,10 +942,8 @@ class GottaCatchemAllTrainer(PokemonTrainer):
             image_path = self.image_path
 
         for b in range(1):
-            self.bm.draw_debug_image(
-                "train_b_%03i_i_%08i_f_%i" %
-                (b, self.iterations, self.free_voxel),
-                path=image_path, b=b, plot_height_pred=True)
+            self.bm.draw_debug_image("train_b_%03i_i_%08i_f_%i" % (b, self.iterations, self.free_voxel),
+                                     path=image_path, b=b, plot_height_pred=True)
 
 
 class RecurrentTrainer(FCFinePokemonTrainer):
@@ -973,7 +967,7 @@ if __name__ == '__main__':
     if options.net_arch == 'net_v8_dilated':
         trainer = GottaCatchemAllTrainer(options)
         while not trainer.converged():
-            print "\r pretrain %0.4f iteration %i free voxel %i" \
+            print "pretrain %0.4f iteration %i free voxel %i" \
                   %(trainer.train(), trainer.iterations, trainer.free_voxel),
 
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
