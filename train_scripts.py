@@ -220,7 +220,7 @@ class FusionPokemonTrainer(PokemonTrainer):
 
 class FinePokemonTrainer(PokemonTrainer):
     def init_BM(self):
-    	print "using edge based prediction method"
+        print "using edge based prediction method"
         self.BM = du.HoneyBatcherE
 
     def define_loss(self):
@@ -348,7 +348,7 @@ class SpeedyPokemonTrainer(FinePokemonTrainer):
 class FCFinePokemonTrainer(FinePokemonTrainer):
 
     def init_BM(self):
-    	print "using edge based prediction"
+        print "using edge based prediction"
         self.BM = du.HoneyBatcherE
         self.images_counter = -1
 
@@ -989,12 +989,12 @@ if __name__ == '__main__':
             trainer = FCRecFinePokemonTrainer(options)
 
         if trainer.val_bm is not None:
-            trainer.val_bm.set_preselect_batches([0,70,40,120,40,100,130,10,140][:trainer.val_bm.bs])
+            trainer.val_bm.set_preselect_batches([12, 101, 53, 98, 138, 60, 20, 131, 35, 119][:trainer.val_bm.bs])
 
         while not trainer.converged():
-            trainer.train()
             if trainer.val_bm is not None and trainer.epoch % 10 == 0:
                 trainer.validate()
+            trainer.train()
 
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     # elif options.net_arch == 'v8_hydra_dilated_ft_joint':
