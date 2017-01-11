@@ -114,9 +114,9 @@ if __name__ == '__main__':
      
             gz = indexgetter(z_lenght)
             for z in range(z_lenght)[sl[ds]]:
-                for j in z_range:
-                    input_data[i,0+j] = raw[gz(z,j),y_slice,x_slice]
-                    input_data[i,1+j] = membrane[gz(z,j),y_slice,x_slice]
+                for j, k in enumerate(z_range):
+                    input_data[i,0+j] = raw[gz(z,k),y_slice,x_slice]
+                    input_data[i,len(z_range)+j] = membrane[gz(z,k),y_slice,x_slice]
 
                 label_data[i] = label[gz(z,0),y_slice,x_slice]
 
