@@ -55,7 +55,6 @@ class PokemonTrainer(object):
         self.update_steps = 10
         self.free_voxel_empty = self.bm.get_num_free_voxel()
         self.free_voxel = self.free_voxel_empty
-        self.observation_counter = self.options.save_counter
         self.update_history = []
         self.loss_history = [[], []]
         self.val_loss_history = [[], []]
@@ -114,7 +113,7 @@ class PokemonTrainer(object):
             self.free_voxel -= 1
             inputs, heights, gt = self.update_BM()
 
-            if self.iterations % self.observation_counter == 0:
+            if self.iterations % self.options.observation_counter == 0:
                 trainer.draw_debug()
 
             if self.free_voxel == 0:
@@ -399,10 +398,10 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                 self.update_BM()
                 if self.free_voxel % 100 == 0:
                     bar.update(self.free_voxel_empty - self.free_voxel)
-        self.epoch += 1
 
     def train(self):
 
+        self.epoch += 1
         self.predict()
 
         self.bm.find_global_error_paths()
@@ -447,8 +446,9 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                 self.save_net_path + '/training_finetuning.png',
                 names=['loss finetuning'], log_scale=False)
 
-        if self.images_counter % 5 == 0:
+        if self.images_counter % self.options.save_counter == 0:
             self.save_net()
+        if self.images_counter % self.options.observation_counter == 0:
             trainer.draw_debug(reset=True)
 
         if self.free_voxel == 0:
@@ -460,7 +460,6 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
 class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def __init__(self, options):
         super(FCRecFinePokemonTrainer, self).__init__(options)
-        self.observation_counter = self.options.save_counter
         self.h1s = []
         self.h2s = []
 
@@ -551,7 +550,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                  self.val_update_history,
                                  self.save_net_path + '/validation.png',
                  names=['Adapted Rand error', 'Adapted Rand error precision'])
-        for b in range(min(5, self.val_bm.bs)):
+        for b in range(self.val_bm.bs):
             self.val_bm.draw_debug_image("%i_validation_b_%03i_i_%08i_f_%i" % (b, 0, self.iterations, self.free_voxel),
                                         path=self.image_path_validation, b=b)
 
@@ -617,8 +616,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
             # self.debug_plots(heights, batch_mask_ft, hiddens_rec, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec)
 
-        if self.images_counter % self.observation_counter == 0:
+        if self.images_counter % self.options.save_counter == 0:
             self.save_net()
+        if self.images_counter % self.options.observation_counter == 0:
             trainer.draw_debug(reset=True)
         # exit();
 
@@ -841,7 +841,6 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
             except:
                 print "unable to load network, predicting with previous parameters"
 
-            self.observation_counter = 500
             self.predict()
 
             self.bm.find_global_error_paths()
@@ -865,7 +864,7 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                     f.create_dataset('options.backtrace_length',data=options.backtrace_length)
                     f.create_dataset('done',data=[1])
 
-            if self.images_counter % 1 == 0:
+            if self.images_counter % self.options.observation_counter == 0:
                 trainer.draw_debug(reset=True)
 
 
@@ -899,7 +898,6 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         print 'Gotta Catchem All'
         super(GottaCatchemAllTrainer, self).__init__(options)
         self.update_steps = 1
-        self.observation_counter = self.options.save_counter
         self.loss_history = [[], []]
 
     def init_BM(self):
@@ -914,6 +912,7 @@ class GottaCatchemAllTrainer(PokemonTrainer):
 
     def train(self):
         self.iterations += 1
+        self.epoch += 1
         inputs, _, heights = self.update_BM()
 
         height_pred = self.prediction_f(inputs)
@@ -921,13 +920,13 @@ class GottaCatchemAllTrainer(PokemonTrainer):
 
         self.bm.global_prediction_map_FC = height_pred
 
-        if self.iterations % self.observation_counter == 0:
+        if self.iterations % self.options.observation_counter == 0:
             trainer.draw_debug(reset=True)
 
         loss_train, individual_loss, _ = self.loss_train_f(inputs, heights)
         loss_no_reg = np.mean(individual_loss)
 
-        if self.iterations % self.observation_counter == 0:
+        if self.iterations % self.options.save_counter == 0:
             self.save_net()
 
         if self.iterations % 100 == 0 and self.options.learningrate_shared is not None:
@@ -965,6 +964,7 @@ class RecurrentTrainer(FCFinePokemonTrainer):
         return False
 
     def train(self):
+        self.epoch += 1
         out_conv_f, out_rec_f = self.fcts
         print out_conv_f(self.input).shape
         print out_rec_f(self.input, self.hid_init).shape
@@ -995,10 +995,10 @@ if __name__ == '__main__':
             trainer.val_bm.set_preselect_batches([12, 101, 53, 98, 138, 60, 20, 131, 35, 119][:trainer.val_bm.bs])
 
 
-        last_val_epoch = -1
+        last_val_epoch = 0
         while not trainer.converged():
             if trainer.val_bm is not None \
-                                and trainer.epoch % 10 == 0 \
+                                and trainer.epoch % options.save_counter == 0 \
                                 and trainer.epoch != last_val_epoch:
                 last_val_epoch = trainer.epoch
                 trainer.validate()

@@ -49,6 +49,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--no-val', dest='val_b', action='store_false')
     p.add('--export_quick_eval', action='store_true')
     p.add('--save_counter', default=1000, type=int)
+    p.add('--observation_counter', default=5, type=int)
     p.add('--dummy_data', dest='dummy_data_b', action='store_true')
     p.add('--global_edge_len', default=300, type=int)
     p.add('--fast_reset', action='store_true')
