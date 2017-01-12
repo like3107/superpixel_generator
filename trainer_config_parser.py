@@ -65,8 +65,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--network_channels', default=1, type=int)
     p.add('--batch_size', default=16, type=int)
     p.add('--quick_eval', action='store_true')
-    p.add('--no-augment_pretraining', dest='augment_pretraining',
-                                      action='store_false')
+    p.add('--no-augment_pretraining', dest='augment_pretraining', action='store_false')
     p.add('--create_holes', action='store_true', default=False)
 
     p.add('--scale_height_factor', default=100, type=float)

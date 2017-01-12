@@ -890,7 +890,7 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         print 'Gotta Catchem All'
         super(GottaCatchemAllTrainer, self).__init__(options)
         self.update_steps = 1
-        self.observation_counter = 200
+        self.observation_counter = self.options.save_counter
         self.loss_history = [[], []]
 
     def init_BM(self):

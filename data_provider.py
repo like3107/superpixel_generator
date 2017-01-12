@@ -75,11 +75,11 @@ class DataProvider(object):
         assert (options.global_input_len <= self.rl_x)
          # (options.global_input_len <=  self.rl_y)
 
-        self.augmenttations = [ lambda x: x, 
-                                lambda x: x[..., ::-1, :], 
-                                lambda x: x[...,:,::-1], 
-                                lambda x: x[...,::-1,::-1], 
-                                lambda x: transpose_last(x), 
+        self.augmenttations = [ lambda x: x,                                        # no aug
+                                lambda x: x[..., ::-1, :],                          # mirror up down
+                                lambda x: x[...,:,::-1],                            # mirror left right
+                                lambda x: x[...,::-1,::-1],                         # both
+                                lambda x: transpose_last(x),                        # morror diagonal
                                 lambda x: transpose_last(x)[...,::-1,:], 
                                 lambda x: transpose_last(x)[...,:,::-1]]
         self.pick_augmentation()
