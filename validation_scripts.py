@@ -6,8 +6,8 @@ import data_provider as du
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
                           pred_key=None, gt_key=None, slice_by_slice=True,
                           offset_xy=0, gel=None, start_z=None, n_z=None):
-    assert (gt_path != gt)  # specify either gt path or gt as np array
-    assert (pred_path != pred)    # specify either raw path or raw as np array
+    assert (gt_path is not None or gt is not None)  # specify either gt path or gt as np array
+    assert (pred_path is not None or pred is not None)    # specify either raw path or raw as np array
 
     if isinstance(gt_path, str):
         if gel is None:
@@ -25,7 +25,6 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
 
     if isinstance(pred_path, str):
         pred = du.load_h5(pred_path, h5_key=pred_key)[0]
-    print 'gt', gt.shape, 'pred', pred.shape
     assert(gt.shape == pred.shape)
 
     if slice_by_slice:

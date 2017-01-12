@@ -245,8 +245,7 @@ class CremiDataProvider(DataProvider):
             self.height_gt /= (-2 * (max_height/10) ** 2)
             np.exp(self.height_gt, out=self.height_gt)
 
-
-    def find_timo_errors(self, label_batch, input_batch, seeds):
+    def get_timo_segmentation(self, label_batch, input_batch, seeds):
         alpha = 0.9
         # timo parameters 
         threshold_dist_trf = 0.3
@@ -257,30 +256,40 @@ class CremiDataProvider(DataProvider):
         groupSeeds = False
         segmentation = np.zeros_like(label_batch)
 
+        raw_index =  input_batch.shape[1]//4
+        prob_index = raw_index + input_batch.shape[1]//2
+
         for b in range(self.bs):
             seed_mat = np.zeros(label_batch[b, :, :].shape).astype(np.bool)
             seed_plus_pad = np.array(seeds[b])
             seed = seed_plus_pad - self.pad
-            # print 'init', seed[:, 0], seed[:, 1]
             seed_mat[seed[:, 0], seed[:, 1]] = 1.
+
             segmentation[b, :, :], _ = \
-            ws_timo_gtseeds.wsDtSegmentation(alpha*input_batch[b, 1, self.pad:-self.pad, self.pad:-self.pad]\
-                                    +(1-alpha)*input_batch[b, 0, self.pad:-self.pad, self.pad:-self.pad],
+            ws_timo_gtseeds.wsDtSegmentation(alpha*input_batch[b, prob_index, self.pad:-self.pad, self.pad:-self.pad]\
+                                    +(1-alpha)*input_batch[b, raw_index, self.pad:-self.pad, self.pad:-self.pad],
                                   threshold_dist_trf, thres_memb_cc,
                                   thresh_seg_cc, sigma_dist_trf,
                                   somethingunimportant,
                                   seed_mat=seed_mat,
                                   groupSeeds=groupSeeds)
 
-            # note: this id translation requires that 
-            # self.global_claims[b, seed_plus_pad[:, 0], seed_plus_pad[:, 1]]
-            # is a range(1, #seeds_per_batch b)
-            # requires seed_method == "gt"
-            assert(self.options.seed_method == "gt")
-            # map to gt id
-            gt_id_map = np.zeros((len(seed)+1))
-            for i, s in enumerate(segmentation[b, seed[:, 0], seed[:, 1]]):
-                gt_id_map[s] = i+1
+
+        return segmentation
+
+    def find_timo_errors(self, label_batch, input_batch, seeds):
+        segmentation = self.get_timo_segmentation(label_batch, input_batch, seeds)
+        for b in range(self.bs):
+            seed_mat = np.zeros(label_batch[b, :, :].shape).astype(np.bool)
+            seed_plus_pad = np.array(seeds[b])
+            seed = seed_plus_pad - self.pad
+            seed_mat[seed[:, 0], seed[:, 1]] = 1
+
+            # map gt_id_map: ws id -> gt id
+            gt_ids = label_batch[b][seed_mat]
+            ws_ids = segmentation[b][seed_mat]
+            gt_id_map = np.zeros((np.max(ws_ids)+1))
+            gt_id_map[ws_ids] = gt_ids
             segmentation[b] = gt_id_map[segmentation[b]]
         return segmentation != label_batch
 

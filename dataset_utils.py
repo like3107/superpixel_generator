@@ -269,6 +269,11 @@ class HoneyBatcherPredict(object):
                 seeds.append([seed[0], seed[1]])
             self.global_seeds.append(seeds)
 
+    def get_ws_segmentation(self):
+        return self.batch_data_provider.get_timo_segmentation(self.global_label_batch,
+                                                              self.global_input_batch, 
+                                                              self.global_seeds)
+
     def find_hard_regions(self):
         self.hard_regions = self.batch_data_provider.find_timo_errors(\
             self.global_label_batch, self.global_input_batch ,self.global_seeds)

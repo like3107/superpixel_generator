@@ -524,6 +524,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
     def validate(self):
         self.val_bm.init_batch()
+
+        timo_seg = self.val_bm.get_ws_segmentation()
+        print "timo reference validation score"
+        vs.validate_segmentation(timo_seg,self.val_bm.global_label_batch)
+
         inputs = self.val_bm.global_input_batch[:, :, :-1, :-1]
         self.precomp_input = self.builder.fc_prec_conv_body(inputs)
 
@@ -550,6 +555,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         for b in range(min(5, self.val_bm.bs)):
             self.val_bm.draw_debug_image("%i_validation_b_%03i_i_%08i_f_%i" % (b, 0, self.iterations, self.free_voxel),
                                         path=self.image_path_validation, b=b)
+
         return score
 
     def predict(self):
