@@ -58,6 +58,8 @@ def get_options(script='training', ignore_config=False):
     p.add('--master', action='store_true')
     p.add('--merge_seeds', dest='merge_seeds', action='store_true')
     p.add('--train_merge', dest='train_merge', action='store_true')
+    p.add('--dropout_b', action='store_true', )
+    p.add('--bnorm_b', action='store_true')
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)
@@ -77,8 +79,6 @@ def get_options(script='training', ignore_config=False):
     p.add('--backtrace_length', default=5, type=int)
     p.add('--n_batch_errors', default=1, type=int)
 
-
-
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)
     p.add('--reset_after_fine_tune', action='store_true')
@@ -89,6 +89,8 @@ def get_options(script='training', ignore_config=False):
     p.add('--no-aug-ft', dest='augment_ft', action='store_false')
     p.add('--optimizer', default="nesterov", type=str)
     p.add('--learningrate', default=0.000001, type=float)
+
+
     # experience replay
     # clip_method="exp20"
     p.add('--exp_bs', default=16, type=int)

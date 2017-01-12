@@ -51,17 +51,24 @@ class NetBuilder:
         filts =         [5,     3,      3,      3,      3,      3,      3,      1,      1,      1]
         dils  =         [1,     1,      2,      4,      8,      16,     1,      1,      1,      1]
         n_filts =       [32,    32,     64,    64,    128,    128,    256,    2048,     128,    n_classes]
-        # debug
-        dropouts =   [True, True,   True,   True,   True,   True,   True,   False,  False,   False]
         regs        =   [True, True,   True,   True,   True,   True,   True,   True,   True,    False]
-        # batch_norms = [False] * len(n_filt)
+
+        nfs = len(n_filts)
+        dropouts, bnorms = [False] * nfs, [False] * nfs
+        if self.options.dropout_b:
+            print 'using dropout'
+            dropouts =   [True, True,   True,   True,   True,   True,   True,   False,  False,   False]
+        if self.options.bnorm_b:
+            print 'using bnorm'
+            bnorms =   [True, True,  True,   True,   True,   True,   True,   False,  False,   False]
         ELU = las.nonlinearities.elu
         ReLU = las.nonlinearities.rectify
         ident = las.nonlinearities.identity
         act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU, ReLU,   cs.elup1]
         names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc', 'fc', 'fc']
-        assert(len(filts) == len(dils) and len(filts) == len(dropouts) and len(filts) == len(regs) and
-               len(filts) == len(n_filts) and len(names) == len(act_fcts) and len(filts) == len(names))
+        assert(nfs == len(dils) and nfs == len(dropouts) and
+               nfs == len(n_filts) and len(names) == len(act_fcts) and nfs == len(names) and 
+                nfs == len(bnorms))
         if l_image_in is None:
             layers['l_in_00'] = L.InputLayer((None, n_channels, None, None))
         else:
@@ -69,15 +76,14 @@ class NetBuilder:
         l_prev = layers['l_in_00']
         i = -1
         l_seconds_last = None
-        for filt, dil, n_filt, dropout, act_fct, reg, name in \
-                zip(filts, dils, n_filts, dropouts, act_fcts, regs, names):
+        for filt, dil, n_filt, dropout, bnorm, reg, act_fct, name in \
+                zip(filts, dils, n_filts, dropouts, bnorms, regs, act_fcts, names):
             i += 1
+            l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), nonlinearity=act_fct, name=name)
+            if bnorm:
+                l_next = L.batch_norm(l_next)
             if dropout:
-                l_next = L.DropoutLayer(
-                    L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), name=name, nonlinearity=act_fct))
-            else:
-                l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), name=name,
-                                              nonlinearity=act_fct)
+                l_next = L.DropoutLayer(l_next)
             if not reg:
                 l_next.params[l_next.W].remove('regularizable')
             layers[name + '_%02i' %i] = l_next
@@ -110,10 +116,14 @@ class NetBuilder:
         layers['l_in_dyn_00'] = L.InputLayer((None, n_channels_dynamic, None, None))
         l_prev = layers['l_in_dyn_00']
         for i, (filt, dil, n_filt, name) in enumerate(zip(filts, dils, n_filts, names)):
-            l_next = L.DropoutLayer(L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil)), name=name)
+
+            l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil))
+            if self.options.bnorm_b:
+                l_next = L.batch_norm(l_next, name=name)
+            if self.options.dropout_b:
+                l_next = L.DropoutLayer(l_next)
             layers['dyn_conv_%02i' % (i + 1)] = l_next
             l_prev = l_next
-
 
         # f = theano.function([layers['l_in_dyn_00'].input_var],
         #                     [L.get_output(layers['dyn_conv_01']),

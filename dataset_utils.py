@@ -1348,6 +1348,7 @@ class HoneyBatcherE(HoneyBatcherPath):
                                         lower_bound, Id, cross_d, center,
                                            input_time=self.global_time)
 
+
 class HoneyBatcherBatcher(HoneyBatcherPath):
     """
     batch control class that propagates hidden states along the minimal spanning tree
@@ -1355,6 +1356,7 @@ class HoneyBatcherBatcher(HoneyBatcherPath):
     def __init__(self, options):
         super(HoneyBatcherPath, self).__init__(options)
         self.global_hidden_states = None
+
 
 class HoneyBatcherPatchFast(HoneyBatcherPath):
     def __init__(self, options):
@@ -1647,6 +1649,7 @@ def augment_batch(batch, gt=None, direction=None):
 
     return augmented_batch
 
+
 def average_ouput(output, ft=False):
     aug_out_shape = list(output.shape)
     aug_out_shape[0] = 7
@@ -1666,6 +1669,7 @@ def average_ouput(output, ft=False):
         mean_out[:,3,:,:] = np.mean(augm_out[:,c,[3,3,1,1,2,0,2],:,:],axis=1)
     return mean_out
 
+
 def grad_to_height(grad):
     height = np.empty((grad.shape[0],4,1,1),dtype=grad.dtype)
     height[:,0,:,:] = grad[:,0,:,:]-grad[:,1,:,:]
@@ -1674,12 +1678,14 @@ def grad_to_height(grad):
     height[:,3,:,:] = grad[:,0,:,:]-grad[:,2,:,:]
     return height
 
+
 def height_to_grad(height):
     grad = np.empty((height.shape[0],3,1,1),dtype=height.dtype)
     grad[:,0,:,:] = height.mean(axis=1)
     grad[:,1,:,:] = height[:,2,:,:]-height[:,0,:,:]
     grad[:,2,:,:] = height[:,1,:,:]-height[:,3,:,:]
     return grad
+
 
 def height_to_fc_height_gt(height):
     fc_height_shape = list(height.shape)
@@ -1699,6 +1705,7 @@ def height_to_fc_height_gt(height):
     fc_height[:, 3, :, :-1] = height[:, :, 1:]
     fc_height[:, 3, :, -1] = height[:, :, -1]
     return fc_height
+
 
 def height_to_fc_edge_gt(height):
     edge_height_shape = list(height.shape)
@@ -1850,6 +1857,7 @@ class HoneyBatcherGonzales(HoneyBatcherPath):
     def gen_calim_c(self, b, x, y):
         return np.array([self.check_claims(b, cx, cy, 0) for cx,cy in zip(x,y)],dtype=bool)
 
+
 class MergeDict(dict):
     def __missing__(self, key):
         return key
@@ -1863,6 +1871,7 @@ class MergeDict(dict):
     def merge(self, id1, id2):
         self[max(id1, id2)] = min(id1, id2)
         return min(id1, id2), max(id1, id2)
+
 
 class HungryHoneyBatcher(HoneyBatcherPath):
 
@@ -1956,6 +1965,7 @@ class HungryHoneyBatcher(HoneyBatcherPath):
         # translate ids if merged
         translated_ids = [self.merge_dict[b].get_merge_id(ids[b]) for b in range(self.bs)]
         return centers, translated_ids, heights
+
 
 if __name__ == '__main__':
     # generate_dummy_data2(2, edge_len=50, patch_len=40,
