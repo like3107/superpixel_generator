@@ -435,7 +435,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # private
         self.add_height_b = False
         # All no padding
-        self.global_directionmap_batch = np.zeros(self.image_shape, dtype=np.int) - 1
+        self.global_directionmap_batch = np.zeros(self.image_shape, dtype=np.int) - 1       # post PQ
         self.global_timemap = np.empty(self.image_shape, dtype=np.int)
         self.global_errormap = np.zeros(self.image_shape, dtype=np.int)
 
@@ -1439,7 +1439,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
         batch, center, Id = [error['batch'], error[key_center], error[key_id]]
 
         if not error["slow_intruder"] and error["first_rec"] and 'e2' in key_time:
-            direction = error[key_direction]
+            direction = error[key_direction]        # first e2 of fast intruder (last in time) is not claimed
             error["first_rec"] = False
         else:
             direction = self.global_directionmap_batch[batch, center[0] - self.pad, center[1] - self.pad]

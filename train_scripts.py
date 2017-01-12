@@ -415,11 +415,10 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
 
             batch_ft = exp.flatten_stack(batch_ft).astype(np.float32)
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
-
-            ft_loss_train, individual_loss_fine, _, heights = \
-                    self.builder.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:],
-                                           batch_dir_ft)
-            if np.any(individual_loss_fine <0):
+            ft_loss_train, individual_loss_fine, heights = self.builder.loss_train_fine_f(batch_ft[:, :2],
+                                                                                          batch_ft[:, 2:],
+                                                                                          batch_dir_ft)
+            if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)
             print 'loss ft', ft_loss_train
             # print 'error type II ', self.bm.error_II_type
@@ -607,7 +606,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             sequ_len = self.options.backtrace_length
             print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
                 'rnn mask', batch_mask_ft.shape
-            ft_loss_train, individual_loss_fine, heights, ft_loss_noreg, stat_conv, dyn_conv, hiddens_rec, reco_merges, reco_befo_rec = \
+            ft_loss_train, individual_loss_fine, heights = \
                     self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
                                                    batch_mask_ft, options.backtrace_length)
             claims = self.bm.global_claims[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad]
@@ -641,6 +640,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         u.plot_train_val_errors([self.h1s, self.h2s], self.update_history,
                                 self.save_net_path + '/heights.png', names=['h1s', 'h2s'],
                                 log_scale=False)
+
     def debug_plots(self, all_heights, masks, hiddens, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec):
 
         for mask in masks:
@@ -816,13 +816,16 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                             batch_mask_ft = np.array(h5f['batch_mask_ft'])
                             length = h5f['options.backtrace_length'].value
 
-                            ft_loss_train, individual_loss_fine, heights, ft_loss_noreg, stat_conv, dyn_conv, hiddens_rec, reco_merges, reco_befo_rec = \
+                            ft_loss_train, individual_loss_fine, heights, = \
                                         self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft, options.backtrace_length)
 
                             self.save_net(name=self.current_net_name)
                             self.save_net()
                             os.system('rm '+f)
-                            self.draw_loss(ft_loss_train, ft_loss_noreg)
+                            claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
+                            # print claims.shape, self.bm.global_label_batch.shape
+                            ft_loss_noreg = vs.validate_claims(claims, self.bm.global_label_batch)
+                            self.draw_loss(ft_loss_noreg, ft_loss_noreg)        # yes twice the same but actual loss
                             self.iterations += 1
                             self.epoch += 1
                 except IOError:
