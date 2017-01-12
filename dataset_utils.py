@@ -763,11 +763,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                     #                                    reverse_direction]
                     # raise Exception("no match found for path end")
 
-    def weitght_importance_by_length(self):
+    def weight_importance_by_length(self):
         for k in self.global_error_dict:
             self.global_error_dict[k]['importance'] = self.global_error_dict[k]['e1_length']
 
-    def weitght_importance_by_hard_regions(self):
+    def weight_importance_by_hard_regions(self):
         for k in self.global_error_dict:
             self.global_error_dict[k]['importance'] = self.global_error_dict[k]['e1_length']
             batch = self.global_error_dict[k]['batch']
@@ -775,6 +775,16 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             pos2 = np.array(self.global_error_dict[k]['e2_pos']) - self.pad
             if self.hard_regions[batch,pos1[0],pos1[1]] or self.hard_regions[batch,pos2[0],pos2[1]]:
                 self.global_error_dict[k]['importance'] *= 1000
+
+    def weight_importance_by_overflow(self):
+        for k in self.global_error_dict:
+            b = self.global_error_dict[k]['batch']
+            s_gt_id = self.global_error_dict[k]['small_gtid']
+            underflow = np.sum(self.global_errormap[b, 1][self.global_label_batch[b]==s_gt_id])
+            area = np.sum(self.global_label_batch[b]==s_gt_id)
+            area = max(area, 200)
+            self.global_error_dict[k]['importance'] = float(underflow) / area
+            print underflow / area
 
     def get_plateau_indicator(self):
         return self.global_prediction_map_nq  < self.global_prediction_map
@@ -792,7 +802,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.set_plateau_indicator()
         self.find_type_I_error()
         self.find_source_of_II_error()
-        self.weitght_importance_by_hard_regions()
+        self.weight_importance_by_hard_regions()
 
     def plot_h1h2_errors(self, image_file, hist_file):
 
@@ -1108,11 +1118,13 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         e2_pos = np.array([np.array(e["e2_pos"]) - self.pad
                   for e in self.global_error_dict.values()
-                  if e["batch"] == b])
+                  if e["batch"] == b and e["used"]])
         e2_color = ["g" if e["used"] else 'r'\
-                 for e in self.global_error_dict.values() if e["batch"] == b]
+                 for e in self.global_error_dict.values() if e["batch"] == b  and e["used"]]
         e2_importance_color = ["g" if e["importance"] > 1000 else 'r'\
-                 for e in self.global_error_dict.values() if e["batch"] == b]
+                 for e in self.global_error_dict.values() if e["batch"] == b  and e["used"]]
+
+
         plot_images.append({"title": "Claims",
                             'cmap': "rand",
                             'scatter':e2_pos,
@@ -1122,9 +1134,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
         e1_pos = np.array([np.array(e["e1_pos"]) - self.pad
                   for e in self.global_error_dict.values()
-                  if e["batch"] == b])
+                  if e["batch"] == b  and e["used"]])
         e1_color = ["g" if e["used"] else 'r'\
-                 for e in self.global_error_dict.values() if e["batch"] == b]
+                 for e in self.global_error_dict.values() if e["batch"] == b  and e["used"]]
         plot_images.append({"title": "Ground Truth Label",
                             'scatter': e1_pos,
                             'scatter_color': e1_color,

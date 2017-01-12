@@ -995,7 +995,7 @@ if __name__ == '__main__':
             trainer.val_bm.set_preselect_batches([12, 101, 53, 98, 138, 60, 20, 131, 35, 119][:trainer.val_bm.bs])
 
 
-        last_val_epoch = -1
+        last_val_epoch = 0
         while not trainer.converged():
             if trainer.val_bm is not None \
                                 and trainer.epoch % 10 == 0 \
