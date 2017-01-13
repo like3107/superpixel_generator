@@ -81,6 +81,8 @@ def get_options(script='training', ignore_config=False):
     p.add('--n_recurrent_hidden', default=128, type=int)
     p.add('--backtrace_length', default=5, type=int)
     p.add('--n_batch_errors', default=1, type=int)
+    p.add('--weight_fct', default="hard", type=str)
+
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)

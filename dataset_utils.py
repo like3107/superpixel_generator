@@ -818,7 +818,14 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.set_plateau_indicator()
         self.find_type_I_error()
         self.find_source_of_II_error()
-        self.weight_importance_by_hard_regions()
+        if self.options.weight_fct == "hard":
+            self.weight_importance_by_hard_regions()
+        elif self.options.weight_fct == "overflow":
+            self.weight_importance_by_overflow()
+        elif self.options.weight_fct == "length":
+            self.weight_importance_by_length()
+        else:
+            raise Exception('Error: unknown weighting scheme %s'%self.options.weight_fct)
 
     def plot_h1h2_errors(self, image_file, hist_file):
 
