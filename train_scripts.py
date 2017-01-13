@@ -242,7 +242,7 @@ class FinePokemonTrainer(PokemonTrainer):
 
     def update_BM(self):
         inputs, gt, seeds, ids = self.bm.get_batches()
-        heights = self.prediction_f(inputs[:, :2], inputs[:, 2:])
+        heights = self.prediction_f(inputs[:, :self.options.claim_channels], inputs[:, self.options.claim_channels:])
         self.bm.update_priority_queue(heights, seeds, ids)
         return inputs, heights, gt
 
@@ -273,7 +273,7 @@ class FinePokemonTrainer(PokemonTrainer):
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
 
             ft_loss_train, individual_loss_fine, _, heights = \
-                    self.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:],
+                    self.loss_train_fine_f(batch_ft[:, :self.options.claim_channels], batch_ft[:, self.options.claim_channels:],
                                            batch_dir_ft)
 
             print "ft_loss_train", ft_loss_train
@@ -380,7 +380,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                                            seeds[:, 0] - self.bm.pad,
                                            seeds[:, 1] - self.bm.pad]
         precomp_input = precomp_input[:, :, None, None]
-        heights = self.builder.probs_f_fc(claims[:, :2], precomp_input)
+        heights = self.builder.probs_f_fc(claims[:, :self.options.claim_channels], precomp_input)
         self.bm.update_priority_queue(heights, seeds, ids)
         return
 
@@ -483,8 +483,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         sequ_len = 1
         rnn_mask = np.ones((bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
-
-        height_probs, hidden_out = self.builder.probs_f_fc(inputs[:, :2], precomp_input_sliced,  hiddens, rnn_mask, 1)
+        height_probs, hidden_out = self.builder.probs_f_fc(inputs[:, :self.options.claim_channels],
+                                                                  precomp_input_sliced,  hiddens, rnn_mask, 1)
 
         # if np.all(centers == self.debug_pos):
         #     verbose = True
@@ -606,8 +606,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
                 'rnn mask', batch_mask_ft.shape
             ft_loss_train, individual_loss_fine, heights = \
-                    self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
-                                                   batch_mask_ft, options.backtrace_length)
+                    self.builder.loss_train_fine_f(batch_ft[:, :self.options.claim_channels, :, :],
+                                                   batch_ft[:, self.options.claim_channels:, :, :],
+                                                   batch_inits, batch_mask_ft, options.backtrace_length)
             claims = self.bm.global_claims[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad]
             # print claims.shape, self.bm.global_label_batch.shape
             ft_loss_noreg = vs.validate_claims(claims, self.bm.global_label_batch)
@@ -750,8 +751,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                         print 'pred time', self.bm.global_timemap[0, self.debug_pos_orig[0], self.debug_pos_orig[1]]
                         verbose = True
                         # self.mem[0, 1, 1, 1] = 2
-                        print 'input comparison', np.sum(np.abs(self.mem[0, :, sx:ex, sy:ey] - batch_ft[number, :2, :, :]))
-                        print 'stat comparison', np.sum(np.abs(self.mem_stat[0, :, 1:-1, 1:-1] - batch_ft[number, 2:, :, :]))
+                        print 'input comparison', np.sum(np.abs(self.mem[0, :, sx:ex, sy:ey] - batch_ft[number, :self.options.claim_channels, :, :]))
+                        print 'stat comparison', np.sum(np.abs(self.mem_stat[0, :, 1:-1, 1:-1] - batch_ft[number, self.options.claim_channels:, :, :]))
                         print 'merge comparison', np.sum(np.abs(self.mem_merge[:, dx, dy] - reco_merges[number, :, 0, 0]))
                         print 'merge diff stat', np.sum(np.abs(self.mem_merge[320-64:, dx, dy] - reco_merges[number, 320-64:, 0, 0]))
                         print 'befo rec comparison', np.sum(np.abs(self.mem_befo_rec[dir + b*4,0 , :] - reco_befo_rec[0, 0, :]))
@@ -857,8 +858,8 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                     'rnn mask', batch_mask_ft.shape
 
                 with h5py.File(self.exp_path+"/%i_%f.h5"%(os.getpid(), time.time()),"w") as f:
-                    f.create_dataset('batch_ft1',data=batch_ft[:, :2, :, :])
-                    f.create_dataset('batch_ft2',data=batch_ft[:, 2:, :, :])
+                    f.create_dataset('batch_ft1',data=batch_ft[:, :self.options.claim_channels, :, :])
+                    f.create_dataset('batch_ft2',data=batch_ft[:, self.options.claim_channels:, :, :])
                     f.create_dataset('batch_inits',data=batch_inits)
                     f.create_dataset('batch_mask_ft',data=batch_mask_ft)
                     f.create_dataset('options.backtrace_length',data=options.backtrace_length)

@@ -92,7 +92,7 @@ class NetBuilder:
         return layers, fov, None
 
     # static and dyn FT NET
-    def build_v8_hydra_dilated_ft_joint(self, l_image_in=None, l_claims_in=None, n_channels_dynamic = 2):
+    def build_v8_hydra_dilated_ft_joint(self, l_image_in=None, l_claims_in=None):
         print 'building recurrent joint net'
         layers_static, fov, _ = self.build_net_v8_dilated(l_image_in=l_image_in)
         self.layers_static = layers_static
@@ -113,7 +113,7 @@ class NetBuilder:
         n_filts =   [32, 32, 64, 64]
         names =     ['ft', 'ft', 'ft', 'ft']
 
-        layers['l_in_dyn_00'] = L.InputLayer((None, n_channels_dynamic, None, None))
+        layers['l_in_dyn_00'] = L.InputLayer((None, self.options.claim_channels, None, None))
         l_prev = layers['l_in_dyn_00']
         for i, (filt, dil, n_filt, name) in enumerate(zip(filts, dils, n_filts, names)):
 

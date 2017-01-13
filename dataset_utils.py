@@ -62,7 +62,7 @@ class HoneyBatcherPredict(object):
 
 
         # private
-        self.n_channels = options.network_channels + 2
+        self.n_channels = options.network_channels + options.claim_channels
         self.options = options
         self.lowercomplete_e = options.lowercomplete_e
         self.max_penalty_pixel = options.max_penalty_pixel
@@ -154,6 +154,9 @@ class HoneyBatcherPredict(object):
         out[0, :, :][labels == -1] = 0                    # the others
         out[1, :, :][labels == Id] = 1                    # me
 
+        if len(out) > 2:
+            out[2, :, :][labels == 0] = 1
+
         if self.options.claim_aug == "height":
             h = np.array(self.global_heightmap_batch[b,
                                                      max(0, center[0] - self.pad):center[0] + self.pad + 1,
@@ -163,6 +166,7 @@ class HoneyBatcherPredict(object):
             hx = max(self.pad-center[0],0)
             hy = max(self.pad-center[1],0)
             hsx, hsy = h.shape
+            # for i in range(len(out)): we could loop here, but it makes no sense for the non claimed region(2)
             out[0, hx:hx+hsx, hy:hy+hsy] *= h
             out[1, hx:hx+hsx, hy:hy+hsy] *= h
         return out
@@ -328,8 +332,8 @@ class HoneyBatcherPredict(object):
                 time_put
 
     def get_network_input(self, center, b, Id, out):
-        self.crop_mask_claimed(center, b, Id, out=out[0:2])
-        self.crop_input(center, b, out=out[2:])
+        self.crop_mask_claimed(center, b, Id, out=out[0:self.options.claim_channels])
+        self.crop_input(center, b, out=out[self.options.claim_channels:])
         return out
 
     def get_batches(self):
@@ -343,7 +347,7 @@ class HoneyBatcherPredict(object):
     def get_batch_i(self,  b, center, height, Id, raw_batch):
         assert (self.global_claims[b, center[0], center[1]] == 0)
         self.set_claims(b, center, Id)
-        raw_batch[b, :, :, :] = self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
+        self.get_network_input(center, b, Id, raw_batch[b, :, :, :])
         # check whether already pulled
         self.global_heightmap_batch[b, center[0] - self.pad, center[1] - self.pad] = height
 

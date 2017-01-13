@@ -67,6 +67,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--pre_train_iter', default=600000, type=int)
     p.add('--regularization', default=10. ** 1, type=float)
     p.add('--network_channels', default=1, type=int)
+    p.add('--claim_channels', default=2, type=int)
     p.add('--batch_size', default=16, type=int)
     p.add('--quick_eval', action='store_true')
     p.add('--no-augment_pretraining', dest='augment_pretraining', action='store_false')
