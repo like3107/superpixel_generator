@@ -88,7 +88,6 @@ class DataProvider(object):
         self.sel_aug_f = random.choice(self.augmenttations)
 
     def apply_augmentation(self, input):
-        print "using data augmentation"
         input[:] = self.sel_aug_f(input) 
 
     def set_slices(self, o):

@@ -153,6 +153,18 @@ class HoneyBatcherPredict(object):
         out[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
         out[0, :, :][labels == -1] = 0                    # the others
         out[1, :, :][labels == Id] = 1                    # me
+
+        if self.options.claim_aug == "height":
+            h = np.array(self.global_heightmap_batch[b,
+                                                     max(0, center[0] - self.pad):center[0] + self.pad + 1,
+                                                     max(0, center[1] - self.pad):center[1] + self.pad + 1])
+            h[h<0] = 0
+            h[h==np.inf] = 0
+            hx = max(self.pad-center[0],0)
+            hy = max(self.pad-center[1],0)
+            hsx, hsy = h.shape
+            out[0, hx:hx+hsx, hy:hy+hsy] *= h
+            out[1, hx:hx+hsx, hy:hy+hsy] *= h
         return out
 
     def crop_height_map(self, center, b):
