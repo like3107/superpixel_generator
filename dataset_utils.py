@@ -292,8 +292,7 @@ class HoneyBatcherPredict(object):
 
     def find_hard_regions(self):
         self.hard_regions = self.batch_data_provider.find_timo_errors(\
-            self.global_label_batch, self.global_input_batch ,self.global_seeds)
-
+            self.global_label_batch, self.global_input_batch, self.global_seeds)
         l = self.global_label_batch.shape[1]
         for b, seeds in enumerate(self.global_seeds):
             pos = np.array(seeds) - self.pad
@@ -456,7 +455,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.global_errormap = np.zeros(self.image_shape, dtype=np.int)
 
         self.n_batch_errors = options.n_batch_errors
-
+        self.error_selections = None
         self.global_error_dict = None
         self.crossing_errors = None
         self.find_errors_b = options.fine_tune_b and not options.rs_ft
@@ -824,6 +823,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             self.weight_importance_by_overflow()
         elif self.options.weight_fct == "length":
             self.weight_importance_by_length()
+        elif self.options.weight_fct == "none":
+            for k in self.global_error_dict:
+                self.global_error_dict[k]['importance'] = 1.
         else:
             raise Exception('Error: unknown weighting scheme %s'%self.options.weight_fct)
 
@@ -859,7 +861,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         plt.clf()
         # from IPython import embed; embed()
         return np.mean(h1), np.mean(h2)
-
 
     def set_plateau_indicator(self):
         self.global_plateau_indicator = self.global_prediction_map_nq  < self.global_prediction_map
@@ -1016,7 +1017,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                                             id_type + "_id", err_type + "_direction")[:, :, 1:-1, 1:-1]
             error_selections.append(error_selection)
         return reconst_es[0], reconst_es[1]
-
 
     def serialize_to_h5(self, h5_filename, path="./../data/debug/serial/"):
         if not exists(path):

@@ -43,6 +43,8 @@ class NetBuilder:
         Returns
         -------
         """
+        assert (self.options.dropout_b or self.options.bnorm_b)     # both off not implemented
+
         n_channels = self.options.network_channels
         layers = {}
         fov = 69
@@ -81,7 +83,7 @@ class NetBuilder:
             i += 1
             l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), nonlinearity=act_fct, name=name)
             if bnorm:
-                l_next = L.batch_norm(l_next)
+                l_next = L.batch_norm(l_next,  epsilon=1e-2, alpha=0.01)    # alpha forget rate (1 only recent)
             if dropout:
                 l_next = L.DropoutLayer(l_next)
             if not reg:
@@ -119,7 +121,7 @@ class NetBuilder:
 
             l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil))
             if self.options.bnorm_b:
-                l_next = L.batch_norm(l_next, name=name)
+                l_next = L.batch_norm(l_next, name=name,  epsilon=1e-2, alpha=0.01)
             if self.options.dropout_b:
                 l_next = L.DropoutLayer(l_next)
             layers['dyn_conv_%02i' % (i + 1)] = l_next
@@ -207,7 +209,7 @@ class NetBuilder:
         if L1_weight > 0:
             loss_train = loss_valid + L1_weight * L1_norm
         if update == 'adam':
-            updates = las.updates.adam(loss_train, all_params)
+            updates = las.updates.adam(loss_train, all_params, epsilon=1.e-6)
         elif update == 'sgd':
             updates = las.updates.sgd(loss_train, all_params, 0.001)
         elif update == 'nesterov':
@@ -287,17 +289,22 @@ class NetBuilder:
 
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
+        weight_vector = T.fvector()
+        RI_err = T.fscalar()
         loss_train, individual_batch, loss_valid = self.get_loss_fct(layers, self.options.backtrace_length,
-                                                                     l_out_train, mask, L1_weight)
+                                                                     l_out_train, mask, L1_weight,
+                                                                     weight_vector=weight_vector,
+                                                                     RI_error=RI_err)
 
-        updates = self.get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
-        # debug
+        updates, grads_mean, grads_std = self.get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
+
         self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
                                                   layers['l_in_static_00'].input_var,
                                                   layers['l_in_hid_08'].input_var,
                                                   layers['l_in_rec_mask_08'].input_var,
-                                                  self.sequ_len],
-                                                 [loss_train, individual_batch, l_out_prediciton],
+                                                  self.sequ_len, weight_vector, RI_err],
+                                                 [loss_train, individual_batch, l_out_prediciton,
+                                                  grads_mean, grads_std],
                                                  updates=updates)
         assert (updates is not None)
 
@@ -305,7 +312,7 @@ class NetBuilder:
 
 
     def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True,
-                     dist_vector=1):
+                     weight_vector=1, RI_error=1):
         bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
         step = backtrace_length
         sum_height = l_out_train
@@ -315,7 +322,7 @@ class NetBuilder:
                 # automatically broadcasts
                 disc_vec = (np.zeros(backtrace_length, dtype=np.float32) + 0.9) ** np.arange(backtrace_length - 1, -1, -1,
                                                                                              dtype=np.float32)
-            sum_height = T.sum(sum_height.reshape((bs, backtrace_length)) * disc_vec * mask, axis=1) * dist_vector
+            sum_height = T.sum(sum_height.reshape((bs, backtrace_length)) * disc_vec * mask, axis=1) * weight_vector
         individual_batch = (sum_height[bs / 2:] - sum_height[:bs / 2])
 
         L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
@@ -324,11 +331,18 @@ class NetBuilder:
         if L1_weight > 0:
             print 'reguralizing with', L1_weight
             loss_train = loss_valid + L1_weight * L1_norm
+        loss_train *= RI_error
         return loss_train, individual_batch, loss_valid
 
 
     def get_update_rule(self, loss_train, all_params, optimizer=None):
         self.options.learningrate_shared = None
+        print 'all params', all_params, loss_train
+        i = 1
+
+        grads_mean = T.mean(T.stacklists([T.mean(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+
         if optimizer == "nesterov":
             print "using nesterov_momentum with learningrate", self.options.learningrate
             lr = theano.shared(np.array(self.options.learningrate, dtype=np.float32))
@@ -342,7 +356,7 @@ class NetBuilder:
             updates = las.updates.sgd(loss_train, all_params, self.options.learningrate)
         else:
             raise Exception("unknown optimizer %s" % optimizer)
-        return updates
+        return updates, grads_mean, grads_std
 
 
 if __name__ == '__main__':

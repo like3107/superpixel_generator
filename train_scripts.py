@@ -57,6 +57,7 @@ class PokemonTrainer(object):
         self.free_voxel = self.free_voxel_empty
         self.update_history = []
         self.loss_history = [[], []]
+        self.grad_history = [[], []]
         self.val_loss_history = [[], []]
         self.val_update_history = []
         self.epoch = 0
@@ -135,25 +136,26 @@ class PokemonTrainer(object):
     def converged(self):
         return self.iterations >= self.options.pre_train_iter
 
-    def draw_debug(self, reset=False, image_path=None, image_name='train'):
+    def draw_debug(self, reset=False, image_path=None, image_name='train', counter=None):
         if reset:
             image_path = self.image_path_reset
         elif image_path is None:
             image_path = self.image_path
-
+        if counter is None:
+            counter=self.iterations
         for b in range(self.bm.bs):
-            self.bm.draw_debug_image(
-                "%s_b_%03i_i_%08i_f_%i" %
-                (image_name, b, self.iterations, self.free_voxel),
-                path=image_path, b=b)
+            self.bm.draw_debug_image("%s_b_%03i_i_%08i_f_%i" % (image_name, b, counter, self.free_voxel),
+                                     path=image_path, b=b)
 
-    def save_net(self, path=None, name=None):
+    def save_net(self, path=None, name=None, counter=None):
         if path is None:
             path = self.net_param_path
+        if counter is None:
+            counter = self.iterations
         if name is None:
-            name = 'net_%i' % self.iterations
-
+            name = 'net_%i' % counter
         u.save_network(path, self.l_out, name, options=self.options)
+        return
 
     def load_net(self, file_path=None):
         if file_path is None:
@@ -414,9 +416,8 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
 
             batch_ft = exp.flatten_stack(batch_ft).astype(np.float32)
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
-            ft_loss_train, individual_loss_fine, heights = self.builder.loss_train_fine_f(batch_ft[:, :2],
-                                                                                          batch_ft[:, 2:],
-                                                                                          batch_dir_ft)
+            ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
+                      self.builder.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:], batch_dir_ft)
             if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)
             print 'loss ft', ft_loss_train
@@ -543,7 +544,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         self.val_loss_history[0].append(1-score['Adapted Rand error'])
         self.val_loss_history[1].append(1-score['Adapted Rand error precision'])
-        self.val_update_history.append(self.iterations)
+        self.val_update_history.append(self.images_counter)
 
         u.plot_val_errors([self.val_loss_history[0],
                                  self.val_loss_history[1]],
@@ -591,46 +592,87 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.bm.find_global_error_paths()
         print "found ",self.bm.count_new_path_errors(),"errors"
         if self.bm.count_new_path_errors() > 0:
-            # print "plotting h12", self.image_path+"/errorheights_i_%08i.png" % (self.iterations)
-            # h1, h2 = self.bm.plot_h1h2_errors(self.image_path+"/errorheights_i_%08i.png" %
-            #                                   (self.iterations), self.image_path+"/hist_heights_i_%08i.png" %
-            #                                   (self.iterations))
-
-            error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
-                self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
-
-            batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
-            batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
-            batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
-
-            sequ_len = self.options.backtrace_length
-            print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
-                'rnn mask', batch_mask_ft.shape
-            ft_loss_train, individual_loss_fine, heights = \
-                    self.builder.loss_train_fine_f(batch_ft[:, :self.options.claim_channels, :, :],
-                                                   batch_ft[:, self.options.claim_channels:, :, :],
-                                                   batch_inits, batch_mask_ft, options.backtrace_length)
-            claims = self.bm.global_claims[:,self.bm.pad:-self.bm.pad,self.bm.pad:-self.bm.pad]
+            train_eval, grad_mean, grad_std = self.path_training()
             # print claims.shape, self.bm.global_label_batch.shape
-            ft_loss_noreg = vs.validate_claims(claims, self.bm.global_label_batch)
+            self.draw_loss(train_eval, train_eval, counter=self.images_counter)
+            self.draw_grads(grad_mean, grad_mean + grad_std)
+            # self.draw_heights(h1, h2)
 
-        self.draw_loss(ft_loss_noreg, ft_loss_noreg)
+            # self.debug_plots(heights, batch_mask_ft, hiddens_rec, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec)
 
         if self.images_counter % self.options.save_counter == 0:
-            self.save_net()
+            self.save_net(counter=self.images_counter)
         if self.images_counter % self.options.observation_counter == 0:
-            trainer.draw_debug(reset=True)
+            trainer.draw_debug(reset=True, counter=self.images_counter)
         # exit();
 
         if self.free_voxel == 0:
             self.free_voxel = self.free_voxel_empty
 
-    def draw_loss(self, ft_loss_train, ft_loss_noreg):
-        self.update_history.append(self.iterations)
+    def path_training(self):
+        if self.images_counter % options.save_counter == 0:
+            print "plotting h12", self.image_path + "/errorheights_i_%08i.png" % (self.iterations)
+            h1, h2 = self.bm.plot_h1h2_errors(self.image_path + "/errorheights_i_%08i.png" %
+                                              (self.iterations), self.image_path + "/hist_heights_i_%08i.png" %
+                                              (self.iterations))
+        error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
+            self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
+
+        weights = self.weight_by_dist()
+
+        claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
+        train_eval = np.array([vs.validate_claims(claims, self.bm.global_label_batch)], dtype='float32')[0]
+
+        batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
+        batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
+        batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
+
+        sequ_len = self.options.backtrace_length
+        print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
+            'rnn mask', batch_mask_ft.shape, 'dists', weights.shape
+        print 'error', train_eval
+        ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
+            self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
+                                           batch_mask_ft, options.backtrace_length, weights, train_eval)
+        return train_eval, grad_mean, grad_std
+
+    def weight_by_dist(self):
+        if self.options.weight_by_distance_b:
+            print 'weighting'
+            n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
+            weights = np.empty(n_err, dtype=np.float32)
+            i = -1
+            for es, e_type in zip(self.bm.error_selections, ['e1', 'e2']):
+                for e in es[::self.options.backtrace_length]:
+                    i += 1
+                    batch, pos = e['batch'], e[e_type + '_pos']
+                    dist = self.bm.global_height_gt_batch[batch, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
+                    weights[i] = np.exp(dist*0.05)
+            return weights
+        else:
+            n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
+            weights = np.ones(n_err, dtype=np.float32)
+            return weights
+
+    def draw_loss(self, ft_loss_train, ft_loss_noreg, counter=None, name='ft_training'):
+        if counter is None:
+            counter = self.iterations
+        self.update_history.append(counter)
         self.loss_history[0].append(ft_loss_train)
         self.loss_history[1].append(ft_loss_noreg)
         u.plot_train_val_errors([self.loss_history[0], self.loss_history[1]], self.update_history,
-                                self.save_net_path + '/ft_training.png', names=['loss', 'loss no reg'],
+                                self.save_net_path + '/%s.png' % name, names=['loss', 'loss no reg'],
+                                log_scale=False)
+
+    def draw_grads(self, grad_mean, grad_std, name='gradients'):
+        self.grad_history[0].append(grad_mean)
+        self.grad_history[1].append(grad_std)
+        if len(self.grad_history) != len(self.update_history):
+            print 'draw loss must be called first'
+        if self.images_counter > 10 and grad_mean > 10 * np.mean(self.grad_history[0]):
+            self.draw_debug(image_name='escalation')
+        u.plot_train_val_errors([self.grad_history[0], self.grad_history[1]], self.update_history,
+                                self.save_net_path + '/%s.png' % name, names=['grads mean', 'grads std'],
                                 log_scale=False)
 
     def draw_heights(self, h1, h2):
@@ -641,139 +683,139 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                 self.save_net_path + '/heights.png', names=['h1s', 'h2s'],
                                 log_scale=False)
 
-    def debug_plots(self, all_heights, masks, hiddens, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec):
-
-        for mask in masks:
-            if not np.any(mask):
-                embed()
-        masks = np.array(masks.reshape((2, -1)), dtype=np.bool)
-        all_heights_tmp = all_heights.reshape((2, -1))
-        print 'shapes', all_heights_tmp.shape, masks.shape
-        # for i, (ei, heights, mask, err_selection) in enumerate(zip(['e1', 'e2'], all_heights_tmp, masks,
-        #                                                            self.bm.error_selections)):
-        #
-        #     print 'ei', ei, heights.shape, mask.shape, np.array(err_selection).shape
-        #     err_selection = np.array(err_selection)[mask]
-        #     print 'amsk', err_selection.shape
-        #     all_ei_pos = np.array([err[ei + '_pos'] for err in err_selection])
-        #     all_b = [err['batch'] for err in err_selection]
-        #     dirs = self.bm.global_directionmap_batch[all_b, all_ei_pos[:, 0] - self.bm.pad,
-        #                                                     all_ei_pos[:, 1] - self.bm.pad]
-        #     origins = [self.bm.update_position(pos, dir) if dir != -1 else pos for pos, dir in zip(all_ei_pos, dirs)]
-        #     origins = np.array(origins)
-        #     all_orig_h = self.bm.global_prediction_map_nq[all_b, all_ei_pos[:, 0] - self.bm.pad,
-        #                                                   all_ei_pos[:, 1] - self.bm.pad, dirs]
-        #     all_rec_h = heights[mask]
-        #     print 'dirs', dirs
-        #     print 'update height diff', ei
-        #     h_diffs = all_orig_h - all_rec_h
-        #     all_orig_h = self.bm.global_prediction_map_nq[all_b, origins[:, 0] - self.bm.pad,
-        #                                                          origins[:, 1] - self.bm.pad, dirs]
-        #     all_rec_h = heights[mask]
-        #     print 'no height diff', ei
-        #     print 'pos', zip(all_ei_pos, origins)
-        #     print 'h_diffs', zip(h_diffs, all_orig_h - all_rec_h)
-        # exit()
-        # exit()
-        # self.bm.draw_batch(batch_ft, 'batch_tmp')
-        ts = self.options.backtrace_length
-        n_err = len(self.bm.error_selections[0]) / ts
-        all_e1 = np.array(self.bm.error_selections[0]).reshape(n_err, ts)
-        all_e2 = np.array(self.bm.error_selections[1]).reshape(n_err, ts)
-        all_heights= all_heights.flatten()
-        print 'nerr', n_err, 'ts', ts, 'h', len(all_heights), all_heights
-        all_h1 = all_heights[:n_err * ts].reshape(n_err, ts)
-        all_h2 = all_heights[n_err * ts:].reshape(n_err, ts)
-        # height diffs, hiddens, hiddens rec, stat_convs
-        # e1_pos = []
-
-        print
-        k = -1
-        for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
-            k += 1
-            for rec_b, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
-                print 'next error', e_type
-                for t, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
-                    number = t + rec_b * ts + k * n_err * ts
-
-                    pos = err_t[e_type + '_pos']
-                    b = err_t['batch']
-                    dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
-
-                    if dir < 0 or not masks[k, rec_b * ts + t]:
-                        print 'continue', pos, dir, masks[k, rec_b * ts + t]
-                        continue
-
-                    old_pos = self.bm.update_position(pos, dir)
-
-                    # conv check
-                    stat_conv_masks = [stat_conv[number, :, 0, 0] != 0]
-                    orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
-                    diff = np.abs(orig_conv[stat_conv_masks] - stat_conv[number, :, 0, 0][stat_conv_masks]*2)
-                    verbose = True
-                    if np.max(diff) > 10 ** -4 or np.all(pos == self.debug_pos):
-                        verbose = True
-                        print 'conv comparison', np.max(diff), np.mean(diff), 'where', np.where(diff == np.max(diff))
-                        print 'orig conv', orig_conv[:5], 'rconst conv', stat_conv[number, :5, 0, 0] / 2
-
-                    err_h = self.bm.global_prediction_map_nq[b, old_pos[0] - self.bm.pad, old_pos[1] - self.bm.pad,
-                                                             dir]
-                    diff = np.abs(h_t - err_h)
-                    # print 'height diff', diff
-                    if diff > 10 ** -2 or np.all(pos == self.debug_pos) and not masks[k, rec_b * ts + t]:
-                        verbose = True
-                        print 'height differences %.5f err h %.5f, diff %.5f hiddens max %.5f' \
-                              % (h_t, err_h, (h_t - err_h), np.max(hiddens_rec)), masks[k, rec_b * ts + t]
-                    # input check
-                    old_stat = self.bm.crop_input(pos, b)[None, ...][0, :, 1:-1, 1:-1]
-                    new_stat = batch_ft[number, 2:, :, :]
-                    stat_inp_diff = np.mean((old_stat - new_stat).astype(np.float))
-                    if stat_inp_diff > 10 ** -4:
-                        verbose = True
-                        print 'static inputs equals', np.mean(stat_inp_diff)
-
-                    if np.all(pos == self.debug_pos):
-                        if self.dir == 0:
-                            dx, dy = (0,0)
-                            sx, ex, sy, ey = (None,-2, 1,-1)
-                        if self.dir == 1:
-                            dx, dy = (0,1)
-                            sx, ex, sy, ey = (1,-1, None, -2)
-                        if self.dir == 2:
-                            dx, dy = (1, 0)
-                            sx, ex, sy, ey = (2, None, 1, -1)
-                        if self.dir == 3:
-                            dx, dy = (1, 1)
-                            sx, ex, sy, ey = (1, -1, 2, None)
-
-                        print 'rec time err', err_t[e_type + '_time'], self.dir
-                        print 'pred time', self.bm.global_timemap[0, self.debug_pos_orig[0], self.debug_pos_orig[1]]
-                        verbose = True
-                        # self.mem[0, 1, 1, 1] = 2
-                        print 'input comparison', np.sum(np.abs(self.mem[0, :, sx:ex, sy:ey] - batch_ft[number, :self.options.claim_channels, :, :]))
-                        print 'stat comparison', np.sum(np.abs(self.mem_stat[0, :, 1:-1, 1:-1] - batch_ft[number, self.options.claim_channels:, :, :]))
-                        print 'merge comparison', np.sum(np.abs(self.mem_merge[:, dx, dy] - reco_merges[number, :, 0, 0]))
-                        print 'merge diff stat', np.sum(np.abs(self.mem_merge[320-64:, dx, dy] - reco_merges[number, 320-64:, 0, 0]))
-                        print 'befo rec comparison', np.sum(np.abs(self.mem_befo_rec[dir + b*4,0 , :] - reco_befo_rec[0, 0, :]))
-
-                        diff =np.abs(self.mem_rec_in[dir + b * 4 , :] - hiddens[0, 0, :])
-                        print 'recurrent input differences', np.mean(diff), np.max(diff), np.where(diff == np.max(diff))
-
-
-                        # print 'recurrent input mem', self.mem_rec_in[3 + b * 4 , :8]
-                        # print 'recurrent input reconst', hiddens[0, 0, :8]
-                        # print 'mem merges', self.mem_merge[320-64-2:, dx, dy][:4]
-                        # print 'reco merges', reco_merges[number, 320-64-2:, 0, 0][:4]
-                        # print 'reco_befo_rec', reco_befo_rec[0, 0, :5]
-                        # print 'mem befo rec', self.mem_befo_rec[dir + b*4,0 , :5]
-
-                    if verbose:
-                        print 'number', number
-                        t_rec = self.bm.global_timemap[b, old_pos[0], old_pos[1]]
-                        print 'type', e_type, 'pos', pos, 'b', b, 'orig pos', old_pos, 'dir', dir, 'trec', t_rec
-                        if self.bm.pad in pos or self.bm.image_shape[-1] - self.bm.pad - 1 in pos:
-                            print 'boundary case.............'
-                        print
+    # def debug_plots(self, all_heights, masks, hiddens, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec):
+    #
+    #     for mask in masks:
+    #         if not np.any(mask):
+    #             embed()
+    #     masks = np.array(masks.reshape((2, -1)), dtype=np.bool)
+    #     all_heights_tmp = all_heights.reshape((2, -1))
+    #     print 'shapes', all_heights_tmp.shape, masks.shape
+    #     # for i, (ei, heights, mask, err_selection) in enumerate(zip(['e1', 'e2'], all_heights_tmp, masks,
+    #     #                                                            self.bm.error_selections)):
+    #     #
+    #     #     print 'ei', ei, heights.shape, mask.shape, np.array(err_selection).shape
+    #     #     err_selection = np.array(err_selection)[mask]
+    #     #     print 'amsk', err_selection.shape
+    #     #     all_ei_pos = np.array([err[ei + '_pos'] for err in err_selection])
+    #     #     all_b = [err['batch'] for err in err_selection]
+    #     #     dirs = self.bm.global_directionmap_batch[all_b, all_ei_pos[:, 0] - self.bm.pad,
+    #     #                                                     all_ei_pos[:, 1] - self.bm.pad]
+    #     #     origins = [self.bm.update_position(pos, dir) if dir != -1 else pos for pos, dir in zip(all_ei_pos, dirs)]
+    #     #     origins = np.array(origins)
+    #     #     all_orig_h = self.bm.global_prediction_map_nq[all_b, all_ei_pos[:, 0] - self.bm.pad,
+    #     #                                                   all_ei_pos[:, 1] - self.bm.pad, dirs]
+    #     #     all_rec_h = heights[mask]
+    #     #     print 'dirs', dirs
+    #     #     print 'update height diff', ei
+    #     #     h_diffs = all_orig_h - all_rec_h
+    #     #     all_orig_h = self.bm.global_prediction_map_nq[all_b, origins[:, 0] - self.bm.pad,
+    #     #                                                          origins[:, 1] - self.bm.pad, dirs]
+    #     #     all_rec_h = heights[mask]
+    #     #     print 'no height diff', ei
+    #     #     print 'pos', zip(all_ei_pos, origins)
+    #     #     print 'h_diffs', zip(h_diffs, all_orig_h - all_rec_h)
+    #     # exit()
+    #     # exit()
+    #     # self.bm.draw_batch(batch_ft, 'batch_tmp')
+    #     ts = self.options.backtrace_length
+    #     n_err = len(self.bm.error_selections[0]) / ts
+    #     all_e1 = np.array(self.bm.error_selections[0]).reshape(n_err, ts)
+    #     all_e2 = np.array(self.bm.error_selections[1]).reshape(n_err, ts)
+    #     all_heights= all_heights.flatten()
+    #     print 'nerr', n_err, 'ts', ts, 'h', len(all_heights), all_heights
+    #     all_h1 = all_heights[:n_err * ts].reshape(n_err, ts)
+    #     all_h2 = all_heights[n_err * ts:].reshape(n_err, ts)
+    #     # height diffs, hiddens, hiddens rec, stat_convs
+    #     # e1_pos = []
+    #
+    #     print
+    #     k = -1
+    #     for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
+    #         k += 1
+    #         for rec_b, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
+    #             print 'next error', e_type
+    #             for t, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
+    #                 number = t + rec_b * ts + k * n_err * ts
+    #
+    #                 pos = err_t[e_type + '_pos']
+    #                 b = err_t['batch']
+    #                 dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
+    #
+    #                 if dir < 0 or not masks[k, rec_b * ts + t]:
+    #                     print 'continue', pos, dir, masks[k, rec_b * ts + t]
+    #                     continue
+    #
+    #                 old_pos = self.bm.update_position(pos, dir)
+    #
+    #                 # conv check
+    #                 stat_conv_masks = [stat_conv[number, :, 0, 0] != 0]
+    #                 orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
+    #                 diff = np.abs(orig_conv[stat_conv_masks] - stat_conv[number, :, 0, 0][stat_conv_masks]*2)
+    #                 verbose = True
+    #                 if np.max(diff) > 10 ** -4 or np.all(pos == self.debug_pos):
+    #                     verbose = True
+    #                     print 'conv comparison', np.max(diff), np.mean(diff), 'where', np.where(diff == np.max(diff))
+    #                     print 'orig conv', orig_conv[:5], 'rconst conv', stat_conv[number, :5, 0, 0] / 2
+    #
+    #                 err_h = self.bm.global_prediction_map_nq[b, old_pos[0] - self.bm.pad, old_pos[1] - self.bm.pad,
+    #                                                          dir]
+    #                 diff = np.abs(h_t - err_h)
+    #                 # print 'height diff', diff
+    #                 if diff > 10 ** -2 or np.all(pos == self.debug_pos) and not masks[k, rec_b * ts + t]:
+    #                     verbose = True
+    #                     print 'height differences %.5f err h %.5f, diff %.5f hiddens max %.5f' \
+    #                           % (h_t, err_h, (h_t - err_h), np.max(hiddens_rec)), masks[k, rec_b * ts + t]
+    #                 # input check
+    #                 old_stat = self.bm.crop_input(pos, b)[None, ...][0, :, 1:-1, 1:-1]
+    #                 new_stat = batch_ft[number, 2:, :, :]
+    #                 stat_inp_diff = np.mean((old_stat - new_stat).astype(np.float))
+    #                 if stat_inp_diff > 10 ** -4:
+    #                     verbose = True
+    #                     print 'static inputs equals', np.mean(stat_inp_diff)
+    #
+    #                 if np.all(pos == self.debug_pos):
+    #                     if self.dir == 0:
+    #                         dx, dy = (0,0)
+    #                         sx, ex, sy, ey = (None,-2, 1,-1)
+    #                     if self.dir == 1:
+    #                         dx, dy = (0,1)
+    #                         sx, ex, sy, ey = (1,-1, None, -2)
+    #                     if self.dir == 2:
+    #                         dx, dy = (1, 0)
+    #                         sx, ex, sy, ey = (2, None, 1, -1)
+    #                     if self.dir == 3:
+    #                         dx, dy = (1, 1)
+    #                         sx, ex, sy, ey = (1, -1, 2, None)
+    #
+    #                     print 'rec time err', err_t[e_type + '_time'], self.dir
+    #                     print 'pred time', self.bm.global_timemap[0, self.debug_pos_orig[0], self.debug_pos_orig[1]]
+    #                     verbose = True
+    #                     # self.mem[0, 1, 1, 1] = 2
+    #                     print 'input comparison', np.sum(np.abs(self.mem[0, :, sx:ex, sy:ey] - batch_ft[number, :2, :, :]))
+    #                     print 'stat comparison', np.sum(np.abs(self.mem_stat[0, :, 1:-1, 1:-1] - batch_ft[number, 2:, :, :]))
+    #                     print 'merge comparison', np.sum(np.abs(self.mem_merge[:, dx, dy] - reco_merges[number, :, 0, 0]))
+    #                     print 'merge diff stat', np.sum(np.abs(self.mem_merge[320-64:, dx, dy] - reco_merges[number, 320-64:, 0, 0]))
+    #                     print 'befo rec comparison', np.sum(np.abs(self.mem_befo_rec[dir + b*4,0 , :] - reco_befo_rec[0, 0, :]))
+    #
+    #                     diff =np.abs(self.mem_rec_in[dir + b * 4 , :] - hiddens[0, 0, :])
+    #                     print 'recurrent input differences', np.mean(diff), np.max(diff), np.where(diff == np.max(diff))
+    #
+    #
+    #                     # print 'recurrent input mem', self.mem_rec_in[3 + b * 4 , :8]
+    #                     # print 'recurrent input reconst', hiddens[0, 0, :8]
+    #                     # print 'mem merges', self.mem_merge[320-64-2:, dx, dy][:4]
+    #                     # print 'reco merges', reco_merges[number, 320-64-2:, 0, 0][:4]
+    #                     # print 'reco_befo_rec', reco_befo_rec[0, 0, :5]
+    #                     # print 'mem befo rec', self.mem_befo_rec[dir + b*4,0 , :5]
+    #
+    #                 if verbose:
+    #                     print 'number', number
+    #                     t_rec = self.bm.global_timemap[b, old_pos[0], old_pos[1]]
+    #                     print 'type', e_type, 'pos', pos, 'b', b, 'orig pos', old_pos, 'dir', dir, 'trec', t_rec
+    #                     if self.bm.pad in pos or self.bm.image_shape[-1] - self.bm.pad - 1 in pos:
+    #                         print 'boundary case.............'
+    #                     print
 
 
 class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
@@ -816,8 +858,9 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                             batch_mask_ft = np.array(h5f['batch_mask_ft'])
                             length = h5f['options.backtrace_length'].value
 
-                            ft_loss_train, individual_loss_fine, heights, = \
-                                        self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft, options.backtrace_length)
+                            ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
+                                    self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft,
+                                                                   options.backtrace_length)
 
                             self.save_net(name=self.current_net_name)
                             self.save_net()
@@ -857,8 +900,8 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                     'rnn mask', batch_mask_ft.shape
 
                 with h5py.File(self.exp_path+"/%i_%f.h5"%(os.getpid(), time.time()),"w") as f:
-                    f.create_dataset('batch_ft1',data=batch_ft[:, :self.options.claim_channels, :, :])
-                    f.create_dataset('batch_ft2',data=batch_ft[:, self.options.claim_channels:, :, :])
+                    f.create_dataset('batch_ft1',data=batch_ft[:, :2, :, :])
+                    f.create_dataset('batch_ft2',data=batch_ft[:, 2:, :, :])
                     f.create_dataset('batch_inits',data=batch_inits)
                     f.create_dataset('batch_mask_ft',data=batch_mask_ft)
                     f.create_dataset('options.backtrace_length',data=options.backtrace_length)

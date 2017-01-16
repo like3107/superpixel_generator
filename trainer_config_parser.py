@@ -1,13 +1,13 @@
 import configargparse
 
+
 def get_options(script='training', ignore_config=False):
     """
     config parser wrapper. Used to generate options object that can be 
     propagated throughout all member classes of the trainer class
     :param options:
     """
-    p = configargparse.ArgParser(default_config_files=
-                                 ['./../data/config/%s.conf' %script])
+    p = configargparse.ArgParser(default_config_files=['./../data/config/%s.conf' % script])
 
     # where to save the net
     def_net_name = 'V5_BN_times100_ft'
@@ -21,7 +21,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--net_name', default=def_net_name)
     p.add('--net_arch', default="ID_v5_hydra_BN")
     p.add('--no-save_net', dest='save_net_b', action='store_false')
-    p.add('--val_name', default='')
+    p.add('--val_name', default='')     # empty strings have catastrophic consequences!!!!
 
     # reload existing net
     p.add('--load_net', dest='load_net_b', action='store_true')
@@ -61,8 +61,9 @@ def get_options(script='training', ignore_config=False):
     p.add('--master', action='store_true')
     p.add('--merge_seeds', dest='merge_seeds', action='store_true')
     p.add('--train_merge', dest='train_merge', action='store_true')
-    p.add('--dropout_b', action='store_true', )
-    p.add('--bnorm_b', action='store_true')
+    p.add('--dropout_b', action='store_true', default=False)
+    p.add('--bnorm_b', action='store_true', default=False)
+    p.add('--weight_by_distance_b', action='store_true', default=False)
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)
@@ -131,7 +132,8 @@ def get_options(script='training', ignore_config=False):
     p.add('--start_slice_z', type=int, default=100)
 
     options = p.parse_args()
-    options.fc_prec = False
+
+    # options.fc_prec = False
 
     if options.input_data_path == "None":
         options.input_data_path ='./../data/volumes/input_%s.h5' % options.train_version
@@ -148,13 +150,12 @@ def get_options(script='training', ignore_config=False):
     print 'saving files to ', options.net_name
 
     # parse validation config
-    if not ignore_config and options.val_name:
+    if not ignore_config and options.val_name != 'None':
         options.val_options = get_options(script=options.val_name, ignore_config=True)
 
     return options
 
 
 if __name__ == '__main__':
-
     options = get_options()
     print options

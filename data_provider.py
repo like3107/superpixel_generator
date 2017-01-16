@@ -88,7 +88,7 @@ class DataProvider(object):
         self.sel_aug_f = random.choice(self.augmenttations)
 
     def apply_augmentation(self, input):
-        input[:] = self.sel_aug_f(input) 
+        input[:] = self.sel_aug_f(input)
 
     def set_slices(self, o):
         print o
@@ -143,7 +143,6 @@ class DataProvider(object):
         else:
             ind_b = np.random.permutation(self.n_slices)[:self.bs]
             if self.options.augment_ft:
-                print "using new augmentation"
                 self.pick_augmentation()
 
 
