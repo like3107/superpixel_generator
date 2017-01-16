@@ -290,11 +290,9 @@ class NetBuilder:
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
         weight_vector = T.fvector()
-        RI_err = T.fscalar()
         loss_train, individual_batch, loss_valid = self.get_loss_fct(layers, self.options.backtrace_length,
                                                                      l_out_train, mask, L1_weight,
-                                                                     weight_vector=weight_vector,
-                                                                     RI_error=RI_err)
+                                                                     weight_vector=weight_vector)
 
         updates, grads_mean, grads_std = self.get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
 
@@ -302,7 +300,7 @@ class NetBuilder:
                                                   layers['l_in_static_00'].input_var,
                                                   layers['l_in_hid_08'].input_var,
                                                   layers['l_in_rec_mask_08'].input_var,
-                                                  self.sequ_len, weight_vector, RI_err],
+                                                  self.sequ_len, weight_vector],
                                                  [loss_train, individual_batch, l_out_prediciton,
                                                   grads_mean, grads_std],
                                                  updates=updates)
@@ -312,7 +310,7 @@ class NetBuilder:
 
 
     def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True,
-                     weight_vector=1, RI_error=1):
+                     weight_vector=1):
         bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
         step = backtrace_length
         sum_height = l_out_train
@@ -331,7 +329,6 @@ class NetBuilder:
         if L1_weight > 0:
             print 'reguralizing with', L1_weight
             loss_train = loss_valid + L1_weight * L1_norm
-        loss_train *= RI_error
         return loss_train, individual_batch, loss_valid
 
 

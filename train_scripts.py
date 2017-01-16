@@ -633,7 +633,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         print 'error', train_eval
         ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
             self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
-                                           batch_mask_ft, options.backtrace_length, weights, train_eval)
+                                           batch_mask_ft, options.backtrace_length, weights)
         return train_eval, grad_mean, grad_std
 
     def weight_by_dist(self):
@@ -857,10 +857,11 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                             batch_inits = np.array(h5f['batch_inits'])
                             batch_mask_ft = np.array(h5f['batch_mask_ft'])
                             length = h5f['options.backtrace_length'].value
+                            weights = self.weight_by_dist()
 
                             ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
                                     self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft,
-                                                                   options.backtrace_length)
+                                                                   options.backtrace_length,  weights)
 
                             self.save_net(name=self.current_net_name)
                             self.save_net()
