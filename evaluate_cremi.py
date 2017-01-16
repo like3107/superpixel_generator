@@ -1,10 +1,10 @@
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Pool
 from trainer_config_parser import get_options
 import time
 import os
 import numpy as np
 
-def pred_wrapper(q, options, slices, gpu):
+def pred_wrapper(options, slices, gpu):
     import evaluate_net
     from data_provider import save_h5
     options.gpu = gpu
@@ -66,8 +66,8 @@ def concat_pred_nq_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
 
 if __name__ == '__main__':
     processes = []
-    q = Queue()
     options = get_options(script='validation')
+    pool = Pool(processes=options.max_processes)
     if options.global_edge_len > 0 and not options.quick_eval:
         for x in range(2):
             print "WARNING edge length is not set to 0. Are you sure ?"
@@ -88,19 +88,24 @@ if __name__ == '__main__':
     
     for i, start in enumerate(range(start_z,start_z+total_z_lenght, options.batch_size)):
         g = gpus[i%4]
-        processes.append(Process(
-            target=pred_wrapper,
-            args=(q, options, range(start,start+options.batch_size), g)))
+        # processes.append(Process(
+        #     target=pred_wrapper,
+        #     args=(q, options, range(start,start+options.batch_size), g)))
+        pool.apply_async(pred_wrapper,
+            args=(options, range(start,start+options.batch_size), g))
+        time.sleep(8)           # for GPU claim
         # debug
         # pred_wrapper(q, options, range(start, start + options.batch_size), g)
 
-    for p in processes:
-        time.sleep(8)           # for GPU claim
-        p.start()
+    # for p in processes:
+    #     p.start()
 
-    for p in processes:
-        print 'joining'
-        p.join()
+    # for p in processes:
+    #     print 'joining'
+    #     p.join()
+    pool.close()
+    pool.join()
+
 
     if options.global_edge_len == 0:
         options.global_edge_len = 1250

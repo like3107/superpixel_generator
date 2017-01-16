@@ -44,6 +44,7 @@ def get_options(script='training', ignore_config=False):
     # valid data paths
     def_valid_version = 'first_repr'
     p.add('--valid_version', default=def_valid_version)
+    p.add('--max_processes', default=2, type=int) 
 
     # training general
     p.add('--no-val', dest='val_b', action='store_false')
