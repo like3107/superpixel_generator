@@ -618,10 +618,10 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
             self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
 
-        weights = self.weight_by_dist()
-
         claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
         train_eval = np.array([vs.validate_claims(claims, self.bm.global_label_batch)], dtype='float32')[0]
+
+        weights = self.weight_by_dist(RI_error=train_eval)
 
         batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
         batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
@@ -636,11 +636,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                            batch_mask_ft, options.backtrace_length, weights)
         return train_eval, grad_mean, grad_std
 
-    def weight_by_dist(self):
+    def weight_by_dist(self, RI_error=None):
+        n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
+        weights = np.ones(n_err, dtype=np.float32)
         if self.options.weight_by_distance_b:
             print 'weighting'
-            n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
-            weights = np.empty(n_err, dtype=np.float32)
             i = -1
             for es, e_type in zip(self.bm.error_selections, ['e1', 'e2']):
                 for e in es[::self.options.backtrace_length]:
@@ -648,11 +648,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     batch, pos = e['batch'], e[e_type + '_pos']
                     dist = self.bm.global_height_gt_batch[batch, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
                     weights[i] = np.exp(dist*0.05)
-            return weights
-        else:
-            n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
-            weights = np.ones(n_err, dtype=np.float32)
-            return weights
+        if RI_error is not None:
+            weights *= RI_error
+        return weights
 
     def draw_loss(self, ft_loss_train, ft_loss_noreg, counter=None, name='ft_training'):
         if counter is None:
