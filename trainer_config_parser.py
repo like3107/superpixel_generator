@@ -95,6 +95,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--margin', default=0.5, type=float)
     p.add('--no-aug-ft', dest='augment_ft', action='store_false')
     p.add('--optimizer', default="nesterov", type=str)
+    p.add('--stochastic_update_b', default=False, action='store_true')
     p.add('--learningrate', default=0.000001, type=float)
 
 
@@ -150,7 +151,7 @@ def get_options(script='training', ignore_config=False):
     print 'saving files to ', options.net_name
 
     # parse validation config
-    if not ignore_config and options.val_name != 'None':
+    if not ignore_config and options.val_name != '':
         options.val_options = get_options(script=options.val_name, ignore_config=True)
 
     return options

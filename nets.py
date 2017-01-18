@@ -13,7 +13,7 @@ class NetBuilder:
     def __init__(self, options=None):
         self.net_name = None
         self.options = options
-
+        self.apply_grads = None
         self.build_methods = \
             dict((method, getattr(self, method)) \
                                         for method in dir(self) if callable(getattr(self, method))
@@ -294,7 +294,9 @@ class NetBuilder:
                                                                      l_out_train, mask, L1_weight,
                                                                      weight_vector=weight_vector)
 
-        updates, grads_mean, grads_std = self.get_update_rule(loss_train, all_params, optimizer=self.options.optimizer)
+        grads_mean = T.mean(T.stacklists([T.mean(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        grads = theano.grad(loss_train, all_params)
 
         self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
                                                   layers['l_in_static_00'].input_var,
@@ -302,8 +304,11 @@ class NetBuilder:
                                                   layers['l_in_rec_mask_08'].input_var,
                                                   self.sequ_len, weight_vector],
                                                  [loss_train, individual_batch, l_out_prediciton,
-                                                  grads_mean, grads_std],
-                                                 updates=updates)
+                                                  grads_mean, grads_std] + grads)
+
+        symbolic_grad_params = [T.zeros_like(param) for param in all_params]
+        updates = self.get_update_rule(symbolic_grad_params, all_params, optimizer=self.options.optimizer)
+        self.apply_grads = theano.function(symbolic_grad_params, outputs=[], updates=updates)
         assert (updates is not None)
 
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
@@ -332,28 +337,24 @@ class NetBuilder:
         return loss_train, individual_batch, loss_valid
 
 
-    def get_update_rule(self, loss_train, all_params, optimizer=None):
+    def get_update_rule(self, loss_train_or_grads, all_params, optimizer=None):
         self.options.learningrate_shared = None
-        print 'all params', all_params, loss_train
-        i = 1
-
-        grads_mean = T.mean(T.stacklists([T.mean(T.abs_(T.grad(loss_train, param))) for param in all_params]))
-        grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))
-
+        lr = theano.shared(np.array(self.options.learningrate, dtype=np.float32))
+        self.options.learningrate_shared = lr
         if optimizer == "nesterov":
-            print "using nesterov_momentum with learningrate", self.options.learningrate
-            lr = theano.shared(np.array(self.options.learningrate, dtype=np.float32))
-            self.options.learningrate_shared = lr
-            updates = las.updates.nesterov_momentum(loss_train, all_params, lr)
+            print "using nesterov_momentum",
+            updates = las.updates.nesterov_momentum(loss_train_or_grads, all_params, lr)
         elif optimizer == "adam":
-            print 'using adam'
-            updates = las.updates.adam(loss_train, all_params)
+            print 'using adam',
+            self.options.learningrate_shared = lr
+            updates = las.updates.adam(loss_train_or_grads, all_params, lr, epsilon=1e-6)
         elif optimizer == "sgd":
-            print 'sgd lr', self.options.learningrate
-            updates = las.updates.sgd(loss_train, all_params, self.options.learningrate)
+            print 'using sgd',
+            updates = las.updates.sgd(loss_train_or_grads, all_params, self.options.learningrate)
         else:
             raise Exception("unknown optimizer %s" % optimizer)
-        return updates, grads_mean, grads_std
+        print ' with learning rate', self.options.learningrate
+        return updates
 
 
 if __name__ == '__main__':

@@ -463,6 +463,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         super(FCRecFinePokemonTrainer, self).__init__(options)
         self.h1s = []
         self.h2s = []
+        self.grads_sum = None
+        self.err_b_counter = None
+        self.train_eval = None
 
     def init_BM(self):
         self.BM = du.HoneyBatcherRec
@@ -584,57 +587,58 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         self.predict()
 
-
         print 'hiddens mean', np.mean(self.bm.global_hidden_states), 'max', np.max(np.abs(self.bm.global_hidden_states))
-        print
-        print 'global seeds', self.bm.global_seeds
 
         self.bm.find_global_error_paths()
-        print "found ",self.bm.count_new_path_errors(),"errors"
-        if self.bm.count_new_path_errors() > 0:
-            train_eval, grad_mean, grad_std = self.path_training()
-            # print claims.shape, self.bm.global_label_batch.shape
-            self.draw_loss(train_eval, train_eval, counter=self.images_counter)
-            self.draw_grads(grad_mean, grad_mean + grad_std)
-            # self.draw_heights(h1, h2)
+        print "found ", self.bm.count_new_path_errors(), "errors"
 
-            # self.debug_plots(heights, batch_mask_ft, hiddens_rec, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec)
+        claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
+        self.train_eval = np.array([vs.validate_claims(claims, self.bm.global_label_batch)], dtype='float32')[0]
+
+        self.err_b_counter, train_infos, self.grads_sum, only_once = 0, 0, None, False
+        while self.bm.count_new_path_errors() > 0 and not only_once:
+            if self.options.stochastic_update_b: only_once = True
+            train_infos += np.array(self.path_training())
+
+        if self.err_b_counter > 0:
+            grad_mean, grad_std = train_infos / self.err_b_counter
+            self.draw_loss(self.train_eval, self.train_eval, counter=self.images_counter)
+            self.draw_grads(grad_mean, grad_mean + grad_std)
+            grads_av = [g / self.err_b_counter for g in self.grads_sum]
+            self.builder.apply_grads(*grads_av)
 
         if self.images_counter % self.options.save_counter == 0:
             self.save_net(counter=self.images_counter)
         if self.images_counter % self.options.observation_counter == 0:
             trainer.draw_debug(reset=True, counter=self.images_counter)
-        # exit();
 
         if self.free_voxel == 0:
             self.free_voxel = self.free_voxel_empty
 
     def path_training(self):
-        if self.images_counter % options.save_counter == 0:
-            print "plotting h12", self.image_path + "/errorheights_i_%08i.png" % (self.iterations)
-            h1, h2 = self.bm.plot_h1h2_errors(self.image_path + "/errorheights_i_%08i.png" %
-                                              (self.iterations), self.image_path + "/hist_heights_i_%08i.png" %
-                                              (self.iterations))
+        self.err_b_counter += 1
+        # if self.images_counter % options.save_counter == 0:
+        #     print "plotting h12", self.image_path + "/errorheights_i_%08i.png" % (self.iterations)
+        #     h1, h2 = self.bm.plot_h1h2_errors(self.image_path + "/errorheights_i_%08i.png" %
+        #                                       (self.iterations), self.image_path + "/hist_heights_i_%08i.png" %
+        #                                       (self.iterations))
         error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
             self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
-
-        claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
-        train_eval = np.array([vs.validate_claims(claims, self.bm.global_label_batch)], dtype='float32')[0]
-
-        weights = self.weight_by_dist(RI_error=train_eval)
-
+        grad_weights = self.weight_by_dist(RI_error=self.train_eval)
         batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
         batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
         batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
 
-        sequ_len = self.options.backtrace_length
-        print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
-            'rnn mask', batch_mask_ft.shape, 'dists', weights.shape
-        print 'error', train_eval
-        ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
-            self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
-                                           batch_mask_ft, options.backtrace_length, weights)
-        return train_eval, grad_mean, grad_std
+        outs = self.builder.loss_train_fine_f(batch_ft[:, :2, :, :], batch_ft[:, 2:, :, :], batch_inits,
+                                              batch_mask_ft, options.backtrace_length, grad_weights)
+        ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = outs[:5]
+        grads_new = outs[5:]
+        if self.grads_sum is None:
+            self.grads_sum = [np.array(g, dtype=np.float32) for g in grads_new]
+        else:
+            for g, gn in zip(self.grads_sum, grads_new):
+                g += gn
+        return grad_mean, grad_std
 
     def weight_by_dist(self, RI_error=None):
         n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
@@ -665,8 +669,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def draw_grads(self, grad_mean, grad_std, name='gradients'):
         self.grad_history[0].append(grad_mean)
         self.grad_history[1].append(grad_std)
-        if len(self.grad_history) != len(self.update_history):
-            print 'draw loss must be called first'
         if self.images_counter > 10 and grad_mean > 10 * np.mean(self.grad_history[0]):
             self.draw_debug(image_name='escalation')
         u.plot_train_val_errors([self.grad_history[0], self.grad_history[1]], self.update_history,
