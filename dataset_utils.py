@@ -983,7 +983,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         return raw_batch
 
     def check_error(self, error):
-        return not 'used' in error
+        return not 'used' in error or not error['used']
         # return not 'used' in error and error['e1_length'] > 5
 
     def reverse_direction(self, direction):
@@ -995,13 +995,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
     def select_errors(self):
         # take approx this many errors or all
-        probs = np.array([self.global_error_dict[k]['importance'] for k in self.global_error_dict.keys()],dtype=float)
+        unused_set = [k for k in self.global_error_dict.keys() if not self.global_error_dict[k]['used']]
+        probs = np.array([self.global_error_dict[k]['importance'] for k in unused_set], dtype=float)
         probs /= np.sum(probs)
-        selection = np.random.choice(self.global_error_dict.keys(), size=min(self.n_batch_errors, len(probs)), p=probs,
+        selection = np.random.choice(unused_set, size=min(self.n_batch_errors, len(probs)), p=probs,
                                      replace=False)
-
-        for k in self.global_error_dict:
-            self.global_error_dict[k]['used'] = False
 
         for k in selection:
             self.global_error_dict[k]['used'] = True
