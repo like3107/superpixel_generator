@@ -159,16 +159,16 @@ class HoneyBatcherPredict(object):
 
         if self.options.claim_aug == "height":
             h = np.array(self.global_heightmap_batch[b,
-                                                     max(0, center[0] - self.pad):center[0] + self.pad + 1,
-                                                     max(0, center[1] - self.pad):center[1] + self.pad + 1])
+                                                    max(0,center[0]-2*self.pad):center[0]+1,
+                                                    max(0,center[1]-2*self.pad):center[1]+1])
             h[h<0] = 0
             h[h==np.inf] = 0
             hx = max(self.pad-center[0],0)
             hy = max(self.pad-center[1],0)
             hsx, hsy = h.shape
-            # for i in range(len(out)): we could loop here, but it makes no sense for the non claimed region(2)
             out[0, hx:hx+hsx, hy:hy+hsy] *= h
             out[1, hx:hx+hsx, hy:hy+hsy] *= h
+
         return out
 
     def crop_height_map(self, center, b):
