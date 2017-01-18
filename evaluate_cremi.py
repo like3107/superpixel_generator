@@ -31,37 +31,39 @@ def pred_wrapper(options, slices, gpu):
             data=pred.bm.global_prediction_map_nq,
             overwrite='w')
 
-def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
+    save_slice_path = options.save_net_path \
+                    + "/baseline_%04i_%04i.h5"%(slices[0],slices[-1])
+    save_h5(save_slice_path, 'data',
+            data=pred.bm.get_ws_segmentation(),
+            overwrite='w')
+
+def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len,
+                        base_file_name='slice'):
     import glob
     from data_provider import load_h5, save_h5
-    files = sorted(glob.glob(path_to_folder + '/slice' + '*.h5'))
-    le_final = np.zeros((n_slices, edge_len, edge_len), dtype=np.uint64)
+    files = sorted(glob.glob(path_to_folder + '/' + base_file_name + '*.h5'))
+    initial = load_h5(files[0])[0]
+    fin_shape = list(initial.shape)
+    fin_shape[0] = n_slices
+    le_final = np.zeros(fin_shape, dtype=initial.dtype)
     for start, file in zip(range(0, n_slices, slice_size), files):
         le_final[start:start + slice_size, :, :] = load_h5(file)[0]
-    save_h5(path_to_folder + '/final.h5', 'data', data=le_final,
+    save_h5(path_to_folder + '/'+base_file_name+'_concat.h5', 'data', data=le_final,
                overwrite='w')
 
 
-def concat_height_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
-    import glob
-    from data_provider import load_h5, save_h5
-    files = sorted(glob.glob(path_to_folder + '/height' + '*.h5'))
-    le_final = np.zeros((n_slices, edge_len, edge_len), dtype=np.uint64)
-    for start, file in zip(range(0, n_slices, slice_size), files):
-        le_final[start:start + slice_size, :, :] = load_h5(file)[0]
-    save_h5(path_to_folder + '/final_height.h5', 'data', data=le_final,
-               overwrite='w')
-
-
-def concat_pred_nq_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len):
-    import glob
-    from data_provider import load_h5, save_h5
-    files = sorted(glob.glob(path_to_folder + '/pred_nq' + '*.h5'))
-    le_final = np.zeros((n_slices, edge_len, edge_len, 4), dtype=np.uint64)
-    for start, file in zip(range(0, n_slices, slice_size), files):
-        le_final[start:start + slice_size, :, :] = load_h5(file)[0]
-    save_h5(path_to_folder + '/final_pred_nq.h5', 'data', data=le_final,
-               overwrite='w')
+def evaluate_h5_files(prediction_path, gt_path, name, options):
+    import validation_scripts as vs
+    fov = 68
+    print "############ Evaliation for ",name,"############"
+    _, results = vs.validate_segmentation(pred_path=prediction_path, gt_path=gt_path,
+                             offset_xy=int(fov)/2, start_z=options.start_slice_z,
+                             n_z=options.slices_total,
+                             gel=options.global_edge_len)
+    f = open(options.save_net_path+'/'+name+'results.txt', 'w')
+    f.write(results)
+    f.close()
+    print "####################################################"
 
 
 if __name__ == '__main__':
@@ -113,28 +115,14 @@ if __name__ == '__main__':
     if not options.padding_b:
         options.global_edge_len -= 70
 
-    concat_h5_in_folder(options.save_net_path,
+    for bn in ["slice", "height", "pred_nq_path", "baseline"]:
+        concat_h5_in_folder(options.save_net_path,
                         options.batch_size,
                         total_z_lenght,
-                        options.global_edge_len)
+                        options.global_edge_len,
+                        base_file_name=bn)
 
-    concat_height_h5_in_folder(options.save_net_path,
-                         options.batch_size,
-                         total_z_lenght,
-                         options.global_edge_len)
-
-    concat_pred_nq_h5_in_folder(options.save_net_path,
-                         options.batch_size,
-                         total_z_lenght,
-                         options.global_edge_len)
-
-    import validation_scripts as vs
-    reload_path = options.save_net_path + 'final.h5'
-    fov = 68
-    _, results = vs.validate_segmentation(pred_path=reload_path, gt_path=options.label_path,
-                             offset_xy=int(fov)/2, start_z=start_z,
-                             n_z=total_z_lenght,
-                             gel=options.global_edge_len)
-    f = open(options.save_net_path + 'results.txt', 'w')
-    f.write(results)
-    f.close()
+    
+    for name in ["slice", "baseline"]:
+        prediction_path = options.save_net_path + '/'+name+'_concat.h5'
+        evaluate_h5_files(prediction_path, options.label_path, name, options)

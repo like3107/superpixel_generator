@@ -800,7 +800,6 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             area = np.sum(self.global_label_batch[b]==s_gt_id)
             area = max(area, 200)
             self.global_error_dict[k]['importance'] = float(underflow) / area
-            print underflow / area
 
     def get_plateau_indicator(self):
         return self.global_prediction_map_nq  < self.global_prediction_map
