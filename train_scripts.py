@@ -652,7 +652,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     batch, pos = e['batch'], e[e_type + '_pos']
                     dist = self.bm.global_height_gt_batch[batch, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
                     weights[i] = np.exp(dist*0.05)
-        if RI_error is not None:
+        if self.options.weight_by_RI_b:
+            print 'RI weighting'
             weights *= RI_error
         return weights
 

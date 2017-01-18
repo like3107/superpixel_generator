@@ -64,6 +64,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--dropout_b', action='store_true', default=False)
     p.add('--bnorm_b', action='store_true', default=False)
     p.add('--weight_by_distance_b', action='store_true', default=False)
+    p.add('--weight_by_RI_b', action='store_true', default=False)
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)
