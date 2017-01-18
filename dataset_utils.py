@@ -627,6 +627,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                  "small_id": self.global_claims[b, x, y],
                  "slow_intruder": slow_intruder,
                  "plateau":False,
+                 "used":False,
                  "first_rec":True} # debug
             assert (new_error["large_gtid"] != new_error["small_gtid"])
             assert (new_error["large_id"] != new_error["small_id"])
