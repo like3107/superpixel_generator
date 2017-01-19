@@ -423,7 +423,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
             batch_ft = exp.flatten_stack(batch_ft).astype(np.float32)
             batch_dir_ft = exp.flatten_stack(batch_dir_ft).astype(np.int32)
             ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
-                      self.builder.loss_train_fine_f(batch_ft[:, :2], batch_ft[:, 2:], batch_dir_ft)
+                      self.builder.loss_train_fine_f(batch_ft[:, :self.options.claim_channels], batch_ft[:, self.options.claim_channels:], batch_dir_ft)
             if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)
             print 'loss ft', ft_loss_train
