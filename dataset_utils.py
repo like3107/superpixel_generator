@@ -70,7 +70,7 @@ class HoneyBatcherPredict(object):
         self.global_claims = np.empty(self.image_shape)
         self.global_claims.fill(-1.)
         self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
-        self.global_heightmap_batch = np.empty(self.label_shape)
+        self.global_heightmap_batch = np.empty(self.label_shape)            # post pq
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
         self.priority_queue = None

@@ -100,6 +100,12 @@ class PokemonTrainer(object):
         os.system('cp -rf *.py ' + code_path)
         os.system('cp -rf ./../data/config/*.conf ' + code_path)
 
+    def decrease_lr(self, disc_factor=0.95):
+        if self.iterations % 100 == 0 and self.options.learningrate_shared is not None:
+            dec = np.array(disc_factor, dtype=np.float32)
+            lr = self.options.learningrate_shared
+            lr.set_value(lr.get_value() * dec)
+            print "reducing learningrate by ", dec, "to ", lr.get_value()
 
     def update_BM(self):
         inputs, gt, seeds, ids = self.bm.get_batches()
@@ -607,6 +613,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             grads_av = [g / self.err_b_counter for g in self.grads_sum]
             self.builder.apply_grads(*grads_av)
 
+        if self.images_counter % 100 == 0:
+            self.decrease_lr()
+
         if self.images_counter % self.options.save_counter == 0:
             self.save_net(counter=self.images_counter)
         if self.images_counter % self.options.observation_counter == 0:
@@ -972,11 +981,8 @@ class GottaCatchemAllTrainer(PokemonTrainer):
         if self.iterations % self.options.save_counter == 0:
             self.save_net()
 
-        if self.iterations % 100 == 0 and self.options.learningrate_shared is not None:
-            dec = np.array(0.95, dtype=np.float32)
-            lr = self.options.learningrate_shared
-            lr.set_value(lr.get_value() * dec)
-            print "reducing learningrate by ",dec, "to ", lr.get_value()
+        if self.iterations % 180**2*20 == 0:
+            self.decrease_lr()
 
         # update parameters once
         self.update_history.append(self.iterations)
