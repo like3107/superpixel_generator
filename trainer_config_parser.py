@@ -54,7 +54,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--dummy_data', dest='dummy_data_b', action='store_true')
     p.add('--global_edge_len', default=300, type=int)
     p.add('--fast_reset', action='store_true')
-    p.add('--clip_method', default='clip')
+    p.add('--clip_method', default='clip')      # rescale, exp, clip
     p.add('--claim_aug', default='None')
     p.add('--padding_b', action='store_true')
     p.add('--master_training', action='store_true')

@@ -350,7 +350,7 @@ class NetBuilder:
             updates = las.updates.adam(loss_train_or_grads, all_params, lr, epsilon=1e-6)
         elif optimizer == "sgd":
             print 'using sgd',
-            updates = las.updates.sgd(loss_train_or_grads, all_params, self.options.learningrate)
+            updates = las.updates.sgd(loss_train_or_grads, all_params, lr)
         else:
             raise Exception("unknown optimizer %s" % optimizer)
         print ' with learning rate', self.options.learningrate

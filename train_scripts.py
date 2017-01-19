@@ -644,7 +644,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
         weights = np.ones(n_err, dtype=np.float32)
         if self.options.weight_by_distance_b:
-            print 'weighting'
             i = -1
             for es, e_type in zip(self.bm.error_selections, ['e1', 'e2']):
                 for e in es[::self.options.backtrace_length]:
@@ -653,7 +652,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     dist = self.bm.global_height_gt_batch[batch, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
                     weights[i] = np.exp(dist*0.05)
         if self.options.weight_by_RI_b:
-            print 'RI weighting'
             weights *= RI_error
         return weights
 
