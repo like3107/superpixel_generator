@@ -18,13 +18,13 @@ def pred_wrapper(options, slices, gpu):
             data=pred.bm.global_claims[:, pred.bm.pad:-pred.bm.pad, pred.bm.pad:-pred.bm.pad].astype(np.uint64),
             overwrite='w', compression='gzip')
 
-    save_height_path = options.validation_save_path + "/height_%04i_%04i.h5"%(slices[0],slices[-1])
-    save_h5(save_height_path, 'data', data=pred.bm.global_heightmap_batch, overwrite='w')
+    save_height_path = options.validation_save_path + "/height_%04i_%04i.h5" % (slices[0], slices[-1])
+    save_h5(save_height_path, 'data', data=pred.bm.global_heightmap_batch.astype(np.float32), overwrite='w')
 
-    save_pred_nq_path = options.validation_save_path  + "/pred_nq_path_%04i_%04i.h5"%(slices[0],slices[-1])
-    save_h5(save_pred_nq_path, 'data', data=pred.bm.global_prediction_map_nq, overwrite='w')
+    save_pred_nq_path = options.validation_save_path + "/pred_nq_path_%04i_%04i.h5" % (slices[0], slices[-1])
+    save_h5(save_pred_nq_path, 'data', data=pred.bm.global_prediction_map_nq.astype(np.float32), overwrite='w')
 
-    save_slice_path = options.validation_save_path + "/baseline_%04i_%04i.h5"%(slices[0],slices[-1])
+    save_slice_path = options.validation_save_path + "/baseline_%04i_%04i.h5" % (slices[0], slices[-1])
     save_h5(save_slice_path, 'data', data=pred.bm.get_ws_segmentation(), overwrite='w')
 
 def concat_h5_in_folder(path_to_folder, slice_size, n_slices, base_file_name='slice', label_b=False):
@@ -34,7 +34,7 @@ def concat_h5_in_folder(path_to_folder, slice_size, n_slices, base_file_name='sl
     initial = load_h5(files[0])[0]
     fin_shape = list(initial.shape)
     fin_shape[0] = n_slices
-    le_final = np.zeros(fin_shape, dtype=initial.dtype).astype(np.uint64)
+    le_final = np.zeros(fin_shape, dtype=initial.dtype)
     for start, file in zip(range(0, n_slices, slice_size), files):
         le_final[start:start + slice_size, :, :] = load_h5(file)[0]
     save_h5(path_to_folder + '/'+base_file_name+'_concat.h5', 'data', data=le_final, overwrite='w',

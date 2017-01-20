@@ -12,7 +12,7 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
         self.options = None
         self.get_options_from_net_file(val_options)        # sets self.options
         self.set_prediction_options(val_options)    # changes relevant self.options for validation
-        print 'using options' self.options
+        print 'using options', self.options
         super(Predictor, self).__init__(self.options)
         self.bm.set_preselect_batches(range(len(self.options.slices)))
         print "using options", self.options
