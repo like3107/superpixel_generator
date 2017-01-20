@@ -75,6 +75,11 @@ class HoneyBatcherPredict(object):
         self.global_seeds = None  # !!ALL!! coords include padding
         self.priority_queue = None
         self.coordinate_offset = np.array([[-1, 0], [0, -1], [1, 0], [0, 1]], dtype=np.int)
+        x = np.linspace(-self.pad,self.pad,2*self.pad + 1)
+        mg = np.meshgrid(x,x)
+        xv, yv = np.meshgrid(x,x)
+        self.manhattan_dist = np.abs(xv)+np.abs(yv)
+        self.manhattan_dist -= np.amax(self.manhattan_dist)
         self.direction_array = np.arange(4)
         self.error_indicator_pass = np.zeros((self.bs))
         self.global_time = 0
@@ -147,15 +152,20 @@ class HoneyBatcherPredict(object):
                                     center[0] - self.pad:center[0] + self.pad + 1,
                                     center[1] - self.pad:center[1] + self.pad + 1]
         if out is None:
-            out = np.zeros((2, self.pl, self.pl), dtype='float32')
+            out = np.zeros((self.options.claim_channels, self.pl, self.pl), dtype='float32')
         else:
-            out[:2].fill(0)
+            out[:self.options.claim_channels].fill(0)
         out[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
         out[0, :, :][labels == -1] = 0                    # the others
         out[1, :, :][labels == Id] = 1                    # me
 
         if len(out) > 2:
-            out[2, :, :][labels == 0] = 1
+            out[2, :, :][labels <= 0] = 1
+        if len(out) > 3:
+            min_pos = np.argmin(self.manhattan_dist * out[0])
+            ncol = labels.shape[1]
+            if labels[min_pos/ncol, min_pos%ncol] > 0:
+                out[3, :, :][labels == labels[min_pos/ncol, min_pos%ncol]] = 1
 
         if self.options.claim_aug == "height":
             h = np.array(self.global_heightmap_batch[b,
@@ -168,6 +178,8 @@ class HoneyBatcherPredict(object):
             hsx, hsy = h.shape
             out[0, hx:hx+hsx, hy:hy+hsy] *= h
             out[1, hx:hx+hsx, hy:hy+hsy] *= h
+            if len(out) > 3:
+                out[3, hx:hx+hsx, hy:hy+hsy] *= h
 
         return out
 
@@ -1497,10 +1509,17 @@ class HoneyBatcherRec(HoneyBatcherPath):
             return bt_error
         else:
             bt_error[key_center] = bt_pos
-            direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
-            old_pos = self.update_position(bt_pos, direction)
-            bt_error[key_time] = self.global_timemap[batch, old_pos[0], old_pos[1]]
-            bt_error[key_direction] = direction
+            old_direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
+            old_old_pos = self.update_position(bt_pos, old_direction)
+            bt_error[key_time] = self.global_timemap[batch, old_old_pos[0], old_old_pos[1]]
+            # debug
+            if bt_error[key_time] < 0:
+                print 'err negative time type', error, key_time, key_center, key_id, key_direction, key_mask
+                embed()
+            if np.any(old_old_pos < 0) or old_old_pos[0] >= self.image_shape[-2] - self.pad or old_old_pos[1] >= self.image_shape[-1] - self.pad:
+                print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
+                embed()
+            bt_error[key_direction] = old_direction
             return bt_error
 
     def reconstruct_path_error_inputs(self, backtrace_length=0):
