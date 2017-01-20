@@ -603,13 +603,13 @@ def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
     return output
 
 
-def save_h5(path, h5_key, data, overwrite='w-'):
+def save_h5(path, h5_key, data, overwrite='w-', compression=None):
     f = h.File(path, overwrite)
     if isinstance(h5_key, str):
         f.create_dataset(h5_key, data=data)
     if isinstance(h5_key, list):
         for key, values in zip(h5_key, data):
-            f.create_dataset(key, data=values)
+            f.create_dataset(key, data=values, compression=compression)
     f.close()
 
 

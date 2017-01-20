@@ -12,6 +12,7 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
         self.options = None
         self.get_options_from_net_file(val_options)        # sets self.options
         self.set_prediction_options(val_options)    # changes relevant self.options for validation
+        print 'using options' self.options
         super(Predictor, self).__init__(self.options)
         self.bm.set_preselect_batches(range(len(self.options.slices)))
         print "using options", self.options
@@ -24,11 +25,9 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
         self.options = u.load_options(net_path, copy(net_options))      # use net_options as placeholder
 
     def set_prediction_options(self, val_options):
-        print 'val options', val_options
-        print 'loaded potions', self.options
-        # self.options.seed_method = val_options.seed_method
+
         # options to keep from val script
-        self.options.net_arch = 'v8_hydra_dilated_ft_joint'
+        self.options.seed_method = val_options.seed_method
 
         self.options.gpu = val_options.gpu
         self.options.slices = val_options.slices
@@ -43,6 +42,8 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
         self.options.height_gt_path = val_options.height_gt_path
         self.options.label_path = val_options.label_path
 
+        # default options
+        self.options.net_arch = 'v8_hydra_dilated_ft_joint'
         self.options.augment_pretraining = False
         self.options.augment_ft = False
         self.options.quick_eval = True
@@ -67,8 +68,6 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
                 self.draw_debug(image_path=self.options.validation_save_path + 'slice_%04i' % self.options.slices[0])
             if self.free_voxel % 100 == 0:
                 bar.update(self.free_voxel_empty - self.free_voxel)
-
-
         # save to h5
 
 

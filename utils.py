@@ -444,8 +444,13 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 if __name__ == '__main__':
-    path = './data/nets/cnn_v5/preds_0'
-    concat_h5_in_folder(path, 8, 64, 300)
+    # path = './data/nets/cnn_v5/preds_0'
+    path_to_file = '/home/lschott_local/src/superpixel_generator/data/volumes/input_CREMI_noz_small_test.h5'
+    h = dp.load_h5(path_to_file, 'data')[0][:, 0, 35:-35, 35:-35]
+    print 'h', h.shape
+    dp.save_h5('raw_files.h5', 'data', h, 'w')
+
+    # concat_h5_in_folder(path, 8, 64, 300)
     # print random_color_map()
     # a = np.random.randint(0, 2, size=(100, 100))
     # print a.shape

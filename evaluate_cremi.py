@@ -12,9 +12,11 @@ def pred_wrapper(options, slices, gpu):
     options.slices = slices
     pred = evaluate_net.Predictor(options)
     pred.predict()
-    save_slice_path = options.validation_save_path + "/slice_%04i_%04i.h5"%(slices[0],slices[-1])
-    save_h5(save_slice_path, 'data', data=pred.bm.global_claims[:, pred.bm.pad:-pred.bm.pad, pred.bm.pad:-pred.bm.pad],
-            overwrite='w')
+
+    save_slice_path = options.validation_save_path + "/slice_%04i_%04i.h5" % (slices[0], slices[-1])
+    save_h5(save_slice_path, 'data',
+            data=pred.bm.global_claims[:, pred.bm.pad:-pred.bm.pad, pred.bm.pad:-pred.bm.pad].astype(np.uint64),
+            overwrite='w', compression='gzip')
 
     save_height_path = options.validation_save_path + "/height_%04i_%04i.h5"%(slices[0],slices[-1])
     save_h5(save_height_path, 'data', data=pred.bm.global_heightmap_batch, overwrite='w')
@@ -25,17 +27,18 @@ def pred_wrapper(options, slices, gpu):
     save_slice_path = options.validation_save_path + "/baseline_%04i_%04i.h5"%(slices[0],slices[-1])
     save_h5(save_slice_path, 'data', data=pred.bm.get_ws_segmentation(), overwrite='w')
 
-def concat_h5_in_folder(path_to_folder, slice_size, n_slices, base_file_name='slice'):
+def concat_h5_in_folder(path_to_folder, slice_size, n_slices, base_file_name='slice', label_b=False):
     import glob
     from data_provider import load_h5, save_h5
     files = sorted(glob.glob(path_to_folder + '/' + base_file_name + '*.h5'))
     initial = load_h5(files[0])[0]
     fin_shape = list(initial.shape)
     fin_shape[0] = n_slices
-    le_final = np.zeros(fin_shape, dtype=initial.dtype)
+    le_final = np.zeros(fin_shape, dtype=initial.dtype).astype(np.uint64)
     for start, file in zip(range(0, n_slices, slice_size), files):
         le_final[start:start + slice_size, :, :] = load_h5(file)[0]
-    save_h5(path_to_folder + '/'+base_file_name+'_concat.h5', 'data', data=le_final, overwrite='w')
+    save_h5(path_to_folder + '/'+base_file_name+'_concat.h5', 'data', data=le_final, overwrite='w',
+            compression='gzip')
 
 
 def evaluate_h5_files(prediction_path, gt_path, name, options):
@@ -84,8 +87,7 @@ if __name__ == '__main__':
         # processes.append(Process(
         #     target=pred_wrapper,
         #     args=(q, options, range(start,start+options.batch_size), g)))
-        pool.apply_async(pred_wrapper,
-            args=(options, range(start, start+options.batch_size), g))
+        pool.apply_async(pred_wrapper,  args=(options, range(start, start+options.batch_size), g))
         # debug
         # pred_wrapper(options, range(start, start + options.batch_size), g)
         time.sleep(8)  # for GPU claim
@@ -106,10 +108,10 @@ if __name__ == '__main__':
     if not options.padding_b:
         options.global_edge_len -= 70
 
-    for bn in ["slice", "height", "pred_nq_path", "baseline"]:
-        concat_h5_in_folder(options.validation_save_path, options.batch_size, total_z_lenght, base_file_name=bn)
+    for label_b, bn in zip( [True, False, False, True], ["slice", "height", "pred_nq_path", "baseline"]):
+        concat_h5_in_folder(options.validation_save_path, options.batch_size, total_z_lenght, base_file_name=bn,
+                            label_b=label_b)
 
-    
     for name in ["slice", "baseline"]:
         prediction_path = options.validation_save_path + '/'+name+'_concat.h5'
         evaluate_h5_files(prediction_path, options.label_path, name, options)
