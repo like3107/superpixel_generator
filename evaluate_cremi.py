@@ -3,6 +3,7 @@ from trainer_config_parser import get_options
 import time
 import os
 import numpy as np
+import re
 
 def pred_wrapper(options, slices, gpu):
     import evaluate_net
@@ -11,34 +12,20 @@ def pred_wrapper(options, slices, gpu):
     options.slices = slices
     pred = evaluate_net.Predictor(options)
     pred.predict()
-    save_slice_path = options.save_net_path \
-                    + "/slice_%04i_%04i.h5"%(slices[0],slices[-1])
-    save_h5(save_slice_path, 'data',
-        data=pred.bm.global_claims[:, pred.bm.pad:-pred.bm.pad,
-                                      pred.bm.pad:-pred.bm.pad],
-        overwrite='w')
-
-    save_height_path = options.save_net_path \
-                    + "/height_%04i_%04i.h5"%(slices[0],slices[-1])
-    save_h5(save_height_path, 'data',
-        data=pred.bm.global_heightmap_batch,
-        overwrite='w')
-
-
-    save_pred_nq_path = options.save_net_path \
-                    + "/pred_nq_path_%04i_%04i.h5"%(slices[0],slices[-1])
-    save_h5(save_pred_nq_path, 'data',
-            data=pred.bm.global_prediction_map_nq,
+    save_slice_path = options.validation_save_path + "/slice_%04i_%04i.h5"%(slices[0],slices[-1])
+    save_h5(save_slice_path, 'data', data=pred.bm.global_claims[:, pred.bm.pad:-pred.bm.pad, pred.bm.pad:-pred.bm.pad],
             overwrite='w')
 
-    save_slice_path = options.save_net_path \
-                    + "/baseline_%04i_%04i.h5"%(slices[0],slices[-1])
-    save_h5(save_slice_path, 'data',
-            data=pred.bm.get_ws_segmentation(),
-            overwrite='w')
+    save_height_path = options.validation_save_path + "/height_%04i_%04i.h5"%(slices[0],slices[-1])
+    save_h5(save_height_path, 'data', data=pred.bm.global_heightmap_batch, overwrite='w')
 
-def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len,
-                        base_file_name='slice'):
+    save_pred_nq_path = options.validation_save_path  + "/pred_nq_path_%04i_%04i.h5"%(slices[0],slices[-1])
+    save_h5(save_pred_nq_path, 'data', data=pred.bm.global_prediction_map_nq, overwrite='w')
+
+    save_slice_path = options.validation_save_path + "/baseline_%04i_%04i.h5"%(slices[0],slices[-1])
+    save_h5(save_slice_path, 'data', data=pred.bm.get_ws_segmentation(), overwrite='w')
+
+def concat_h5_in_folder(path_to_folder, slice_size, n_slices, base_file_name='slice'):
     import glob
     from data_provider import load_h5, save_h5
     files = sorted(glob.glob(path_to_folder + '/' + base_file_name + '*.h5'))
@@ -48,8 +35,7 @@ def concat_h5_in_folder(path_to_folder, slice_size, n_slices, edge_len,
     le_final = np.zeros(fin_shape, dtype=initial.dtype)
     for start, file in zip(range(0, n_slices, slice_size), files):
         le_final[start:start + slice_size, :, :] = load_h5(file)[0]
-    save_h5(path_to_folder + '/'+base_file_name+'_concat.h5', 'data', data=le_final,
-               overwrite='w')
+    save_h5(path_to_folder + '/'+base_file_name+'_concat.h5', 'data', data=le_final, overwrite='w')
 
 
 def evaluate_h5_files(prediction_path, gt_path, name, options):
@@ -60,7 +46,7 @@ def evaluate_h5_files(prediction_path, gt_path, name, options):
                              offset_xy=int(fov)/2, start_z=options.start_slice_z,
                              n_z=options.slices_total,
                              gel=options.global_edge_len)
-    f = open(options.save_net_path+'/'+name+'results.txt', 'w')
+    f = open(options.validation_save_path+'/'+name+'results.txt', 'w')
     f.write(results)
     f.close()
     print "####################################################"
@@ -87,17 +73,22 @@ if __name__ == '__main__':
         gpus = ["gpu%i"%i for i in range(4)]
     if not os.path.exists(options.save_net_path):
         os.makedirs(options.save_net_path)
-    
-    for i, start in enumerate(range(start_z,start_z+total_z_lenght, options.batch_size)):
-        g = gpus[i%4]
+    net_number = re.search(r'net_\d*', options.load_net_path).group()
+    options.validation_save_path = options.save_net_path + '/validation_%s/' % net_number
+
+    if not os.path.exists(options.validation_save_path):
+        os.mkdir(options.validation_save_path)
+
+    for i, start in enumerate(range(start_z, start_z+total_z_lenght, options.batch_size)):
+        g = gpus[i % 4]
         # processes.append(Process(
         #     target=pred_wrapper,
         #     args=(q, options, range(start,start+options.batch_size), g)))
         pool.apply_async(pred_wrapper,
-            args=(options, range(start,start+options.batch_size), g))
-        time.sleep(8)           # for GPU claim
+            args=(options, range(start, start+options.batch_size), g))
         # debug
-        # pred_wrapper(q, options, range(start, start + options.batch_size), g)
+        # pred_wrapper(options, range(start, start + options.batch_size), g)
+        time.sleep(8)  # for GPU claim
 
     # for p in processes:
     #     p.start()
@@ -116,13 +107,9 @@ if __name__ == '__main__':
         options.global_edge_len -= 70
 
     for bn in ["slice", "height", "pred_nq_path", "baseline"]:
-        concat_h5_in_folder(options.save_net_path,
-                        options.batch_size,
-                        total_z_lenght,
-                        options.global_edge_len,
-                        base_file_name=bn)
+        concat_h5_in_folder(options.validation_save_path, options.batch_size, total_z_lenght, base_file_name=bn)
 
     
     for name in ["slice", "baseline"]:
-        prediction_path = options.save_net_path + '/'+name+'_concat.h5'
+        prediction_path = options.validation_save_path + '/'+name+'_concat.h5'
         evaluate_h5_files(prediction_path, options.label_path, name, options)

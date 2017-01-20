@@ -359,7 +359,7 @@ def load_options(load_path, options={}):
     with h5py.File(load_path, 'r') as net_file:
         for op_key, op_val in [(k, net_file['options/'+k].value)\
                                 for k in net_file['options'].keys()]:
-            if isinstance(options,dict):
+            if isinstance(options, dict):
                 options[op_key] = op_val
             else:
                 options.__setattr__(op_key, op_val)

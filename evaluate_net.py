@@ -4,61 +4,53 @@ import utils as u
 from trainer_config_parser import get_options
 from copy import copy
 import progressbar
+import dataset_utils as du
 
 
 class Predictor(train_scripts.FCRecFinePokemonTrainer):
-    def __init__(self, options):
-        self.get_options_from_net_file(options)
-        super(Predictor, self).__init__(options)
-
-        self.set_prediction_options(options)
-        self.builder = nets.NetBuilder(self.options)
-        self.define_loss()
-        self.network_i_choose_you()
-        options.patch_len = self.builder.fov
-        self.init_BM()
-        self.bm = self.BM(self.options)
+    def __init__(self, val_options):
+        self.options = None
+        self.get_options_from_net_file(val_options)        # sets self.options
+        self.set_prediction_options(val_options)    # changes relevant self.options for validation
+        super(Predictor, self).__init__(self.options)
         self.bm.set_preselect_batches(range(len(self.options.slices)))
-        self.bm.init_batch()
-        self.iterations = -1
-        self.update_steps = 10
-        self.free_voxel_empty = self.bm.get_num_free_voxel()
-        self.free_voxel = self.free_voxel_empty
-        self.observation_counter = self.options.save_counter
-        self.update_history = []
-        self.loss_history = []
-        self.prepare_paths()
         print "using options", self.options
 
-    def get_options_from_net_file(self, options):
-        self.options = copy(options)
-        net_path = options.load_net_path
-        # self.options.__dict__.clear()
-        # u.load_options(net_path, self.options)
-        self.options = options
-        # debug temporary options
+    def init_BM(self):
+        self.BM = du.HoneyBatcherRec
+
+    def get_options_from_net_file(self, net_options):
+        net_path = net_options.load_net_path
+        self.options = u.load_options(net_path, copy(net_options))      # use net_options as placeholder
+
+    def set_prediction_options(self, val_options):
+        print 'val options', val_options
+        print 'loaded potions', self.options
+        # self.options.seed_method = val_options.seed_method
+        # options to keep from val script
         self.options.net_arch = 'v8_hydra_dilated_ft_joint'
 
+        self.options.gpu = val_options.gpu
+        self.options.slices = val_options.slices
+        self.options.batch_size = len(val_options.slices)
+        self.options.load_net_b = val_options.load_net_b
+        self.options.load_net_path = val_options.load_net_path
+        self.options.save_net_path = val_options.save_net_path
+        self.options.global_edge_len = val_options.global_edge_len
+        self.options.net_name = val_options.net_name
+        self.options.padding_b = val_options.padding_b
+        self.options.input_data_path = val_options.input_data_path
+        self.options.height_gt_path = val_options.height_gt_path
+        self.options.label_path = val_options.label_path
 
-        self.options.gpu = options.gpu
-        self.options.slices = options.slices
-        self.options.batch_size = len(options.slices)
-        self.options.load_net_b = options.load_net_b
-        self.options.load_net_path = options.load_net_path
-        self.options.save_net_path = options.save_net_path
-        self.options.global_edge_len = options.global_edge_len
-        self.options.quick_eval = options.quick_eval
-        self.options.net_name = options.net_name
-        self.options.padding_b = options.padding_b
-        self.options.input_data_path = options.input_data_path
-        self.options.height_gt_path = options.height_gt_path
-        self.options.label_path = options.label_path
+        self.options.augment_pretraining = False
+        self.options.augment_ft = False
+        self.options.quick_eval = True
         self.options.fc_prec = True
 
-    def set_prediction_options(self, options):
-        self.options.seed_method = options.seed_method
-
     def predict(self):
+        self.bm.init_batch()
+        self.free_voxel = self.free_voxel_empty
         inputs = self.update_BM_FC()
         # precompute fc part
         self.precomp_input = self.fc_prec_conv_body(inputs)
@@ -72,8 +64,7 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
             # self.save_net()
 
             if self.free_voxel % ((self.free_voxel_empty-1) / 5) == 0:
-                self.draw_debug(image_path=self.options.save_net_path+\
-                                    'slice_%04i'%self.options.slices[0])
+                self.draw_debug(image_path=self.options.validation_save_path + 'slice_%04i' % self.options.slices[0])
             if self.free_voxel % 100 == 0:
                 bar.update(self.free_voxel_empty - self.free_voxel)
 

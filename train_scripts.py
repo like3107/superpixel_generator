@@ -494,7 +494,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         rnn_mask = np.ones((bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
         height_probs, hidden_out = self.builder.probs_f_fc(inputs[:, :self.options.claim_channels],
-                                                                  precomp_input_sliced,  hiddens, rnn_mask, 1)
+                                                           precomp_input_sliced,  hiddens, rnn_mask, 1)
 
         # if np.all(centers == self.debug_pos):
         #     verbose = True
@@ -633,7 +633,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         #                                       (self.iterations))
         error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
             self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
-        grad_weights = self.weight_by_dist(RI_error=self.train_eval)
+        grad_weights = self.weight_gradients(RI_error=self.train_eval)
         batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
         batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
         batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
@@ -650,7 +650,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 g += gn
         return grad_mean, grad_std
 
-    def weight_by_dist(self, RI_error=None):
+    def weight_gradients(self, RI_error=None):
         n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
         weights = np.ones(n_err, dtype=np.float32)
         if self.options.weight_by_distance_b:
@@ -663,6 +663,13 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     weights[i] = np.exp(dist*0.05)
         if self.options.weight_by_RI_b:
             weights *= RI_error
+        if self.options.weight_by_importance:
+            i = -1
+            for es, e_type in zip(self.bm.error_selections, ['e1', 'e2']):
+                for e in es[::self.options.backtrace_length]:
+                    i += 1
+                    weights[i] *= e['importance']
+            weights /= np.max(weights)
         return weights
 
     def draw_loss(self, ft_loss_train, ft_loss_noreg, counter=None, name='ft_training'):
@@ -866,7 +873,7 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                             batch_inits = np.array(h5f['batch_inits'])
                             batch_mask_ft = np.array(h5f['batch_mask_ft'])
                             length = h5f['options.backtrace_length'].value
-                            weights = self.weight_by_dist()
+                            weights = self.weight_gradients()
 
                             ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
                                     self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft,
