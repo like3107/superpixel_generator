@@ -58,7 +58,6 @@ def evaluate_h5_files(prediction_path, gt_path, name, options):
 if __name__ == '__main__':
     processes = []
     options = get_options(script='validation')
-    pool = Pool(processes=options.max_processes)
     if options.global_edge_len > 0 and not options.quick_eval:
         for x in range(2):
             print "WARNING edge length is not set to 0. Are you sure ?"
@@ -76,30 +75,26 @@ if __name__ == '__main__':
         gpus = ["gpu%i"%i for i in range(4)]
     if not os.path.exists(options.save_net_path):
         os.makedirs(options.save_net_path)
-    net_number = re.search(r'net_\d*', options.load_net_path).group()
-    options.validation_save_path = options.save_net_path + '/validation_%s/' % net_number
+    try:
+        net_number = re.search(r'net_\d*', options.load_net_path).group()
+        options.validation_save_path = options.save_net_path + '/validation_%s/' % net_number
+    except:
+        options.validation_save_path = options.save_net_path + '/validation_0/'
 
     if not os.path.exists(options.validation_save_path):
         os.mkdir(options.validation_save_path)
 
-    for i, start in enumerate(range(start_z, start_z+total_z_lenght, options.batch_size)):
-        g = gpus[i % 4]
-        # processes.append(Process(
-        #     target=pred_wrapper,
-        #     args=(q, options, range(start,start+options.batch_size), g)))
-        pool.apply_async(pred_wrapper,  args=(options, range(start, start+options.batch_size), g))
-        # debug
-        # pred_wrapper(options, range(start, start + options.batch_size), g)
-        time.sleep(8)  # for GPU claim
-
-    # for p in processes:
-    #     p.start()
-
-    # for p in processes:
-    #     print 'joining'
-    #     p.join()
-    pool.close()
-    pool.join()
+    if options.max_processes > 1:
+        pool = Pool(processes=options.max_processes)
+        for i, start in enumerate(range(start_z, start_z+total_z_lenght, options.batch_size)):
+            g = gpus[i % 4]
+            pool.apply_async(pred_wrapper,  args=(options, range(start, start+options.batch_size), g))
+            time.sleep(8)  # for GPU claim
+        pool.close()
+        pool.join()
+    else:
+        for i, start in enumerate(range(start_z, start_z+total_z_lenght, options.batch_size)):
+            pred_wrapper(options, range(start, start + options.batch_size), options.gpu)
 
 
     if options.global_edge_len == 0:
