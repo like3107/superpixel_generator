@@ -41,7 +41,7 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
         self.options.input_data_path = val_options.input_data_path
         self.options.height_gt_path = val_options.height_gt_path
         self.options.label_path = val_options.label_path
-
+        self.options.s_minsize = 0
         # default options
         self.options.net_arch = 'v8_hydra_dilated_ft_joint'
         self.options.augment_pretraining = False
@@ -65,7 +65,8 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
             # self.save_net()
 
             if self.free_voxel % ((self.free_voxel_empty-1) / 5) == 0:
-                self.draw_debug(image_path=self.options.validation_save_path + 'slice_%04i' % self.options.slices[0])
+                self.draw_debug(image_path=self.options.validation_save_path + '/images/' + 'slice_%04i' %
+                                                                                            self.options.slices[0])
             if self.free_voxel % 100 == 0:
                 bar.update(self.free_voxel_empty - self.free_voxel)
         # save to h5

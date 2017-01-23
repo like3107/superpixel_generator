@@ -32,7 +32,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
 
     if defect_slices:
         print 'removing defect slices'
-        defect_slices_ind = [13, 19]
+        defect_slices_ind = [14, 15]
         pred = np.delete(pred, defect_slices_ind, axis=0)
         gt = np.delete(gt, defect_slices_ind, axis=0)
 

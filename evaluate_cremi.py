@@ -50,7 +50,7 @@ def evaluate_h5_files(prediction_path, gt_path, name, options):
                                           offset_xy=int(fov)/2, start_z=options.start_slice_z,
                                           n_z=options.slices_total,
                                           gel=options.global_edge_len,
-                                          defect_slices=options.defect_slices)
+                                          defect_slices=options.defect_slices_b)
     f = open(options.validation_save_path+'/'+name+'results.txt', 'w')
     f.write(results)
     f.close()
@@ -85,6 +85,8 @@ if __name__ == '__main__':
 
     if not os.path.exists(options.validation_save_path):
         os.mkdir(options.validation_save_path)
+    if not os.path.exists(options.validation_save_path + '/images/'):
+        os.mkdir(options.validation_save_path + '/images/')
 
     if options.max_processes > 1:
         pool = Pool(processes=options.max_processes)
