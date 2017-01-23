@@ -27,7 +27,7 @@ def get_options(script='training', ignore_config=False):
     # reload existing net
     p.add('--load_net', dest='load_net_b', action='store_true')
     p.add('--load_net_path', default='None')
-    p.add('--load_init_net_path', default='./data/nets/')
+    p.add('--load_init_net_path', default='None')
 
     p.add('--gpu', default='gpu0')
 

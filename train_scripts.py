@@ -1074,13 +1074,13 @@ if __name__ == '__main__':
     #         trainer.train()
     #         trainer.save_net()
     print 'ende'
-    # COLD WAR TEST 
+    # COLD WAR TEST
 
     # trainer = StalinTrainer(options)
     # while not trainer.converged():
     #     trainer.train()
     #     trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
- 
+
 
 
     # COLD WAR TEST 
