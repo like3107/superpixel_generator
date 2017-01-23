@@ -103,8 +103,8 @@ class PokemonTrainer(object):
         os.system('cp -rf *.py ' + code_path)
         os.system('cp -rf ./../data/config/*.conf ' + code_path)
 
-    def decrease_lr(self, disc_factor=0.95):
-        if self.iterations % 100 == 0 and self.options.learningrate_shared is not None:
+    def decrease_lr(self, disc_factor=0.9):
+        if self.options.learningrate_shared is not None:
             dec = np.array(disc_factor, dtype=np.float32)
             lr = self.options.learningrate_shared
             lr.set_value(lr.get_value() * dec)
