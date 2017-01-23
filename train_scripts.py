@@ -87,7 +87,10 @@ class PokemonTrainer(object):
         self.image_path_reset = self.save_net_path + '/images/reset/'
         self.image_path_validation = self.save_net_path + '/images/validation/'
         self.net_param_path = self.save_net_path + '/nets/'
-        code_path = self.save_net_path + '/code/'
+        if not self.options.validation_b:
+            code_path = self.save_net_path + '/code/'
+        else:
+            code_path = self.save_net_path + '/code_validation/'
         paths = [self.save_net_path, self.debug_path,
                  self.save_net_path + '/images/', self.image_path,
                  self.net_param_path, code_path, self.image_path_reset,
@@ -1054,13 +1057,12 @@ if __name__ == '__main__':
 
         last_val_epoch = 0
         while not trainer.converged():
+            trainer.train()
             if trainer.val_bm is not None \
                                 and trainer.epoch % options.save_counter == 0 \
                                 and trainer.epoch != last_val_epoch:
                 last_val_epoch = trainer.epoch
                 trainer.validate()
-            trainer.train()
-
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
     # elif options.net_arch == 'v8_hydra_dilated_ft_joint':
     #     # from pycallgraph import PyCallGraph

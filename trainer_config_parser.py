@@ -22,10 +22,11 @@ def get_options(script='training', ignore_config=False):
     p.add('--net_arch', default="ID_v5_hydra_BN")
     p.add('--no-save_net', dest='save_net_b', action='store_false')
     p.add('--val_name', default='')     # empty strings have catastrophic consequences!!!!
+    p.add('--validation_b', default=False, action='store_true')     # empty strings have catastrophic consequences!!!!
 
     # reload existing net
     p.add('--load_net', dest='load_net_b', action='store_true')
-    p.add('--load_net_path', default='./data/nets/V5_BN_times100/net_60000')
+    p.add('--load_net_path', default='None')
     p.add('--load_init_net_path', default='./data/nets/')
 
     p.add('--gpu', default='gpu0')
@@ -45,6 +46,7 @@ def get_options(script='training', ignore_config=False):
     def_valid_version = 'first_repr'
     p.add('--valid_version', default=def_valid_version)
     p.add('--max_processes', default=2, type=int) 
+    p.add('--defect_slices', default=False, action='store_true')
 
     # training general
     p.add('--no-val', dest='val_b', action='store_false')

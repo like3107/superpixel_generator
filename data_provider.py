@@ -45,6 +45,7 @@ def get_dataset_provider(datasetname):
     print 'using dataset: ', datasetname
     return getattr(sys.modules[__name__], datasetname+"DataProvider")
 
+
 def transpose_last(arr):
     order = np.arange(len(arr.shape))
     order[-2:] = order[-2:][::-1]
@@ -291,6 +292,7 @@ class CremiDataProvider(DataProvider):
             gt_id_map[ws_ids] = gt_ids
             segmentation[b] = gt_id_map[segmentation[b]]
         return segmentation != label_batch
+
 
 class PolygonDataProvider(DataProvider):
     def __init__(self, options):
@@ -560,6 +562,7 @@ class PolygonDataProvider(DataProvider):
 
         self.bs = orig_bs
 
+
 def cut_reprs(path):
     label_path = path + 'label_first_repr_big_zstack_cut.h5'
     memb_path = path + 'membranes_first_repr_big_zstack.h5'
@@ -606,7 +609,7 @@ def load_h5(path, h5_key=None, group=None, group2=None, slices=None):
 def save_h5(path, h5_key, data, overwrite='w-', compression=None):
     f = h.File(path, overwrite)
     if isinstance(h5_key, str):
-        f.create_dataset(h5_key, data=data)
+        f.create_dataset(h5_key, data=data, compression=compression)
     if isinstance(h5_key, list):
         for key, values in zip(h5_key, data):
             f.create_dataset(key, data=values, compression=compression)
@@ -766,38 +769,43 @@ def generate_quick_eval_big_FOV_z_slices(
                         vol_path,
                         names=['raw', 'label','membranes', 'height'],
                         h5_keys=[None,None, None, None],
-                        label=False, suffix='_first',
-                        n_slices=16, edg_len=300, n_slices_load=3 * 50,
-                        inp_el=1250, mode='valid', load=True, stack=True):
+                        label=False, suffix='_test',
+                        n_slices=30, edg_len=468, n_slices_load=3 * 50,
+                        inp_el=1250, mode='valid', load=True, stack=True,
+                        save_suffix='valid'):
     print 'mode', mode, 'stack', stack, 'suffix', suffix
     if stack:
         factor = 3
     else:
         factor = 1
-    represent_data = np.empty((4, factor * n_slices, edg_len, edg_len))
+    represent_data = np.empty((len(names), factor * n_slices, edg_len, edg_len))
 
-    all_data = np.empty((4, n_slices_load, inp_el, inp_el))
+    all_data = np.empty((len(names), n_slices_load, inp_el, inp_el))
 
+    j = 0
     for i, (key, name) in enumerate(zip(h5_keys, names)):
-        all_data[i, :, :, :] = load_h5(vol_path + name + suffix + '.h5',
-                           h5_key=key)[0]
+        print 'vol path', vol_path + name + suffix + '.h5'
+        if 'input' in name:
+            all_data[i, :, :, :] = load_h5(vol_path + name + suffix + '.h5', h5_key=key)[0][:, j, :, :]
+            j += 1
+        else:
+            all_data[i, :, :, :] = load_h5(vol_path + name + suffix + '.h5', h5_key=key)[0]
+
     if not load:
-        if mode == 'valid':
+        if 'valid' in mode:
             z_inds = range(40, 50) + range(90, 100) + range(140, 150)
-        elif mode == 'test':
+        elif 'test' in mode:
             z_inds = range(0, 40) + range(50, 90) + range(100, 140)
         else:
             mode = 'second'
             assert (n_slices_load == 3 * 75)
             z_inds = range(n_slices_load)
 
-        slices = sorted(np.random.choice(z_inds, size=n_slices,
-                                         replace=False))
+        slices = sorted(np.random.choice(z_inds, size=n_slices, replace=False))
         starts_x = np.random.randint(0, inp_el - edg_len, size=n_slices)
         starts_y = np.random.randint(0, inp_el - edg_len, size=n_slices)
     else:
-        slices, starts_x, starts_y = \
-            load_h5(path + 'indices_%s.h5' % mode)[0].astype(int)
+        slices, starts_x, starts_y = load_h5(path + 'indices_%s.h5' % mode)[0].astype(int)
 
     if stack:
         save_inds_x = range(1, n_slices_load * 3, 3)
@@ -806,11 +814,8 @@ def generate_quick_eval_big_FOV_z_slices(
     for i, start_x, start_y, slice in zip(save_inds_x,
                                           starts_x, starts_y, slices):
         print 'i', i, slice, start_x, start_y
+        represent_data[:, i, :, :] = all_data[:, slice, start_x:start_x+edg_len, start_y:start_y+edg_len]
 
-        represent_data[:, i, :, :] \
-            = all_data[:, slice,
-                       start_x:start_x+edg_len,
-                       start_y:start_y+edg_len]
         if suffix == '_first':
             if slice == 0 or slice == 50 or slice == 100:
                 below = slice
@@ -836,28 +841,40 @@ def generate_quick_eval_big_FOV_z_slices(
         else:
             inds_save = [i]
             inds_load = [slice]
-        represent_data[:, inds_save, :, :] \
-            = all_data[:, inds_load,
-                       start_x:start_x+edg_len,
-                       start_y:start_y+edg_len]
+        represent_data[:, inds_save, :, :] = all_data[:, inds_load, start_x:start_x+edg_len, start_y:start_y+edg_len]
 
     # save data
     if not load:
-        save_h5(path + 'indices_%s.h5' % mode, h5_key='zxy',
-            data=[slices, starts_x, starts_y], overwrite='w')
-    for data, name in zip(represent_data, names):
+        save_h5(vol_path + 'indices_%s.h5' % mode, h5_key='zxy', data=[slices, starts_x, starts_y], overwrite='w')
+    print 'repr data', represent_data.shape
+    repr_data_list = []
+    for indz in [(0, 2), (2, 3), (3,4), (4,5), (5,6)]:
+        print 'list indi', indz[0], indz[1]
+        repr_data_list.append(represent_data[indz[0]:indz[1]])
+
+    # exit()
+    for i, (data, name, h5_key) in enumerate(zip(repr_data_list, names[1:], h5_keys[1:])):
+        data = data.swapaxes(0,1).squeeze()
         if name == 'label':
             if stack:
                 data = data.astype(np.uint64)[1::3]
             else:
                 data = data.astype(np.uint64)
-        if stack:
-            stack_name = '_zstack'
+        if not stack:
+            stack_name = '_noz'
         else:
             stack_name = ''
-        save_h5(vol_path + name + '_%s' % mode + '_repr%s.h5' % stack_name, 'data',
-                data=data, overwrite='w')
+        print 'data', data.shape
+        print 'saving name', name, 'path', vol_path + name + '_CREMI_noz_small_valid' + '.h5', 'h5 key', h5_key
+        if 'height' in name and 'rescale' in h5_key:
+            overwrite = 'a'
+        else:
+            overwrite='w'
+        save_h5(vol_path + name + '_CREMI_noz_small_valid' + '.h5', h5_key, data=data, overwrite=overwrite)
 
+        print 'danata', data
+    exit()
+    return
 
 def segmentation_to_membrane(input_path,output_path):
     """
@@ -1040,6 +1057,13 @@ class TestPolygonDataProvider(PolygonDataProvider):
         self.load_test_data(options)
 
 if __name__ == '__main__':
+    generate_quick_eval_big_FOV_z_slices('./../data/volumes/', names=['input', 'input', 'height', 'height', 'label'],
+                                         h5_keys=['data', 'data', 'data', 'rescaled', 'data'],
+                                         suffix='_CREMI_noz_test',
+                                         load=False, stack=False,
+                                         save_suffix='_CREMI_noz_valid',
+                                         mode='CEMI_noz_valid')
+
     # class opt():
     #     def __init__(self):
     #         self.batch_size = 10
@@ -1061,10 +1085,10 @@ if __name__ == '__main__':
     # #     p.prepare_input_batch(inputx)
     # p.load_test_data(options)
     # # p.draw_circle()
-
-    options = get_options()
-    cdp = CremiDataProvider(options)
-    cdp.load_data()
-    print cdp.full_input.shape
-    print cdp.label.shape
-    print cdp.height_gt.shape
+    #
+    # options = get_options()
+    # cdp = CremiDataProvider(options)
+    # cdp.load_data()
+    # print cdp.full_input.shape
+    # print cdp.label.shape
+    # print cdp.height_gt.shape

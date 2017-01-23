@@ -98,7 +98,8 @@ class NetBuilder:
         print 'building recurrent joint net'
         layers_static, fov, _ = self.build_net_v8_dilated(l_image_in=l_image_in)
         self.layers_static = layers_static
-        u.load_network(self.options.load_init_net_path, layers_static['l_out_cross'])
+        if not self.options.load_net_b and self.options.load_init_net_path != 'None':
+            u.load_network(self.options.load_init_net_path, layers_static['l_out_cross'])
 
         # transfer copied layers to new dictionary
         layers = {}

@@ -27,6 +27,7 @@ def pred_wrapper(options, slices, gpu):
     save_slice_path = options.validation_save_path + "/baseline_%04i_%04i.h5" % (slices[0], slices[-1])
     save_h5(save_slice_path, 'data', data=pred.bm.get_ws_segmentation(), overwrite='w')
 
+
 def concat_h5_in_folder(path_to_folder, slice_size, n_slices, base_file_name='slice', label_b=False):
     import glob
     from data_provider import load_h5, save_h5
@@ -46,9 +47,10 @@ def evaluate_h5_files(prediction_path, gt_path, name, options):
     fov = 68
     print "############ Evaliation for ",name,"############"
     _, results = vs.validate_segmentation(pred_path=prediction_path, gt_path=gt_path,
-                             offset_xy=int(fov)/2, start_z=options.start_slice_z,
-                             n_z=options.slices_total,
-                             gel=options.global_edge_len)
+                                          offset_xy=int(fov)/2, start_z=options.start_slice_z,
+                                          n_z=options.slices_total,
+                                          gel=options.global_edge_len,
+                                          defect_slices=options.defect_slices)
     f = open(options.validation_save_path+'/'+name+'results.txt', 'w')
     f.write(results)
     f.close()
@@ -95,7 +97,6 @@ if __name__ == '__main__':
     else:
         for i, start in enumerate(range(start_z, start_z+total_z_lenght, options.batch_size)):
             pred_wrapper(options, range(start, start + options.batch_size), options.gpu)
-
 
     if options.global_edge_len == 0:
         options.global_edge_len = 1250

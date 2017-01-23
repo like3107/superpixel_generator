@@ -5,7 +5,8 @@ import data_provider as du
 
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
                           pred_key=None, gt_key=None, slice_by_slice=True,
-                          offset_xy=0, gel=None, start_z=None, n_z=None):
+                          offset_xy=0, gel=None, start_z=None, n_z=None,
+                          defect_slices=None):
     assert (gt_path is not None or gt is not None)  # specify either gt path or gt as np array
     assert (pred_path is not None or pred is not None)    # specify either raw path or raw as np array
 
@@ -18,14 +19,22 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
             gt = du.load_h5(gt_path, h5_key=gt_key)[0][start_z:start_z+n_z,
                                                        offset_xy:offset_xy+gel,
                                                        offset_xy:offset_xy+gel]
+
         else:
             gt = du.load_h5(gt_path, h5_key=gt_key)[0][:,
                   offset_xy:offset_xy + gel,
                   offset_xy:offset_xy + gel]
 
+
     if isinstance(pred_path, str):
         pred = du.load_h5(pred_path, h5_key=pred_key)[0]
     assert(gt.shape == pred.shape)
+
+    if defect_slices:
+        print 'removing defect slices'
+        defect_slices_ind = [13, 19]
+        pred = np.delete(pred, defect_slices_ind, axis=0)
+        gt = np.delete(gt, defect_slices_ind, axis=0)
 
     if slice_by_slice:
         print 'slice by slice evaluation'
