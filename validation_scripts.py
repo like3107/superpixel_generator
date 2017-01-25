@@ -112,29 +112,61 @@ def adapted_rand(seg, gt, all_stats=False):
     # segA is truth, segB is query
     segA = np.ravel(gt)
     segB = np.ravel(seg)
-    n = segA.size
+
+    # mask to foreground in A
+    mask = (segA > 0)
+    segA = segA[mask]
+    segB = segB[mask]
+    n = segA.size  # number of nonzero pixels in original segA
 
     n_labels_A = np.amax(segA) + 1
     n_labels_B = np.amax(segB) + 1
 
     ones_data = np.ones(n)
 
-    p_ij = sparse.csr_matrix((ones_data, (segA[:], segB[:])), shape=(n_labels_A, n_labels_B))
+    p_ij = sparse.csr_matrix((ones_data, (segA.ravel(), segB.ravel())),
+                             shape=(n_labels_A, n_labels_B),
+                             dtype=np.uint64)
 
-    a = p_ij[1:n_labels_A,:]
-    b = p_ij[1:n_labels_A,1:n_labels_B]
-    c = p_ij[1:n_labels_A,0].todense()
-    d = np.array(b.todense()) ** 2
+    # In the paper where adapted rand is proposed, they treat each background
+    # pixel in segB as a different value (i.e., unique label for each pixel).
+    # To do this, we sum them differently than others
 
-    a_i = np.array(a.sum(1))
-    b_i = np.array(b.sum(0))
+    B_nonzero = p_ij[:, 1:]
+    B_zero = p_ij[:, 0]
 
-    sumA = np.sum(a_i * a_i)
-    sumB = np.sum(b_i * b_i) + (np.sum(c) / n)
-    sumAB = np.sum(d) + (np.sum(c) / n)
+    # this is a count
+    num_B_zero = B_zero.sum()
 
-    precision = sumAB / sumB
-    recall = sumAB / sumA
+    # This is the old code, with conversion to probabilities:
+    #
+    #  # sum of the joint distribution
+    #  #   separate sum of B>0 and B=0 parts
+    #  sum_p_ij = ((B_nonzero.astype(np.float32) / n).power(2).sum() +
+    #              (float(num_B_zero) / (n ** 2)))
+    #
+    #  # these are marginal probabilities
+    #  a_i = p_ij.sum(1).astype(np.float32) / n
+    #  b_i = B_nonzero.sum(0).astype(np.float32) / n
+    #
+    #  sum_a = np.power(a_i, 2).sum()
+    #  sum_b = np.power(b_i, 2).sum() + (float(num_B_zero) / (n ** 2))
+
+    # This is the new code, removing the divides by n because they cancel.
+
+    # sum of the joint distribution
+    #   separate sum of B>0 and B=0 parts
+    sum_p_ij = (B_nonzero).power(2).sum() + num_B_zero
+
+    # these are marginal probabilities
+    a_i = p_ij.sum(1)
+    b_i = B_nonzero.sum(0)
+
+    sum_a = np.power(a_i, 2).sum()
+    sum_b = np.power(b_i, 2).sum() + num_B_zero
+
+    precision = float(sum_p_ij) / sum_b
+    recall = float(sum_p_ij) / sum_a
 
     fScore = 2.0 * precision * recall / (precision + recall)
     are = 1.0 - fScore
