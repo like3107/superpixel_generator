@@ -103,9 +103,9 @@ class PokemonTrainer(object):
         os.system('cp -rf *.py ' + code_path)
         os.system('cp -rf ./../data/config/*.conf ' + code_path)
 
-    def decrease_lr(self, disc_factor=0.9):
+    def decrease_lr(self):
         if self.options.learningrate_shared is not None:
-            dec = np.array(disc_factor, dtype=np.float32)
+            dec = np.array(self.options.lr_decrase, dtype=np.float32)
             lr = self.options.learningrate_shared
             lr.set_value(lr.get_value() * dec)
             print "reducing learningrate by ", dec, "to ", lr.get_value()
