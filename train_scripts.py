@@ -604,9 +604,13 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
         self.train_eval = np.array([vs.validate_claims(claims, self.bm.global_label_batch)], dtype='float32')[0]
 
+        if self.images_counter % self.options.save_counter == 0:            # save before update
+            self.save_net(counter=self.images_counter)
+
         self.err_b_counter, train_infos, self.grads_sum, only_once = 0, 0, None, False
         while self.bm.count_new_path_errors() > 0 and not only_once:
-            if self.options.stochastic_update_b: only_once = True
+            if self.options.stochastic_update_b:
+                only_once = True
             train_infos += np.array(self.path_training())
 
         if self.err_b_counter > 0:
@@ -619,8 +623,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         if self.images_counter % 100 == 0:
             self.decrease_lr()
 
-        if self.images_counter % self.options.save_counter == 0:
-            self.save_net(counter=self.images_counter)
         if self.images_counter % self.options.observation_counter == 0:
             trainer.draw_debug(reset=True, counter=self.images_counter)
 

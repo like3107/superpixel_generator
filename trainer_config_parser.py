@@ -79,9 +79,9 @@ def get_options(script='training', ignore_config=False):
     p.add('--no-augment_pretraining', dest='augment_pretraining', action='store_false')
     p.add('--create_holes', action='store_true', default=False)
 
-    p.add('--scale_height_factor', default=100, type=float)
-    p.add('--ahp', dest='add_height_penalty', action='store_true')
-    p.add('--max_penalty_pixel', default=3, type=float)
+    # p.add('--scale_height_factor', default=100, type=float)
+    # p.add('--ahp', dest='add_height_penalty', action='store_true')
+    # p.add('--max_penalty_pixel', default=3, type=float)
 
     # RNN
     p.add('--n_recurrent_hidden', default=128, type=int)

@@ -801,7 +801,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             batch = self.global_error_dict[k]['batch']
             pos1 = np.array(self.global_error_dict[k]['e1_pos']) - self.pad
             pos2 = np.array(self.global_error_dict[k]['e2_pos']) - self.pad
-            if self.hard_regions[batch,pos1[0],pos1[1]] or self.hard_regions[batch,pos2[0],pos2[1]]:
+            if self.hard_regions[batch, pos1[0], pos1[1]] or self.hard_regions[batch, pos2[0], pos2[1]]:
                 self.global_error_dict[k]['importance'] *= 1000
 
     def weight_importance_by_overflow(self):
@@ -820,8 +820,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         print 'searching for hard regions'
 
         for b in range(self.bs):
-            self.global_errormap[b,0] = np.logical_and(self.global_errormap[b,1] ,
-                            binary_dilation(binary_erosion(self.global_errormap[b,1])))
+            self.global_errormap[b, 0] = np.logical_and(self.global_errormap[b, 1],
+                                                        binary_dilation(binary_erosion(self.global_errormap[b, 1])))
 
         self.find_hard_regions()
         self.locate_global_error_path_intersections()
