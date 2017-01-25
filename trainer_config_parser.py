@@ -79,9 +79,6 @@ def get_options(script='training', ignore_config=False):
     p.add('--no-augment_pretraining', dest='augment_pretraining', action='store_false')
     p.add('--create_holes', action='store_true', default=False)
 
-    # p.add('--scale_height_factor', default=100, type=float)
-    # p.add('--ahp', dest='add_height_penalty', action='store_true')
-    # p.add('--max_penalty_pixel', default=3, type=float)
 
     # RNN
     p.add('--n_recurrent_hidden', default=128, type=int)
@@ -92,31 +89,16 @@ def get_options(script='training', ignore_config=False):
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)
-    # p.add('--reset_after_fine_tune', action='store_true')
-    # p.add('--no-ft', dest='fine_tune_b', action='store_false')
-    # p.add('--reset-ft', dest='rs_ft', action='store_true')
-    # p.add('--reset_pretraining', dest='reset_pretraining', action='store_true')
-    # p.add('--margin', default=0.5, type=float)
+
     p.add('--no-aug-ft', dest='augment_ft', action='store_false')
     p.add('--optimizer', default="nesterov", type=str)
     p.add('--stochastic_update_b', default=False, action='store_true')
     p.add('--learningrate', default=0.000001, type=float)
+    p.add('--lr_decrase', default=0.95, type=float)
 
 
     # experience replay
-    # clip_method="exp20"
-    # p.add('--exp_bs', default=16, type=int)
-    # p.add('--exp_ft_bs', default=8, type=int)
-    # p.add('--exp_warmstart', default=1000, type=int)
-    # p.add('--exp_acceptance_rate', default=0.1, type=float)
-    # p.add('--no-exp_height', dest='exp_height', action='store_false')
-    # p.add('--no-exp_save', dest='exp_save', action='store_false')
-    # p.add('--exp_mem_size', default=20000, type=int)
-    # p.add('--exp_load', default="None", type=str)
-    # p.add('--no-exp_loss', dest='exp_loss', action='store_false')
-    # p.add('--exp_wlast', default=1., type=float)
-    #
-    # p.add('--max_iter', default=10000000000000, type=int)
+
     p.add('--no_bash_backup', action='store_true')
     p.add('--lowercomplete_e', default=0., type=float)
 
@@ -135,6 +117,28 @@ def get_options(script='training', ignore_config=False):
     # validation
     p.add('--slices_total', type=int, default=10)
     p.add('--start_slice_z', type=int, default=100)
+
+    p.add('--reset_after_fine_tune', action='store_true')
+    p.add('--no-ft', dest='fine_tune_b', action='store_false')
+    p.add('--reset-ft', dest='rs_ft', action='store_true')
+    p.add('--reset_pretraining', dest='reset_pretraining', action='store_true')
+    p.add('--margin', default=0.5, type=float)
+    # clip_method="exp20"
+    p.add('--exp_bs', default=16, type=int)
+    p.add('--exp_ft_bs', default=8, type=int)
+    p.add('--exp_warmstart', default=1000, type=int)
+    p.add('--exp_acceptance_rate', default=0.1, type=float)
+    p.add('--no-exp_height', dest='exp_height', action='store_false')
+    p.add('--no-exp_save', dest='exp_save', action='store_false')
+    p.add('--exp_mem_size', default=20000, type=int)
+    p.add('--exp_load', default="None", type=str)
+    p.add('--no-exp_loss', dest='exp_loss', action='store_false')
+    p.add('--exp_wlast', default=1., type=float)
+    p.add('--max_iter', default=10000000000000, type=int)
+    p.add('--scale_height_factor', default=100, type=float)
+    p.add('--ahp', dest='add_height_penalty', action='store_true')
+    p.add('--max_penalty_pixel', default=3, type=float)
+
 
     options = p.parse_args()
 
