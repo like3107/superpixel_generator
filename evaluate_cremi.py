@@ -59,7 +59,7 @@ def evaluate_h5_files(prediction_path, gt_path, name, options):
 
 if __name__ == '__main__':
     processes = []
-    options = get_options(script='validation')
+    options = get_options(script='validation_valid')
     if options.global_edge_len > 0 and not options.quick_eval:
         for x in range(2):
             print "WARNING edge length is not set to 0. Are you sure ?"
