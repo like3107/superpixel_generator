@@ -44,6 +44,7 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
         self.options.s_minsize = 0
         # default options
         self.options.net_arch = 'v8_hydra_dilated_ft_joint'
+        self.options.validation_b = True
         self.options.augment_pretraining = False
         self.options.augment_ft = False
         self.options.quick_eval = True
