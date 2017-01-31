@@ -573,36 +573,22 @@ class GPDataProvider(PolygonDataProvider):
         None
 
         # Generate Gaussian Model to sample from
-        self.el = 250
+        import numpy as np
+        import GPy
+        from matplotlib import pyplot as plt
+        import os
+        from scipy import sparse
+        el = 250
+        n_samples = 10000
 
-        h_el = self.el / 2
-        print np.mgrid[-h_el:h_el, -h_el:h_el].shape
-        X = np.mgrid[-h_el :h_el , -h_el :h_el].reshape(2, self.el**2).swapaxes(1, 0)
-        # print 'X', X
-        # exit()
+        h_el = el / 2
+        X = np.mgrid[-h_el:h_el, -h_el:h_el].reshape(2, el ** 2).swapaxes(1, 0)  # all pixel coord pairs [(0,0), (0,1)..]
         k = GPy.kern.RBF(2, ARD=True, lengthscale=6)
-        print X
-        C = k.K(X, X)
-        print 'invert'
-        # AMN = u.ApproxMultivariateNormal(C  + np.diag(np.random.normal(0, size=C.shape[0])))
-        print 'ivnertion done'
-        np.save('./inv_matrix250.npy', np.linalg.inv(C))
-        exit()
-        print 'done'
-        print C.shape
-        mn = stats.multivariate_normal()
-        # Z = np.random.multivariate_normal(np.zeros((self.el**2)), C, 10)
-        print 'Z done'
-        Z2 = np.zeros_like(Z)
-        Z2[Z > 0.5] = 1.
-        print 'Z', Z.shape
-        fig, ax = plt.subplots(10, 2)
-        print 'fig, ax', fig, ax
-        for i in range(10):
-            ax[i, 0].imshow(Z[i].reshape((self.el, self.el)), cmap='gray', interpolation='none')
-            ax[i, 1].imshow(Z2[i].reshape((self.el, self.el)), cmap='gray', interpolation='none')
-        plt.show()
-        exit()
+        C = k.K(X, X) + np.diag(np.random.random(el**2)) / 100.  # Kernel matrix C
+        Z = np.random.multivariate_normal(np.zeros((el**2)), C, n_samples)           # sample from
+        save_h5('./../data/volumes/GP_raw.h5', 'data', Z.reshape(n_samples, el, el),
+                overwrite='w')
+
 
     def make_single_image(self):
         X = None
