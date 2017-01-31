@@ -443,6 +443,26 @@ def plot_val_errors(all_y_values, x_values, save_path, names,
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
+
+class ApproxMultivariateNormal(object):
+    def __init__(self, cov):
+        self.d = cov.shape[0]
+        det = np.linalg.det(cov)
+        print 'det', det
+        inv_path = './inverse_matrix.npy'
+        # if os.path.exists(inv_path):
+        #     inv_matrix =
+        # np.save(, self.inv_cov)
+
+        self.inv_cov = np.linalg.pinv(cov)
+        print 'conv', cov
+        print 'pi'
+        self.pref = 1. / (np.sqrt((2 * np.pi)**self.d * det + 10**-4))
+
+    def sample(self, n=1):
+        x = np.random.normal(0, size=self.d)[:, None]
+        return 0.001 * np.exp(- 0.5 * np.dot(np.dot(x.T, self.inv_cov), x))
+
 if __name__ == '__main__':
     # path = './data/nets/cnn_v5/preds_0'
     path_to_file = '/home/lschott_local/src/superpixel_generator/data/volumes/input_CREMI_noz_small_test.h5'

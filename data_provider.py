@@ -1,3 +1,6 @@
+# import matplotlib
+# matplotlib.use('Qt4Agg')
+from matplotlib import pyplot as plt
 import h5py as h
 import numpy as np
 import random
@@ -18,6 +21,8 @@ from voronoi_polygon import voronoi_finite_polygons_2d
 # import png
 from trainer_config_parser import get_options
 import ws_timo_gtseeds
+import GPy
+
 
 def segmenation_to_membrane_core(label_image):
     gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -562,6 +567,46 @@ class PolygonDataProvider(DataProvider):
 
         self.bs = orig_bs
 
+class GPDataProvider(PolygonDataProvider):
+    def __init__(self, options):
+        # super(GPDataProvider, self).__init__(options)
+        None
+
+        # Generate Gaussian Model to sample from
+        self.el = 250
+
+        h_el = self.el / 2
+        print np.mgrid[-h_el:h_el, -h_el:h_el].shape
+        X = np.mgrid[-h_el :h_el , -h_el :h_el].reshape(2, self.el**2).swapaxes(1, 0)
+        # print 'X', X
+        # exit()
+        k = GPy.kern.RBF(2, ARD=True, lengthscale=6)
+        print X
+        C = k.K(X, X)
+        print 'invert'
+        # AMN = u.ApproxMultivariateNormal(C  + np.diag(np.random.normal(0, size=C.shape[0])))
+        print 'ivnertion done'
+        np.save('./inv_matrix250.npy', np.linalg.inv(C))
+        exit()
+        print 'done'
+        print C.shape
+        mn = stats.multivariate_normal()
+        # Z = np.random.multivariate_normal(np.zeros((self.el**2)), C, 10)
+        print 'Z done'
+        Z2 = np.zeros_like(Z)
+        Z2[Z > 0.5] = 1.
+        print 'Z', Z.shape
+        fig, ax = plt.subplots(10, 2)
+        print 'fig, ax', fig, ax
+        for i in range(10):
+            ax[i, 0].imshow(Z[i].reshape((self.el, self.el)), cmap='gray', interpolation='none')
+            ax[i, 1].imshow(Z2[i].reshape((self.el, self.el)), cmap='gray', interpolation='none')
+        plt.show()
+        exit()
+
+    def make_single_image(self):
+        X = None
+
 
 def cut_reprs(path):
     label_path = path + 'label_first_repr_big_zstack_cut.h5'
@@ -1057,12 +1102,14 @@ class TestPolygonDataProvider(PolygonDataProvider):
         self.load_test_data(options)
 
 if __name__ == '__main__':
-    generate_quick_eval_big_FOV_z_slices('./../data/volumes/', names=['input', 'input', 'height', 'height', 'label'],
-                                         h5_keys=['data', 'data', 'data', 'rescaled', 'data'],
-                                         suffix='_CREMI_noz_test',
-                                         load=False, stack=False,
-                                         save_suffix='_CREMI_noz_valid',
-                                         mode='CEMI_noz_valid')
+    # op
+    GPD = GPDataProvider(None)
+    # generate_quick_eval_big_FOV_z_slices('./../data/volumes/', names=['input', 'input', 'height', 'height', 'label'],
+    #                                      h5_keys=['data', 'data', 'data', 'rescaled', 'data'],
+    #                                      suffix='_CREMI_noz_test',
+    #                                      load=False, stack=False,
+    #                                      save_suffix='_CREMI_noz_valid',
+    #                                      mode='CEMI_noz_valid')
 
     # class opt():
     #     def __init__(self):

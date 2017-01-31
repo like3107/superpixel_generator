@@ -32,20 +32,23 @@ def concat_h5_in_folder(path_to_folder, slice_size, n_slices, base_file_name='sl
     import glob
     from data_provider import load_h5, save_h5
     files = sorted(glob.glob(path_to_folder + '/' + base_file_name + '*.h5'))
+    print 'files', files, (path_to_folder + '/' + base_file_name + '*.h5')
+    if not os.path.exists(files[0]):
+        print files[0]
     initial = load_h5(files[0])[0]
     fin_shape = list(initial.shape)
     fin_shape[0] = n_slices
     le_final = np.zeros(fin_shape, dtype=initial.dtype)
     for start, file in zip(range(0, n_slices, slice_size), files):
         le_final[start:start + slice_size, :, :] = load_h5(file)[0]
-    save_h5(path_to_folder + '/'+base_file_name+'_concat.h5', 'data', data=le_final, overwrite='w',
+    save_h5(path_to_folder + '/'+base_file_name+'_concat.h5', 'data', data=le_final.astype(np.uint64), overwrite='w',
             compression='gzip')
 
 
 def evaluate_h5_files(prediction_path, gt_path, name, options):
     import validation_scripts as vs
-    fov = 68
-    print "############ Evaliation for ",name,"############"
+    fov = 70
+    print "############ Evaliation for ", name, "############"
     _, results = vs.validate_segmentation(pred_path=prediction_path, gt_path=gt_path,
                                           offset_xy=int(fov)/2, start_z=options.start_slice_z,
                                           n_z=options.slices_total,

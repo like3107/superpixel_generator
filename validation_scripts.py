@@ -61,7 +61,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         print 'Adapted Rand error precision :, %.3f ,+- %.3f' % (all_means[3], all_vars[3])
         print 'Adapted Rand error recall    :, %.3f ,+- %.3f' % (all_means[4], all_vars[4])
         # string for easy copy to google doc
-        print ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
+        print ','.join(['%.3f,+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
         text = ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
 
         return make_val_dic(all_means, all_vars), text
@@ -109,6 +109,20 @@ def adapted_rand(seg, gt, all_stats=False):
     ----------
     [1]: http://brainiac2.mit.edu/SNEMI3D/evaluation
     """
+    if np.any(seg == 0):
+        print 'waarning zeros in seg, treat as background'
+    if np.any(gt == 0):
+        print 'waarning zeros in gt, 0 labels will be ignored'
+
+    import data_provider as dp
+    from scipy.ndimage.morphology import binary_dilation
+
+    # boundaries = dp.segmenation_to_membrane_core(gt.squeeze())[0]
+    # boundaries = binary_dilation(boundaries, iterations=1)
+    # gt[boundaries, 0] = 0
+
+    # print 'after gt', np.sum(gt == 0)
+
     # segA is truth, segB is query
     segA = np.ravel(gt)
     segB = np.ravel(seg)
@@ -119,6 +133,7 @@ def adapted_rand(seg, gt, all_stats=False):
     segB = segB[mask]
     n = segA.size  # number of nonzero pixels in original segA
 
+    # print 'n', n
     n_labels_A = np.amax(segA) + 1
     n_labels_B = np.amax(segB) + 1
 
@@ -128,39 +143,30 @@ def adapted_rand(seg, gt, all_stats=False):
                              shape=(n_labels_A, n_labels_B),
                              dtype=np.uint64)
 
+    # print 'pij'
+    # print p_ij.todense()
+
     # In the paper where adapted rand is proposed, they treat each background
     # pixel in segB as a different value (i.e., unique label for each pixel).
     # To do this, we sum them differently than others
 
-    B_nonzero = p_ij[:, 1:]
+    B_nonzero = p_ij[:, 1:]             # ind (label_gt, label_seg), so ignore 0 seg labels
     B_zero = p_ij[:, 0]
 
     # this is a count
     num_B_zero = B_zero.sum()
 
-    # This is the old code, with conversion to probabilities:
-    #
-    #  # sum of the joint distribution
-    #  #   separate sum of B>0 and B=0 parts
-    #  sum_p_ij = ((B_nonzero.astype(np.float32) / n).power(2).sum() +
-    #              (float(num_B_zero) / (n ** 2)))
-    #
-    #  # these are marginal probabilities
-    #  a_i = p_ij.sum(1).astype(np.float32) / n
-    #  b_i = B_nonzero.sum(0).astype(np.float32) / n
-    #
-    #  sum_a = np.power(a_i, 2).sum()
-    #  sum_b = np.power(b_i, 2).sum() + (float(num_B_zero) / (n ** 2))
-
-    # This is the new code, removing the divides by n because they cancel.
-
     # sum of the joint distribution
     #   separate sum of B>0 and B=0 parts
     sum_p_ij = (B_nonzero).power(2).sum() + num_B_zero
 
+    # print 'sum pij', sum_p_ij
+
     # these are marginal probabilities
-    a_i = p_ij.sum(1)
+    a_i = p_ij.sum(1)           # sum over all seg labels overlapping one gt label (except 0 labels)
     b_i = B_nonzero.sum(0)
+    # print 'ai', a_i
+    # print 'bi', b_i
 
     sum_a = np.power(a_i, 2).sum()
     sum_b = np.power(b_i, 2).sum() + num_B_zero
@@ -477,22 +483,40 @@ def make_val_dic(all_means, all_vars):
 
 
 if __name__ == '__main__':
-    print   
-    # pred_path='./data/preds/pred2_net_real_seeds_2D.h5'
-    # pred_path='./data/preds/timo_first_repr_zstack.h5'
-    # pred_path='./data/preds/tmp.h5'
-    # pred_path='./../data/nets/pred_C_big/final.h5'
-    pred_path='./../data/nets/pretrain_cremi_noz_ft_180_C10/final.h5'
-    # pred_path='./data/preds/random.h5'
-    # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './../data/volumes/label_CREMI_test.h5'
 
-    print 'gt path'
-    print pred_path
+    # seg = np.ones((10, 10))
+    # seg[:5, 5:] = 2.        # right top 2
+    # seg[5:, 5:] = 3.        # right bottom 3
+    # seg[5:, :5] = 4.        # left bottom 1
+    # gt = np.copy(seg)
+    #
+    # seg[4, 7:9] = 3.
+    # seg[5, 1:3] = 1.
+    # seg[7:9, 5] = 4.
+    # # seg[1:3, 4] = 2.
+    #
+    # print seg
 
+
+    # print 'RI %.3f PR %.3f REC %.3f' % adapted_rand(seg, gt, all_stats=True)
+
+
+    # print
+    pred_path='./../data/nets/ft_evol_adam/validation_net_1400/slice_concat.h5'
+    # # pred_path='./data/preds/timo_first_repr_zstack.h5'
+    # # pred_path='./data/preds/tmp.h5'
+    # # pred_path='./../data/nets/pred_C_big/final.h5'
+    # pred_path='./../data/nets/pretrain_cremi_noz_ft_180_C10/final.h5'
+    # # pred_path='./data/preds/random.h5'
+    # # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
+    gt_path = './../data/volumes/label_CREMI_noz_small_valid.h5'
+    #
+    # print 'gt path'
+    # print pred_path
+    #
     validate_segmentation(pred_path=pred_path,
                           gt_path=gt_path,
                           slice_by_slice=True,
-                          start_z=0, n_z=10, gel=82, offset_xy=68)
+                          start_z=0, n_z=30, gel=398, offset_xy=35, defect_slices=True)
 
-
+    #
