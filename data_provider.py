@@ -1,5 +1,5 @@
-# import matplotlib
-# matplotlib.use('Qt4Agg')
+import matplotlib
+matplotlib.use('Qt4Agg')
 from matplotlib import pyplot as plt
 import h5py as h
 import numpy as np
@@ -22,7 +22,7 @@ from voronoi_polygon import voronoi_finite_polygons_2d
 from trainer_config_parser import get_options
 import ws_timo_gtseeds
 import GPy
-
+import glob
 
 def segmenation_to_membrane_core(label_image):
     gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -224,8 +224,9 @@ class DataProvider(object):
         # print self.options.input_data_path
         # self.full_input = load_h5(self.options.input_data_path,
         self.full_input = load_h5(str(self.options.input_data_path), h5_key=None, slices=self.slices)[0]
-        self.height_gt = load_h5(self.options.height_gt_path, h5_key=None, slices=self.slices)[0]
         self.label = load_h5(self.options.label_path, h5_key=None, slices=self.slices)[0]
+        if exists(self.options.height_gt_path):
+            self.height_gt = load_h5(self.options.height_gt_path, h5_key=None, slices=self.slices)[0]
 
 
 class CremiDataProvider(DataProvider):
@@ -567,8 +568,12 @@ class PolygonDataProvider(DataProvider):
 
         self.bs = orig_bs
 
-class GPDataProvider(PolygonDataProvider):
+
+class GPDataProvider(DataProvider):
     def __init__(self, options):
+        None
+
+    def generate_GP(self):
         # super(GPDataProvider, self).__init__(options)
         None
 
@@ -578,21 +583,67 @@ class GPDataProvider(PolygonDataProvider):
         from matplotlib import pyplot as plt
         import os
         from scipy import sparse
-        el = 250
-        n_samples = 10000
+        el = 126
+        n_samples = 100
 
         h_el = el / 2
         X = np.mgrid[-h_el:h_el, -h_el:h_el].reshape(2, el ** 2).swapaxes(1, 0)  # all pixel coord pairs [(0,0), (0,1)..]
         k = GPy.kern.RBF(2, ARD=True, lengthscale=6)
         C = k.K(X, X) + np.diag(np.random.random(el**2)) / 100.  # Kernel matrix C
-        Z = np.random.multivariate_normal(np.zeros((el**2)), C, n_samples)           # sample from
-        save_h5('./../data/volumes/GP_raw.h5', 'data', Z.reshape(n_samples, el, el),
-                overwrite='w')
+
+        for i in range(1000):
+            print 'i', i
+            Z = np.random.multivariate_normal(np.zeros((el**2)), C, n_samples)           # sample from
+            save_h5('./../data/volumes/GP_raw_%i).h5' %i, 'data', Z.reshape(n_samples, el, el), overwrite='w')
 
 
-    def make_single_image(self):
-        X = None
+    def GP_to_data(self):
+        """
+        creates height, label and raw from GP margin sample
+        Returns
+        -------
 
+        """
+        paths = glob.glob('./../data/volumes/GP_raw_*')
+        n_samples_per_file, shape_x, shape_y = (load_h5(paths[0], 'data')[0].shape)
+        simga_SNR = 2.5
+
+        GP_data = np.empty((len(paths) * n_samples_per_file, shape_x, shape_y))
+        print GP_data.shape, 'smapm;les', n_samples_per_file
+
+        for i, path in zip(range(0, len(paths) * n_samples_per_file, n_samples_per_file), paths):
+            print 'loading', path, i, i + n_samples_per_file
+            GP_data[i: i + n_samples_per_file, :, :] = load_h5(path, 'data')[0]
+        GP_data = ndimage.gaussian_filter(ndimage.zoom(GP_data, [1, 2, 2]), [0, 8, 8])
+
+        heights = np.empty_like(GP_data, dtype=np.uint64)
+        labels = np.empty_like(GP_data, dtype=np.uint64)
+        raw = np.empty_like(GP_data, dtype=np.float32)
+        for i in range(len(paths) * n_samples_per_file):
+            print '\r i', i, i* 100. / (n_samples_per_file * len(paths)),
+            thres_image = np.zeros_like(GP_data[i])
+            thres_image[GP_data[i] > 0.9] = 1
+            lab_image = label(thres_image) + 1
+            edges, _ = segmenation_to_membrane_core(lab_image)
+            dist_trf = distance_transform_edt(np.invert(edges.astype(bool)))
+            raw_image = create_holes2(ndimage.gaussian_filter(edges, simga_SNR)) + \
+                        np.clip(np.random.normal(0.5, 1, lab_image.shape), 0, 1)
+            labels[i, :, :] = lab_image
+            raw[i, :, :] = raw_image
+            heights[i, :, :] = dist_trf
+            if i == 4:        # debug
+                fig, ax = plt.subplots(4, 3)
+                for j in range(4):
+                    ax[j, 0].imshow(labels[i], interpolation='none')
+                    ax[j, 1].imshow(raw[i], interpolation='none', cmap='gray')
+                    ax[j, 2].imshow(heights[i], interpolation='none', cmap='gray')
+                plt.show()
+                # exit()
+
+        save_h5('./../data/volumes/input_toy.h5', 'data', raw[:, None, :, :], overwrite='w')
+        save_h5('./../data/volumes/label_toy.h5', 'data', labels, overwrite='w')
+        save_h5('./../data/volumes/height_toy.h5', 'data', heights, overwrite='w')
+        print 'done'
 
 def cut_reprs(path):
     label_path = path + 'label_first_repr_big_zstack_cut.h5'
@@ -974,13 +1025,14 @@ def create_holes(batch, fov):
     return batch
 
 
-def create_holes2(image, edge_len, n_holes=10):
+def create_holes2(image, edge_len=None, n_holes=10, length_scale=0.5):
+    if edge_len is None:
+        edge_len = image.shape[-1]
     x, y = np.mgrid[0:edge_len:1, 0:edge_len:1]
     pos = np.dstack((x, y))
     for h in range(n_holes):
-        rand_mat = np.diag(np.random.rand(2)) * edge_len * 2
-        rv = stats.multivariate_normal(np.random.randint(0, edge_len, 2),
-                                       rand_mat)
+        rand_mat = np.diag(np.random.rand(2)) * edge_len * length_scale
+        rv = stats.multivariate_normal(np.random.randint(0, edge_len, 2), rand_mat)
         gauss = rv.pdf(pos).astype(np.float32)
         gauss /= np.max(gauss)
         gauss = 1. - gauss
@@ -1088,8 +1140,16 @@ class TestPolygonDataProvider(PolygonDataProvider):
         self.load_test_data(options)
 
 if __name__ == '__main__':
+
+    None
+
+
+
+
     # op
     GPD = GPDataProvider(None)
+    GPD.GP_to_data()
+
     # generate_quick_eval_big_FOV_z_slices('./../data/volumes/', names=['input', 'input', 'height', 'height', 'label'],
     #                                      h5_keys=['data', 'data', 'data', 'rescaled', 'data'],
     #                                      suffix='_CREMI_noz_test',
