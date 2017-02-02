@@ -70,7 +70,7 @@ class DataProvider(object):
 
         if options.padding_b:
             self.full_input = mirror_cube(self.full_input, self.pad)
-            self.options.global_input_len += self.options.patch_len
+            self.options.global_input_len += self.options.patch_len - 1
 
         self.rl_x = self.full_input.shape[2]
         self.rl_y = self.full_input.shape[3]
@@ -129,7 +129,6 @@ class DataProvider(object):
         if not self.options.padding_b:
             data_shape[1] -= self.options.patch_len - 1
             data_shape[2] -= self.options.patch_len - 1
-
 
         return data_shape
 
@@ -631,18 +630,18 @@ class GPDataProvider(DataProvider):
             labels[i, :, :] = lab_image
             raw[i, :, :] = raw_image
             heights[i, :, :] = dist_trf
-            if i == 4:        # debug
-                fig, ax = plt.subplots(4, 3)
-                for j in range(4):
-                    ax[j, 0].imshow(labels[i], interpolation='none')
-                    ax[j, 1].imshow(raw[i], interpolation='none', cmap='gray')
-                    ax[j, 2].imshow(heights[i], interpolation='none', cmap='gray')
-                plt.show()
-                # exit()
+            # if i == 4:        # debug
+            #     fig, ax = plt.subplots(4, 3)
+            #     for j in range(4):
+            #         ax[j, 0].imshow(labels[i], interpolation='none')
+            #         ax[j, 1].imshow(raw[i], interpolation='none', cmap='gray')
+            #         ax[j, 2].imshow(heights[i], interpolation='none', cmap='gray')
+            #     plt.show()
+            #     exit()
 
-        save_h5('./../data/volumes/input_toy.h5', 'data', raw[:, None, :, :], overwrite='w')
-        save_h5('./../data/volumes/label_toy.h5', 'data', labels, overwrite='w')
-        save_h5('./../data/volumes/height_toy.h5', 'data', heights, overwrite='w')
+        save_h5('./../data/volumes/input_toy_25.h5', 'data', raw[:, None, :, :], overwrite='w')
+        save_h5('./../data/volumes/label_toy_25.h5', 'data', labels, overwrite='w')
+        save_h5('./../data/volumes/height_toy_25.h5', 'data', heights, overwrite='w')
         print 'done'
 
 def cut_reprs(path):
@@ -699,11 +698,7 @@ def save_h5(path, h5_key, data, overwrite='w-', compression=None):
 
 
 def mirror_cube(array, pad_length):
-    
-    pad_info = tuple((array.ndim-2)*[(0,0)]+\
-                    [(pad_length, pad_length),
-                    (pad_length, pad_length)])
-
+    pad_info = tuple((array.ndim-2)*[(0,0)]+ [(pad_length, pad_length), (pad_length, pad_length)])
     mirrored_array = np.pad(array, pad_info, mode='reflect')
     return mirrored_array
 
