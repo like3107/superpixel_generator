@@ -90,6 +90,7 @@ class HoneyBatcherPredict(object):
 
         self.timo_min_len = 5
         self.timo_sigma = 0.3
+        self.SeedMan = SeedMan(self.batch_data_provider)
         assert(self.pl == self.pad * 2 + 1)
 
     def get_seed_ids(self):
@@ -234,20 +235,22 @@ class HoneyBatcherPredict(object):
         else:
             raise Exception("no valid seeding method defined")
 
-    def get_seed_coords_timo(self, sigma=1.0, min_dist=4, thresh=0.2):
+    def get_seed_coords_timo(self, sigma=1.0, thresh=0.2):
         """
         Seeds by minima of dist trf of thresh of memb prob
         :return:
         """
         self.global_seeds = []
         for b in range(self.bs):
-            x, y = wsDtseeds(
-                self.global_input_batch[b, 0, self.pad:-self.pad, self.pad:-self.pad],
-                    thresh, self.timo_min_len, self.timo_sigma, groupSeeds=True)
-            seeds = [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
+            seeds = \
+                self.SeedMan.get_seed_coords_timo(self.global_input_batch[b, 0, self.pad:-self.pad, self.pad:-self.pad],
+                                                  min_memb_size=self.timo_min_len,
+                                                  sigma=self.timo_sigma,
+                                                  min_dist=min_dist,
+                                                  thresh=thresh)
             self.global_seeds.append(seeds)
 
-    def get_seed_coords_grid(self, gridsize = 7):
+    def get_seed_coords_grid(self, gridsize=7):
         """
         Seeds by grid
         :return:
@@ -257,49 +260,19 @@ class HoneyBatcherPredict(object):
         offset_x = ((shape[0]) % gridsize) /2
         offset_y = ((shape[1]) % gridsize) /2
         for b in range(self.bs):
-            seeds_b = [(x+self.pad,y+self.pad) for x,y in \
-                        product(xrange(offset_x,shape[0],gridsize),
-                        xrange(offset_y,shape[1],gridsize))]
+            seeds_b = self.SeedMan.get_seed_coords_grid(gridsize=gridsize)
             self.global_seeds.append(seeds_b)
 
     def get_seed_coords_gt(self, minsize = 0):
         self.global_seeds = []
-        seed_ids = []
-        dist_trf = np.zeros(self.batch_data_provider.get_label_shape())
-        # self.global_label_batch = self.global_label_batch.astype(np.uint32)
-        for b in range(self.bs):
-        # perform connected components to remove disconnected (same id) regions
-            # analysis.labelImage(self.global_label_batch[b],\
-                # out=self.global_label_batch[b])
-            self.global_label_batch[b] = measure.label(self.global_label_batch[b])
-            seed_ids.append(np.unique(
-                self.global_label_batch[b, :, :]).astype(int))
-
-            # add border to labels
-            padded_label = \
-                data_provider.pad_cube(self.global_label_batch[b, :, :],
-                                      1,
-                                      value=np.max(seed_ids[-1])+1)
-
-            dist_trf[b, :, :] = \
-                data_provider.segmenation_to_membrane_core(
-                                padded_label)[1][1:-1, 1:-1]
-        for b, ids in zip(range(self.bs), seed_ids):  # iterates over batches
-            seeds = []
-            for Id in ids:  # ids within each slice
-                if minsize > 0 and np.sum(self.global_label_batch[b, :, :] == Id) < minsize:
-                    print "removing seed for small(<%i) region with id %i" % (minsize, Id)
-                    continue
-
-                regions = np.where(self.global_label_batch[b, :, :] == Id)
-                seed_ind = np.argmax(dist_trf[b][regions])
-                seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) + self.pad
-                seeds.append([seed[0], seed[1]])
+        # label_image = label_image.astype(np.uint32)
+        for b, label_image in enumerate(self.global_label_batch):
+            seeds = self.SeedMan.get_seed_coords_gt(label_image, self.pad, minsize=minsize)
             self.global_seeds.append(seeds)
 
+
     def get_ws_segmentation(self):
-        return self.batch_data_provider.get_timo_segmentation(self.global_label_batch,
-                                                              self.global_input_batch, 
+        return self.batch_data_provider.get_timo_segmentation(self.global_label_batch, self.global_input_batch,
                                                               self.global_seeds)
 
     def find_hard_regions(self):
@@ -1570,6 +1543,43 @@ class HoneyBatcherERec(HoneyBatcherRec):
 
     def set_plateau_indicator(self):
         self.global_plateau_indicator = self.global_prediction_map_nq  == 0
+
+
+class SeedMan(object):
+    def __init__(self, batch_data_provider):
+        self.global_seeds = None
+        self.batch_data_provider = batch_data_provider
+
+    def get_seed_coords_gt(self, label_image, offset=0, minsize=0):
+
+        # perform connected components to remove disconnected (same id) regions  # analysis.labelImage(label_image[b], out=label_image[b])
+        label_image = measure.label(label_image)
+        seed_ids = np.unique(label_image[:, :]).astype(int)
+
+        # add border to labels
+        padded_label = data_provider.pad_cube(label_image[:, :], 1, value=np.max(seed_ids) + 1)
+
+        dist_trf = data_provider.segmenation_to_membrane_core(padded_label)[1][1:-1, 1:-1]
+        seeds = []
+
+        for Id in seed_ids:  # ids within each slice
+            if minsize > 0 and np.sum(label_image[:, :] == Id) < minsize:
+                print "removing seed for small(<%i) region with id %i" % (minsize, Id)
+                continue
+            regions = np.where(label_image[:, :] == Id)
+            seed_ind = np.argmax(dist_trf[regions])
+            seed = np.array([regions[0][seed_ind], regions[1][seed_ind]]) + offset
+            seeds.append([seed[0], seed[1]])
+        return seeds
+
+    def get_seed_coords_grid(self, gridsize=7):
+        seeds = [(x + self.pad, y + self.pad) for x, y in product(xrange(offset_x, shape[0], gridsize),
+                                                                  xrange(offset_y, shape[1], gridsize))]
+        return seeds
+
+    def get_seed_coords_timo(self, image, min_memb_size=5, sigma=1.0, thresh=0.2):
+        x, y = wsDtseeds(image, thresh, self.timo_min_len, sigma, groupSeeds=True)
+        seeds = [[x_i + self.pad, y_i + self.pad] for x_i, y_i in zip(x, y)]
 
 
 # TODO: make this loopy (maybe with lambdas and slices ???)

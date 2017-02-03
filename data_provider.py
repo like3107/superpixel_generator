@@ -23,6 +23,8 @@ from trainer_config_parser import get_options
 import ws_timo_gtseeds
 import GPy
 import glob
+import re
+
 
 def segmenation_to_membrane_core(label_image):
     gx = convolve(label_image, np.array([-1., 0., 1.]).reshape(1, 3))
@@ -599,49 +601,67 @@ class GPDataProvider(DataProvider):
     def GP_to_data(self):
         """
         creates height, label and raw from GP margin sample
+        v1:
+        simga_SNR = 2.5         # tune this parameter
+        GP_thresh = 0.2
+        holes_length_scale = 0.2
+        n_holes = 10
+        noise_mean = 0.5
+        noise_sigma = 0.5
         Returns
         -------
 
         """
-        paths = glob.glob('./../data/volumes/GP_raw_*')
-        n_samples_per_file, shape_x, shape_y = (load_h5(paths[0], 'data')[0].shape)
-        simga_SNR = 2.5
 
-        GP_data = np.empty((len(paths) * n_samples_per_file, shape_x, shape_y))
-        print GP_data.shape, 'smapm;les', n_samples_per_file
+        simga_SNR = 25         # tune this parameter divided by 10
+        GP_thresh = 0.2
+        holes_length_scale = 0.2
+        n_holes = 10
+        noise_mean = 0.5
+        noise_sigma = 0.5
+        GP_data = load_h5('./../data/volumes/GPs/GP_orig.h5', 'data')[0]
 
-        for i, path in zip(range(0, len(paths) * n_samples_per_file, n_samples_per_file), paths):
-            print 'loading', path, i, i + n_samples_per_file
-            GP_data[i: i + n_samples_per_file, :, :] = load_h5(path, 'data')[0]
+        print 'smoothing data...'
         GP_data = ndimage.gaussian_filter(ndimage.zoom(GP_data, [1, 2, 2]), [0, 8, 8])
 
+        print 'preparing data...'
         heights = np.empty_like(GP_data, dtype=np.uint64)
         labels = np.empty_like(GP_data, dtype=np.uint64)
         raw = np.empty_like(GP_data, dtype=np.float32)
-        for i in range(len(paths) * n_samples_per_file):
-            print '\r i', i, i* 100. / (n_samples_per_file * len(paths)),
+        for i in range(GP_data.shape[0]):
+            print '\r i', i, i * 100. / GP_data.shape[0],
             thres_image = np.zeros_like(GP_data[i])
-            thres_image[GP_data[i] > 0.9] = 1
-            lab_image = label(thres_image) + 1
+            thres_image[GP_data[i] > GP_thresh] = 1
+            lab_image = label(thres_image + 1) + 1
             edges, _ = segmenation_to_membrane_core(lab_image)
             dist_trf = distance_transform_edt(np.invert(edges.astype(bool)))
-            raw_image = create_holes2(ndimage.gaussian_filter(edges, simga_SNR)) + \
-                        np.clip(np.random.normal(0.5, 1, lab_image.shape), 0, 1)
+            holy_edges =  create_holes2(edges, length_scale=holes_length_scale, n_holes=n_holes)
+            raw_image = np.clip(ndimage.gaussian_filter(holy_edges, simga_SNR / 10.) + \
+                        np.random.normal(0.5, 0.5, lab_image.shape), 0, 1)
             labels[i, :, :] = lab_image
             raw[i, :, :] = raw_image
             heights[i, :, :] = dist_trf
             # if i == 4:        # debug
-            #     fig, ax = plt.subplots(4, 3)
+            #     fig, ax = plt.subplots(4, 4)
             #     for j in range(4):
-            #         ax[j, 0].imshow(labels[i], interpolation='none')
-            #         ax[j, 1].imshow(raw[i], interpolation='none', cmap='gray')
-            #         ax[j, 2].imshow(heights[i], interpolation='none', cmap='gray')
+            #         ax[j, 0].imshow(labels[j], interpolation='none')
+            #         ax[j, 1].imshow(raw[j], interpolation='none', cmap='gray')
+            #         ax[j, 2].imshow(heights[j], interpolation='none', cmap='gray')
+            #         smooth_raw = ndimage.gaussian_filter(raw[j], 3)
+            #         ax[j, 3].imshow(smooth_raw, interpolation='none', cmap='gray')
             #     plt.show()
             #     exit()
-
-        save_h5('./../data/volumes/input_toy_25.h5', 'data', raw[:, None, :, :], overwrite='w')
-        save_h5('./../data/volumes/label_toy_25.h5', 'data', labels, overwrite='w')
-        save_h5('./../data/volumes/height_toy_25.h5', 'data', heights, overwrite='w')
+        last = 0
+        for ver, i in zip(['train', 'test', 'valid'], [2900, 1000, 100]):
+            start = last
+            end = i
+            save_h5('./../data/volumes/input_toy_ISNR%i_%s.h5' % (simga_SNR, ver), 'data', raw[start:end, None, :, :],
+                    overwrite='w')
+            save_h5('./../data/volumes/label_toy_ISNR%i_%s.h5' % (simga_SNR, ver), 'data', labels[start:end],
+                    overwrite='w')
+            save_h5('./../data/volumes/height_toy_ISNR%i_%s.h5' % (simga_SNR, ver), 'data', heights[start:end],
+                    overwrite='w')
+            last = end
         print 'done'
 
 def cut_reprs(path):
@@ -1025,9 +1045,12 @@ def create_holes2(image, edge_len=None, n_holes=10, length_scale=0.5):
         edge_len = image.shape[-1]
     x, y = np.mgrid[0:edge_len:1, 0:edge_len:1]
     pos = np.dstack((x, y))
-    for h in range(n_holes):
+    means = np.where(image == 1)
+    means_sample = np.random.randint(0, len(means[0]), n_holes)
+    means = zip(means[0][means_sample], means[1][means_sample])
+    for h, mean in enumerate(means):
         rand_mat = np.diag(np.random.rand(2)) * edge_len * length_scale
-        rv = stats.multivariate_normal(np.random.randint(0, edge_len, 2), rand_mat)
+        rv = stats.multivariate_normal(mean, rand_mat)
         gauss = rv.pdf(pos).astype(np.float32)
         gauss /= np.max(gauss)
         gauss = 1. - gauss
