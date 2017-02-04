@@ -33,9 +33,15 @@ def segmenation_to_membrane_core(label_image):
     height = distance_transform_edt(boundary == 0)
     return boundary, height.astype(np.float32)
 
+def segmenation_to_membrane_wrapper(label_stack):
+    boundaries = np.zeros_like(label_stack, dtype=np.float32)
+    for i, label_slice in enumerate(label_stack):
+        boundaries[i, :, :], _ = segmenation_to_membrane_core(label_slice)
+    return boundaries
+
 
 def generate_gt_height(label_image, max_height, clip_method='clip'):
-    _, height = segmenation_to_membrane_core(label_image)
+    memb, height = segmenation_to_membrane_core(label_image)
     if clip_method=='clip':
         np.clip(height, 0, max_height, out=height)
         maximum = np.max(height)
@@ -45,6 +51,11 @@ def generate_gt_height(label_image, max_height, clip_method='clip'):
         np.square(height, out=height)
         height /= (-2 * (max_height/10) ** 2)
         np.exp(height, out=height)
+    elif clip_method=='smooth':
+        print 'smoothing'
+        height = gaussian_filter(memb, 1)
+        height /= (np.max(height) + 0.001)
+        print height
     return height
 
 
@@ -251,6 +262,10 @@ class CremiDataProvider(DataProvider):
             np.square(self.height_gt, out=self.height_gt)
             self.height_gt /= (-2 * (max_height/10) ** 2)
             np.exp(self.height_gt, out=self.height_gt)
+        elif self.options.clip_method == 'smooth':
+            self.height_gt = gaussian_filter(segmenation_to_membrane_wrapper(self.label), (0, 3, 3))
+            self.height_gt /= (np.max(self.height_gt) + 0.001)
+
 
     def get_timo_segmentation(self, label_batch, input_batch, seeds):
         alpha = 0.9
@@ -621,7 +636,7 @@ class GPDataProvider(DataProvider):
         noise_mean = 0.5            # fixed
 
         n_holes = 0                # 0, 10
-        noise_sigma = 90          # 0.3, 0.6, 0.9
+        noise_sigma = 3.          # 0.3, 0.6, 0.9
 
         # v1
         # simga_SNR = 10         # tune this parameter divided by 10
@@ -648,7 +663,7 @@ class GPDataProvider(DataProvider):
         # noise_sigma = 0.5
 
 
-        GP_data = load_h5('./../data/volumes/GPs/GP_orig.h5', 'data')[0]
+        GP_data = load_h5('./../data/volumes/GPs/GP_orig.h5', 'data')[0][:100]
 
         print 'smoothing data...'
         GP_data = ndimage.gaussian_filter(ndimage.zoom(GP_data, [1, 2, 2]), [0, 8, 8])
@@ -666,22 +681,22 @@ class GPDataProvider(DataProvider):
             dist_trf = distance_transform_edt(np.invert(edges.astype(bool)))
             holy_edges =  create_holes2(edges, length_scale=holes_length_scale, n_holes=n_holes)
             raw_image = np.clip(ndimage.gaussian_filter(holy_edges, simga_SNR / 10.) + \
-                        np.random.normal(noise_mean, noise_sigma / 10, lab_image.shape), 0, 1)
+                        np.random.normal(noise_mean, noise_sigma / 10., lab_image.shape), 0, 1)
             labels[i, :, :] = lab_image
             raw[i, :, :] = raw_image
             heights[i, :, :] = dist_trf
-            # if i == 4:        # debug
-            #     fig, ax = plt.subplots(4, 4)
-            #     for j in range(4):
-            #         ax[j, 0].imshow(labels[j], interpolation='none')
-            #         ax[j, 1].imshow(raw[j], interpolation='none', cmap='gray')
-            #         ax[j, 2].imshow(heights[j], interpolation='none', cmap='gray')
-            #         smooth_raw = ndimage.gaussian_filter(raw[j], 3)
-            #         ax[j, 3].imshow(smooth_raw, interpolation='none', cmap='gray')
-            #     plt.show()
-            #     exit()
+            if i == 4:        # debug
+                fig, ax = plt.subplots(4, 4)
+                for j in range(4):
+                    ax[j, 0].imshow(labels[j], interpolation='none')
+                    ax[j, 1].imshow(raw[j], interpolation='none', cmap='gray')
+                    ax[j, 2].imshow(heights[j], interpolation='none', cmap='gray')
+                    smooth_raw = ndimage.gaussian_filter(raw[j], 3)
+                    ax[j, 3].imshow(smooth_raw, interpolation='none', cmap='gray')
+                plt.show()
+                # exit()
         last = 0
-        for ver, i in zip(['train', 'vaild', 'test'], [29000, 100, 1000]):
+        for ver, i in zip(['train', 'vaild', 'test'], [100, 100, 1000]):
             start = last
             end = start + i
             print 'start', start, 'ende', end, ver

@@ -90,7 +90,7 @@ class HoneyBatcherPredict(object):
 
         self.timo_min_len = 5
         self.timo_sigma = 0.3
-        self.SeedMan = SeedMan(self.batch_data_provider)
+        self.SeedMan = SeedMan()
         assert(self.pl == self.pad * 2 + 1)
 
     def get_seed_ids(self):
