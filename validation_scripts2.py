@@ -13,7 +13,7 @@ import data_provider as du
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
                           pred_key=None, gt_key=None, slice_by_slice=True,
                           offset_xy=0, gel=None, start_z=None, n_z=None,
-                          defect_slices=None, resolution=4, border_thresh=25):
+                          defect_slices=None, resolution=4, border_thresh=25, verbose=True):
     assert (gt_path is not None or gt is not None)  # specify either gt path or gt as np array
     assert (pred_path is not None or pred is not None)    # specify either raw path or raw as np array
 
@@ -44,7 +44,8 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         gt = np.delete(gt, defect_slices_ind, axis=0)
 
     if slice_by_slice:
-        print 'slice by slice evaluation'
+        if verbose:
+            print 'slice by slice evaluation'
         splits, merges, ares, precisions, recalls = [], [], [], [], []
         all_measures = [splits, merges, ares, precisions, recalls]
         for i in range(pred.shape[0]):
@@ -53,7 +54,8 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
             segmentation2 = CremiData(pred[i][None, :, :] + 1, resolution=resolution)
             ni = NeuronIds(groundtruth, border_threshold=border_thresh)
 
-            print '\r %.3f' % (float(i) / pred.shape[0]),
+            if verbose:
+                print '\r %.3f' % (float(i) / pred.shape[0]),
             split, merge = ni.voi(segmentation)
             are, prec, rec = ni.adapted_rand(segmentation2)
 
@@ -65,19 +67,19 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         all_vars = np.var(all_measures, 1)
         all_means = np.mean(all_measures, 1)
         # all_means[2] = all_means[2]
+        if verbose:
+            print 'border thresh', border_thresh, 'resolution', resolution
+            print 'Variational information split:, %.3f ,+- %.3f' % (all_means[0], all_vars[0])
+            print 'Variational information merge:, %.3f ,+- %.3f' % (all_means[1], all_vars[1])
+            print 'Adapted Rand error F1        :, %.3f ,+- %.3f' % (1-all_means[2], all_vars[2])
+            print 'Adapted Rand error precision :, %.3f ,+- %.3f' % (all_means[3], all_vars[3])
+            print 'Adapted Rand error recall    :, %.3f ,+- %.3f' % (all_means[4], all_vars[4])
+            print 'cremi', np.sqrt((all_means[0] + all_means[1]) * all_means[2])
 
-        print 'border thresh', border_thresh, 'resolution', resolution
-        print 'Variational information split:, %.3f ,+- %.3f' % (all_means[0], all_vars[0])
-        print 'Variational information merge:, %.3f ,+- %.3f' % (all_means[1], all_vars[1])
-        print 'Adapted Rand error F1        :, %.3f ,+- %.3f' % (1-all_means[2], all_vars[2])
-        print 'Adapted Rand error precision :, %.3f ,+- %.3f' % (all_means[3], all_vars[3])
-        print 'Adapted Rand error recall    :, %.3f ,+- %.3f' % (all_means[4], all_vars[4])
-        print 'cremi', np.sqrt((all_means[0] + all_means[1]) * all_means[2])
-
-        # string for easy copy to google doc
-        print ','.join(['%.3f,+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
+            # string for easy copy to google doc
+            print ','.join(['%.3f,+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
         text = ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
-
+        return np.sqrt((all_means[0] + all_means[1]) * all_means[2])
         # return make_val_dic(all_means, all_vars), text
 
     else:

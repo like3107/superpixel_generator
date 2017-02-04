@@ -1,5 +1,5 @@
-import matplotlib
-matplotlib.use('Qt4Agg')
+# import matplotlib
+# matplotlib.use('Qt4Agg')
 from matplotlib import pyplot as plt
 import h5py as h
 import numpy as np
@@ -613,12 +613,41 @@ class GPDataProvider(DataProvider):
 
         """
 
-        simga_SNR = 25         # tune this parameter divided by 10
-        GP_thresh = 0.2
-        holes_length_scale = 0.2
-        n_holes = 10
-        noise_mean = 0.5
-        noise_sigma = 0.5
+        # v0:
+
+        simga_SNR = 10               # fixed
+        GP_thresh = 0.2              # fixed
+        holes_length_scale = 0.2     # fixed
+        noise_mean = 0.5            # fixed
+
+        n_holes = 0                # 0, 10
+        noise_sigma = 90          # 0.3, 0.6, 0.9
+
+        # v1
+        # simga_SNR = 10         # tune this parameter divided by 10
+        # GP_thresh = 0.2
+        # holes_length_scale = 0.2
+        # n_holes = 0
+        # noise_mean = 0.2
+        # noise_sigma = 0.5
+
+        # v2
+        # simga_SNR = 10         # tune this parameter divided by 10
+        # GP_thresh = 0.2
+        # holes_length_scale = 0.2
+        # n_holes = 10
+        # noise_mean = 0.5
+        # noise_sigma = 0.5
+
+        # v3
+        # simga_SNR = 10         # tune this parameter divided by 10
+        # GP_thresh = 0.2
+        # holes_length_scale = 0.2
+        # n_holes = 10
+        # noise_mean = 0.5
+        # noise_sigma = 0.5
+
+
         GP_data = load_h5('./../data/volumes/GPs/GP_orig.h5', 'data')[0]
 
         print 'smoothing data...'
@@ -637,7 +666,7 @@ class GPDataProvider(DataProvider):
             dist_trf = distance_transform_edt(np.invert(edges.astype(bool)))
             holy_edges =  create_holes2(edges, length_scale=holes_length_scale, n_holes=n_holes)
             raw_image = np.clip(ndimage.gaussian_filter(holy_edges, simga_SNR / 10.) + \
-                        np.random.normal(0.5, 0.5, lab_image.shape), 0, 1)
+                        np.random.normal(noise_mean, noise_sigma / 10, lab_image.shape), 0, 1)
             labels[i, :, :] = lab_image
             raw[i, :, :] = raw_image
             heights[i, :, :] = dist_trf
@@ -652,17 +681,20 @@ class GPDataProvider(DataProvider):
             #     plt.show()
             #     exit()
         last = 0
-        for ver, i in zip(['train', 'test', 'valid'], [2900, 1000, 100]):
+        for ver, i in zip(['train', 'vaild', 'test'], [29000, 100, 1000]):
             start = last
-            end = i
-            save_h5('./../data/volumes/input_toy_ISNR%i_%s.h5' % (simga_SNR, ver), 'data', raw[start:end, None, :, :],
-                    overwrite='w')
-            save_h5('./../data/volumes/label_toy_ISNR%i_%s.h5' % (simga_SNR, ver), 'data', labels[start:end],
-                    overwrite='w')
-            save_h5('./../data/volumes/height_toy_ISNR%i_%s.h5' % (simga_SNR, ver), 'data', heights[start:end],
-                    overwrite='w')
+            end = start + i
+            print 'start', start, 'ende', end, ver
+            name = 'toy_nh%i_sig%i_%s' % (n_holes, noise_sigma, ver)
+            save_h5('./../data/volumes/input_%s.h5' % name , 'data', raw[start:end, None, :, :],
+                    overwrite='w', compression='gzip')
+            save_h5('./../data/volumes/label_%s.h5' % name, 'data', labels[start:end],
+                    overwrite='w', compression='gzip')
+            save_h5('./../data/volumes/height_%s.h5' % name, 'data', heights[start:end],
+                    overwrite='w', compression='gzip')
             last = end
         print 'done'
+
 
 def cut_reprs(path):
     label_path = path + 'label_first_repr_big_zstack_cut.h5'
@@ -1043,6 +1075,8 @@ def create_holes(batch, fov):
 def create_holes2(image, edge_len=None, n_holes=10, length_scale=0.5):
     if edge_len is None:
         edge_len = image.shape[-1]
+    if n_holes == 0:
+        return image
     x, y = np.mgrid[0:edge_len:1, 0:edge_len:1]
     pos = np.dstack((x, y))
     means = np.where(image == 1)

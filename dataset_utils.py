@@ -1,8 +1,8 @@
-import matplotlib
+# import matplotlib
 # try:
 #     matplotlib.use('Qt4Agg')
 # except:
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 
 import h5py as h
 import numpy as np
@@ -1546,12 +1546,10 @@ class HoneyBatcherERec(HoneyBatcherRec):
 
 
 class SeedMan(object):
-    def __init__(self, batch_data_provider):
+    def __init__(self):
         self.global_seeds = None
-        self.batch_data_provider = batch_data_provider
 
     def get_seed_coords_gt(self, label_image, offset=0, minsize=0):
-
         # perform connected components to remove disconnected (same id) regions  # analysis.labelImage(label_image[b], out=label_image[b])
         label_image = measure.label(label_image)
         seed_ids = np.unique(label_image[:, :]).astype(int)
