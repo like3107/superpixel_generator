@@ -356,6 +356,9 @@ def load_network(load_path, l_last=None):
 
 def load_options(load_path, options={}):
     print 'loading options from', load_path
+    if not os.path.exists(load_path):
+        error_msg = 'path: %s does not exist' % load_path
+        raise Exception(error_msg)
     with h5py.File(load_path, 'r') as net_file:
         for op_key, op_val in [(k, net_file['options/'+k].value)\
                                 for k in net_file['options'].keys()]:

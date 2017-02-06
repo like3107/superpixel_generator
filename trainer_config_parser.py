@@ -68,6 +68,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--weight_by_distance_b', action='store_true', default=False)
     p.add('--weight_by_RI_b', action='store_true', default=False)
     p.add('--weight_by_importance', action='store_true', default=False)
+    p.add('--fully_conf_valildation_b', action='store_true', default=False)
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)

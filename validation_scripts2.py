@@ -13,7 +13,8 @@ import data_provider as du
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
                           pred_key=None, gt_key=None, slice_by_slice=True,
                           offset_xy=0, gel=None, start_z=None, n_z=None,
-                          defect_slices=None, resolution=4, border_thresh=25, verbose=True):
+                          defect_slices=None, resolution=1, border_thresh=1, verbose=True):
+    # cremi resolution 4, border thresh=25
     assert (gt_path is not None or gt is not None)  # specify either gt path or gt as np array
     assert (pred_path is not None or pred is not None)    # specify either raw path or raw as np array
 

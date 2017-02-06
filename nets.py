@@ -43,6 +43,8 @@ class NetBuilder:
         Returns
         -------
         """
+        print 'building static net'
+
         assert (self.options.dropout_b or self.options.bnorm_b)     # both off not implemented
 
         n_channels = self.options.network_channels
@@ -192,9 +194,7 @@ class NetBuilder:
         self.layers_static = layers_static
         return layers, fov, None
 
-    def loss_updates_probs_v0(self, layers, target, L1_weight=10**-5,
-                              update='nesterov'):
-
+    def loss_updates_probs_v0(self, layers, target, L1_weight=10**-5, update='nesterov'):
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
         # outputs
