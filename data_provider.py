@@ -263,8 +263,11 @@ class CremiDataProvider(DataProvider):
             self.height_gt /= (-2 * (max_height/10) ** 2)
             np.exp(self.height_gt, out=self.height_gt)
         elif self.options.clip_method == 'smooth':
-            self.height_gt = gaussian_filter(segmenation_to_membrane_wrapper(self.label), (0, 3, 3))
-            self.height_gt /= (np.max(self.height_gt) + 0.001)
+            height_gt = load_h5(self.options.height_gt_path, h5_key=None,  slices=self.slices)[0]
+            self.height_gt = np.zeros_like(height_gt, dtype=np.float32)
+            self.height_gt[height_gt < 1] = 1.
+            self.height_gt = gaussian_filter(self.height_gt, [0, 1, 1])
+
 
 
     def get_timo_segmentation(self, label_batch, input_batch, seeds):
