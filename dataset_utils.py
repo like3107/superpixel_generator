@@ -1424,7 +1424,11 @@ class HoneyBatcherRec(HoneyBatcherPath):
         super(HoneyBatcherRec, self).update_priority_queue_i(b, center, Id, height)
 
     def get_hidden(self, b, center):
-        direction = self.global_directionmap_batch[b, center[0] - self.pad, center[1] - self.pad]
+        try:
+            direction = self.global_directionmap_batch[b, center[0] - self.pad, center[1] - self.pad]
+        except Exception as e:
+            print e.message, e.args
+            embed()
         if direction == -1:  # seed
             return np.zeros((self.n_recurrent_hidden), dtype=np.float32)
         else:

@@ -614,8 +614,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             grad_mean, grad_std = train_infos / self.err_b_counter
             self.draw_loss(self.train_eval, self.train_eval, counter=self.images_counter)
             self.draw_grads(grad_mean, grad_mean + grad_std)
-            grads_av = [g / self.err_b_counter for g in self.grads_sum]
-            self.builder.apply_grads(*grads_av)
+            if not self.check_escalation(grad_mean):
+                grads_av = [g / self.err_b_counter for g in self.grads_sum]
+                self.builder.apply_grads(*grads_av)
+            else:
+                print "ignoring escalated gradients"
 
         if self.images_counter % self.options.save_counter == 0:            # save before update
             self.save_net(counter=self.images_counter)
@@ -687,10 +690,13 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                 self.save_net_path + '/%s.png' % name, names=['loss', 'loss no reg'],
                                 log_scale=False)
 
+    def check_escalation(self, grad_mean):
+        return self.images_counter > 10 and grad_mean > 10 * np.mean(self.grad_history[0])
+
     def draw_grads(self, grad_mean, grad_std, name='gradients'):
         self.grad_history[0].append(grad_mean)
         self.grad_history[1].append(grad_std)
-        if self.images_counter > 10 and grad_mean > 10 * np.mean(self.grad_history[0]):
+        if self.check_escalation():
             self.draw_debug(image_name='escalation')
         u.plot_train_val_errors([self.grad_history[0], self.grad_history[1]], self.update_history,
                                 self.save_net_path + '/%s.png' % name, names=['grads mean', 'grads std'],
