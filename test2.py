@@ -8,8 +8,11 @@ sigmas = [3]
 holes = [0]
 # versions = ['valid', 'test', 'train']
 versions = ['vaild']
+sigmas = [6]
+holes = [10]
+versions = ['train', 'test', 'valid']
 start_slice = [0, 0, 0]
-slices_total = [100, 10, 2900]
+slices_total = [100, 1000, 29000]
 c = copy.copy(a.splitlines())
 
 
@@ -34,7 +37,7 @@ for sigma in sigmas:
             b.write("\n".join(c))
             b.close()
 
-            mypython = '/home/lschott_local/anaconda2/envs/ws_timo/bin/python '
+            mypython = sys.executable
 
             cmd = mypython + 'evaluate_net.py -c ' + config
             print cmd

@@ -181,7 +181,17 @@ class HoneyBatcherPredict(object):
             out[1, hx:hx+hsx, hy:hy+hsy] *= h
             if len(out) > 3:
                 out[3, hx:hx+hsx, hy:hy+hsy] *= h
-
+        elif self.options.claim_aug == "raw":
+            raw = self.global_input_batch[b, 0,
+                         center[0] - self.pad:center[0] + self.pad + 1,
+                         center[1] - self.pad:center[1] + self.pad + 1]
+            out[0] *= raw
+            out[1] *= raw
+            if len(out) > 2:
+                out[2] *= raw
+            if len(out) > 3:
+                out[3] *= raw
+        
         return out
 
     def crop_height_map(self, center, b):
