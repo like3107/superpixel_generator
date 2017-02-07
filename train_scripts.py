@@ -887,11 +887,8 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
 
     def load_gradients(self, h5f):
         grads = [None]*h5f["len"].value
-        print h5f.keys()
         for j in range(h5f["len"].value):
-            print str(j) in h5f
             grads[j] = np.array(h5f[str(j)].value)
-        assert(not None in grads)
         return grads
 
     def train(self):
