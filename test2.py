@@ -4,11 +4,12 @@ from os import system
 
 a = open('./../data/config/validation_validtmp.conf', 'r').read()
 
-sigmas = [3, 6, 9]
-holes = [0, 10]
-versions = ['train', 'test', 'valid']
+sigmas = [3]
+holes = [0]
+# versions = ['valid', 'test', 'train']
+versions = ['vaild']
 start_slice = [0, 0, 0]
-slices_total = [10, 10, 100]
+slices_total = [100, 10, 2900]
 c = copy.copy(a.splitlines())
 
 
@@ -19,7 +20,7 @@ for sigma in sigmas:
             b = open(config, 'w')
             for i, line in enumerate(c):
                 if 'net_name' in line:
-                    c[i] = 'train_version = toy_nh%i_sig%i_%s' %(n_holes, sigma, version)
+                    c[i] = 'net_name = toy_nh%i_sig%i_%s' %(n_holes, sigma, version)
                 if 'slices_total' in line:
                     c[i] = 'start_slice_z         =            %i' % start
                     c[i] = 'slices_total          =            %i' % total
@@ -35,7 +36,7 @@ for sigma in sigmas:
 
             mypython = '/home/lschott_local/anaconda2/envs/ws_timo/bin/python '
 
-            cmd = mypython + 'evaluate_cremi.py -c ' + config
+            cmd = mypython + 'evaluate_net.py -c ' + config
             print cmd
             system(cmd)
 

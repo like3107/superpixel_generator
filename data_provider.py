@@ -77,13 +77,10 @@ class DataProvider(object):
         self.set_slices(options)
         self.pad = options.patch_len /2
         self.pl = options.patch_len
+        self.full_input = None
+        self.options.global_input_len = self.options.global_edge_len        # modified in load data
         self.load_data(options)
         self.n_slices = range(self.full_input.shape[0])
-        self.options.global_input_len = self.options.global_edge_len
-
-        if options.padding_b:
-            self.full_input = mirror_cube(self.full_input, self.pad)
-            self.options.global_input_len += self.options.patch_len - 1
 
         self.rl_x = self.full_input.shape[2]
         self.rl_y = self.full_input.shape[3]
@@ -110,7 +107,6 @@ class DataProvider(object):
         input[:] = self.sel_aug_f(input)
 
     def set_slices(self, o):
-        print o
         if "slices" in o:
             self.slices = o.slices
         else:
@@ -150,8 +146,7 @@ class DataProvider(object):
         # against each other
         # get indices for global batches in raw/ label cubes
         if preselect_batches is not None:
-            print "using fixed batches"
-            print self.bs, preselect_batches
+            print "using fixed batches bs", self.bs, 'preselected slices',  preselect_batches
             assert(self.bs == len(preselect_batches))
             ind_b = preselect_batches
         elif self.options.quick_eval:
@@ -167,7 +162,7 @@ class DataProvider(object):
         # indices to raw, correct for label which edge len is -self.pl shorter
         if self.options.global_edge_len > 0:
             if self.options.quick_eval:
-                print 'using fixed indices '
+                print 'using fixed indices'
                 ind_x = np.empty(self.bs, dtype=int)
                 ind_x.fill(int(0))
                 ind_y = np.empty(self.bs, dtype=int)
@@ -188,7 +183,6 @@ class DataProvider(object):
 
             return [ind_b, ind_x, ind_y]
         else:
-            print input.shape, self.full_input.shape
             input[range(self.bs)] = self.full_input[ind_b]
             if self.options.augment_ft:
                 self.apply_augmentation(input)
@@ -236,6 +230,10 @@ class DataProvider(object):
         # print self.options.input_data_path
         # self.full_input = load_h5(self.options.input_data_path,
         self.full_input = load_h5(str(self.options.input_data_path), h5_key=None, slices=self.slices)[0]
+        if options.padding_b:
+            self.full_input = mirror_cube(self.full_input, self.pad)
+            self.options.global_input_len += self.options.patch_len - 1
+
         self.label = load_h5(self.options.label_path, h5_key=None, slices=self.slices)[0]
         if exists(self.options.height_gt_path):
             self.height_gt = load_h5(self.options.height_gt_path, h5_key=None, slices=self.slices)[0]

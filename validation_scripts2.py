@@ -36,11 +36,14 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
 
     if isinstance(pred_path, str):
         pred = du.load_h5(pred_path, h5_key=pred_key)[0]
-    assert(gt.shape == pred.shape)
+    if not np.all(gt.shape == pred.shape):
+        print 'gt', gt.shape, 'pred', pred.shape
+        assert(gt.shape == pred.shape)
 
     if defect_slices:
         print 'removing defect slices'
-        defect_slices_ind = [14, 15]
+        # defect_slices_ind = [14, 15]
+        defect_slices_ind = [66, 67, 95, 96, 115]
         pred = np.delete(pred, defect_slices_ind, axis=0)
         gt = np.delete(gt, defect_slices_ind, axis=0)
 
@@ -124,6 +127,7 @@ if __name__ == '__main__':
 
     # print
     pred_path='./../data/nets/ft_evol_rescale_noreg/validation_net_600/slice_concat.h5'
+    pred_path='./../data/we.h5'
     # pred_path='./../data/nets/ft_evol_adam/validation_net_1400/slice_concat.h5'
 
     # # pred_path='./data/preds/timo_first_repr_zstack.h5'
@@ -132,17 +136,19 @@ if __name__ == '__main__':
     # pred_path='./../data/nets/pretrain_cremi_noz_ft_180_C10/final.h5'
     # # pred_path='./data/preds/random.h5'
     # # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './../data/volumes/label_CREMI_noz_small_valid.h5'
+    gt_path = './../data/volumes/label_CREMI_noz_test.h5'
     #
     # print 'gt path'
     # print pred_path
     #
     validate_segmentation(pred_path=pred_path, gt_path=gt_path, slice_by_slice=True,
-                          start_z=0, n_z=30, gel=398, offset_xy=35, defect_slices=True)
+                          start_z=0, n_z=150, gel=1180, offset_xy=35, defect_slices=True,
+                          resolution=4, border_thresh=25)
 
     #
     # pred_path='./../data/nets/ft_bn_dowbd/validation_net_2000/baseline_concat.h5'
-    pred_path='./../data/nets/ft_evol_adam/validation_net_1400/baseline_concat.h5'
+    pred_path='./../data/timo.h5'
+
 
     # # pred_path='./data/preds/timo_first_repr_zstack.h5'
     # # pred_path='./data/preds/tmp.h5'
@@ -150,10 +156,11 @@ if __name__ == '__main__':
     # pred_path='./../data/nets/pretrain_cremi_noz_ft_180_C10/final.h5'
     # # pred_path='./data/preds/random.h5'
     # # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './../data/volumes/label_CREMI_noz_small_valid.h5'
+    # gt_path = './../data/volumes/label_CREMI_noz_small_valid.h5'
     #
     # print 'gt path'
     # print pred_path
     #
     validate_segmentation(pred_path=pred_path, gt_path=gt_path, slice_by_slice=True,
-                          start_z=0, n_z=30, gel=398, offset_xy=35, defect_slices=True)
+                          start_z=0, n_z=150, gel=1180, offset_xy=35, defect_slices=True,
+                          resolution=4, border_thresh=25)

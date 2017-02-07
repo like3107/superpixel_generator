@@ -5,6 +5,7 @@ import os
 import numpy as np
 import re
 
+
 def pred_wrapper(options, slices, gpu):
     import evaluate_net
     from data_provider import save_h5
@@ -80,6 +81,7 @@ if __name__ == '__main__':
         gpus = [options.gpu] * 4
     else:
         gpus = ["gpu%i"%i for i in range(4)]
+
     if not os.path.exists(options.save_net_path):
         os.makedirs(options.save_net_path)
     try:

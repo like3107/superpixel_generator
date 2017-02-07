@@ -109,7 +109,7 @@ class NetBuilder:
             if 'conv' in layer_old_key:
                 layers['static_' + layer_old_key] = layers_static[layer_old_key]
         layers['l_in_static_00'] = layers_static['l_in_00']
-        print 'layers', layers
+        # print 'layers', layers
         # build dynamic net bottom
         self.fov = 69 + 2
         n_classes = 1
