@@ -262,11 +262,11 @@ class CremiDataProvider(DataProvider):
             np.exp(self.height_gt, out=self.height_gt)
         elif self.options.clip_method == 'smooth':
             self.height_gt = load_h5(self.options.height_gt_path, h5_key=None,slices=self.slices)[0]
-            np.clip(self.height_gt, 0, 2, out=self.height_gt)
+            np.clip(self.height_gt, 0, 1, out=self.height_gt)
             maximum = np.max(self.height_gt)
             self.height_gt *= -1.
             self.height_gt += maximum
-            self.height_gt = gaussian_filter(self.height_gt, [0, 6, 6]).astype(np.float32)
+            self.height_gt = gaussian_filter(self.height_gt, [0, 2, 2]).astype(np.float32)
             self.height_gt /= (np.max(self.height_gt) * 0.1 + 0.0001)
 
 
