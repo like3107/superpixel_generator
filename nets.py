@@ -44,9 +44,6 @@ class NetBuilder:
         -------
         """
         print 'building static net'
-
-        assert (self.options.dropout_b or self.options.bnorm_b)     # both off not implemented
-
         n_channels = self.options.network_channels
         layers = {}
         fov = 69

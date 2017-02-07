@@ -587,7 +587,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 if self.free_voxel % 400 == 0:
                     bar.update(self.free_voxel_empty - self.free_voxel)
 
-    def train(self):
+    def train(self, slave=False):
+        """ if slave == True then train returns the average gradients instead of applying them"""
         self.epoch += 1
 
         # self.debug_pos = np.array([98, 41])
@@ -610,16 +611,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 only_once = True
             train_infos += np.array(self.path_training())
 
-        if self.err_b_counter > 0:
-            grad_mean, grad_std = train_infos / self.err_b_counter
-            self.draw_loss(self.train_eval, self.train_eval, counter=self.images_counter)
-            self.draw_grads(grad_mean, grad_mean + grad_std)
-            if not self.check_escalation(grad_mean):
-                grads_av = [g / self.err_b_counter for g in self.grads_sum]
-                self.builder.apply_grads(*grads_av)
-            else:
-                print "ignoring escalated gradients"
-
         if self.images_counter % self.options.save_counter == 0:            # save before update
             self.save_net(counter=self.images_counter)
 
@@ -631,6 +622,22 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         if self.free_voxel == 0:
             self.free_voxel = self.free_voxel_empty
+
+        if self.err_b_counter > 0:
+            grad_mean, grad_std = train_infos / self.err_b_counter
+            if slave:
+                if not self.check_escalation(grad_mean):
+                    grads_av = [g / self.err_b_counter for g in self.grads_sum]
+                    grad_mean, grad_std = train_infos / self.err_b_counter 
+                    return grads_av, grad_mean, grad_std, self.train_eval
+            self.draw_loss(self.train_eval, self.train_eval, counter=self.images_counter)
+            self.draw_grads(grad_mean, grad_mean + grad_std)
+            if not self.check_escalation(grad_mean):
+                grads_av = [g / self.err_b_counter for g in self.grads_sum]
+                self.builder.apply_grads(*grads_av)
+            else:
+                print "ignoring escalated gradients"
+
 
     def path_training(self):
         self.err_b_counter += 1
@@ -696,7 +703,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def draw_grads(self, grad_mean, grad_std, name='gradients'):
         self.grad_history[0].append(grad_mean)
         self.grad_history[1].append(grad_std)
-        if self.check_escalation():
+        if self.check_escalation(grad_mean):
             self.draw_debug(image_name='escalation')
         u.plot_train_val_errors([self.grad_history[0], self.grad_history[1]], self.update_history,
                                 self.save_net_path + '/%s.png' % name, names=['grads mean', 'grads std'],
@@ -869,36 +876,44 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
             np.random.seed(np.random.seed(int(time.time())))
             print "starting Slave"
 
+    def save_gradients(self, average_grad, grad_mean, grad_std, train_eval):
+        with h5py.File(self.exp_path+"/%i_%f.h5"%(os.getpid(), time.time()),"w") as f:
+            f.create_dataset('grad_mean',data=grad_mean)
+            f.create_dataset('grad_std',data=grad_std)
+            f.create_dataset('train_eval',data=train_eval)
+            for i, g in enumerate(average_grad):
+                f.create_dataset(str(i),data=g)
+            f.create_dataset('len',data=len(average_grad))
+
+    def load_gradients(self, h5f):
+        grads = [None]*h5f["len"].value
+        print h5f.keys()
+        for j in range(h5f["len"].value):
+            print str(j) in h5f
+            grads[j] = np.array(h5f[str(j)].value)
+        assert(not None in grads)
+        return grads
+
     def train(self):
         if self.master:
             print self.iterations,
             sys.stdout.flush()
             for f in glob.glob(self.exp_path+'*.h5'):
                 print "learning from ",f
+                self.images_counter += 1
                 try:
                     with h5py.File(f,"r") as h5f:
-                        if 'done' in h5f:
+                        print h5f["train_eval"].value
+                        self.draw_loss(h5f["train_eval"].value, h5f["train_eval"].value, counter=self.images_counter)
+                        self.draw_grads(h5f["grad_mean"].value, h5f["grad_mean"].value +h5f["grad_std"].value)
+                        self.builder.apply_grads(*self.load_gradients(h5f))
 
-                            batch_ft1 = np.array(h5f['batch_ft1'])
-                            batch_ft2 = np.array(h5f['batch_ft2'])
-                            batch_inits = np.array(h5f['batch_inits'])
-                            batch_mask_ft = np.array(h5f['batch_mask_ft'])
-                            length = h5f['options.backtrace_length'].value
-                            weights = self.weight_gradients()
+                    self.iterations += 1
+                    self.epoch += 1
+                    self.save_net(name=self.current_net_name)
+                    self.save_net()
+                    os.system('rm '+f)
 
-                            ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = \
-                                    self.builder.loss_train_fine_f(batch_ft1, batch_ft2, batch_inits, batch_mask_ft,
-                                                                   options.backtrace_length,  weights)
-
-                            self.save_net(name=self.current_net_name)
-                            self.save_net()
-                            os.system('rm '+f)
-                            claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
-                            # print claims.shape, self.bm.global_label_batch.shape
-                            ft_loss_noreg = vs.validate_claims(claims, self.bm.global_label_batch)
-                            self.draw_loss(ft_loss_noreg, ft_loss_noreg)        # yes twice the same but actual loss
-                            self.iterations += 1
-                            self.epoch += 1
                 except IOError:
                     print "unable to read ",f
             time.sleep(5)
@@ -912,28 +927,12 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
             except:
                 print "unable to load network, predicting with previous parameters"
 
-            self.predict()
-
-            self.bm.find_global_error_paths()
-            if self.bm.count_new_path_errors() > 0:
-                error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
-                    self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
-
-                batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
-                batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
-                batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
-
-                sequ_len = self.options.backtrace_length
-                print 'sequ len', sequ_len, 'batch ft', batch_ft.shape, 'hidden', batch_inits.shape, \
-                    'rnn mask', batch_mask_ft.shape
-
-                with h5py.File(self.exp_path+"/%i_%f.h5"%(os.getpid(), time.time()),"w") as f:
-                    f.create_dataset('batch_ft1',data=batch_ft[:, :2, :, :])
-                    f.create_dataset('batch_ft2',data=batch_ft[:, 2:, :, :])
-                    f.create_dataset('batch_inits',data=batch_inits)
-                    f.create_dataset('batch_mask_ft',data=batch_mask_ft)
-                    f.create_dataset('options.backtrace_length',data=options.backtrace_length)
-                    f.create_dataset('done',data=[1])
+            average_grad, grad_mean, grad_std, train_eval = super(FCRecMasterFinePokemonTrainer, self).train(slave=True)
+            print grad_mean
+            self.save_gradients(average_grad,
+                                grad_mean,
+                                grad_std,
+                                train_eval)
 
             if self.images_counter % self.options.observation_counter == 0:
                 trainer.draw_debug(reset=True)
