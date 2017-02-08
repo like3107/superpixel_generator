@@ -924,32 +924,35 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                     print "unable to read ",f
             time.sleep(5)
 
-        elif self.options.validation_slave:
-            self.validate()
         else:
-            np.random.seed(np.random.seed(int(time.time())))
-            # change seed so different images for retrain
-            print "loading network parameters from ",
-            try:
-                u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
-            except:
-                print "unable to load network, predicting with previous parameters"
+            if self.validate():
+                np.random.seed(np.random.seed(int(time.time())))
+                # change seed so different images for retrain
+                print "loading network parameters from ",
+                try:
+                    u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
+                except:
+                    print "unable to load network, predicting with previous parameters"
 
-            g = super(FCRecMasterFinePokemonTrainer, self).train(slave=True)
-            if g is not None:
-                average_grad, grad_mean, grad_std, train_eval = g
-                print grad_mean
-                self.save_gradients(average_grad,
-                                    grad_mean,
-                                    grad_std,
-                                    train_eval)
+                g = super(FCRecMasterFinePokemonTrainer, self).train(slave=True)
+                if g is not None:
+                    average_grad, grad_mean, grad_std, train_eval = g
+                    print grad_mean
+                    self.save_gradients(average_grad,
+                                        grad_mean,
+                                        grad_std,
+                                        train_eval)
 
-            if self.images_counter % self.options.observation_counter == 0:
-                trainer.draw_debug(reset=True)
+                if self.images_counter % self.options.observation_counter == 0:
+                    trainer.draw_debug(reset=True)
 
     def validate(self):
+        if not self.options.validation_slave:
+            return True
+        idle = True
         for f in glob.glob(self.save_net_path+"/nets/net_*"):
             if f not in self.val_path_history:
+                idle = False
                 try:
                     counter = u.get_network_iterration(f)
                     if counter is not None:
@@ -960,7 +963,9 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                     self.val_path_history.append(f)
                 except IOError:
                     print "unable to read ",f
-        time.sleep(5)
+        time.sleep(2)
+        return idle
+
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
     def init_BM(self):
