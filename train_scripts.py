@@ -926,8 +926,6 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
 
         elif self.options.validation_slave:
             self.validate()
-
-
         else:
             np.random.seed(np.random.seed(int(time.time())))
             # change seed so different images for retrain
@@ -955,6 +953,7 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                 try:
                     counter = u.get_network_iterration(f)
                     if counter is not None:
+                        self.iterations = counter
                         self.images_counter = counter
                         u.load_network(f, self.l_out)
                         super(FCRecMasterFinePokemonTrainer, self).validate()
