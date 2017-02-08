@@ -11,7 +11,7 @@ def pred_wrapper(options, slices, gpu):
     from data_provider import save_h5
     options.gpu = gpu
     options.slices = slices
-    pred = evaluate_net.GottaCatchemAllPredictor(options)
+    pred = evaluate_net.Predictor(options)
     pred.predict()
 
     save_slice_path = options.validation_save_path + "/slice_%04i_%04i.h5" % (slices[0], slices[-1])
@@ -120,7 +120,8 @@ if __name__ == '__main__':
         label_types = [False]
         versions = ["height"]
 
-    for label_b, bn in zip():
+    for label_b, bn in zip(label_types, versions):
+
         concat_h5_in_folder(options.validation_save_path, options.batch_size, total_z_lenght, base_file_name=bn,
                             label_b=label_b)
 
