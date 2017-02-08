@@ -636,6 +636,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 grads_av = [g / self.err_b_counter for g in self.grads_sum]
                 self.builder.apply_grads(*grads_av)
             else:
+                self.draw_debug(image_name='escalation')
                 print "ignoring escalated gradients"
 
 
@@ -703,8 +704,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def draw_grads(self, grad_mean, grad_std, name='gradients'):
         self.grad_history[0].append(grad_mean)
         self.grad_history[1].append(grad_std)
-        if self.check_escalation(grad_mean):
-            self.draw_debug(image_name='escalation')
         u.plot_train_val_errors([self.grad_history[0], self.grad_history[1]], self.update_history,
                                 self.save_net_path + '/%s.png' % name, names=['grads mean', 'grads std'],
                                 log_scale=False)
@@ -900,16 +899,21 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                 self.images_counter += 1
                 try:
                     with h5py.File(f,"r") as h5f:
-                        print h5f["train_eval"].value
-                        self.draw_loss(h5f["train_eval"].value, h5f["train_eval"].value, counter=self.images_counter)
-                        self.draw_grads(h5f["grad_mean"].value, h5f["grad_mean"].value +h5f["grad_std"].value)
-                        self.builder.apply_grads(*self.load_gradients(h5f))
+                        if not self.check_escalation(h5f["grad_mean"].value):
+                            print h5f["train_eval"].value
+                            self.draw_loss(h5f["train_eval"].value, h5f["train_eval"].value, counter=self.images_counter)
+                            self.draw_grads(h5f["grad_mean"].value, h5f["grad_mean"].value +h5f["grad_std"].value)
+                            self.builder.apply_grads(*self.load_gradients(h5f))
+                            self.iterations += 1
+                            self.epoch += 1
+                            self.save_net(name=self.current_net_name)
+                            if self.images_counter % self.options.save_counter == 0: 
+                                self.save_net()
+                        else:
+                            print "escalation detected ", h5f["grad_mean"].value
+                        os.system('rm '+f)
+                            
 
-                    self.iterations += 1
-                    self.epoch += 1
-                    self.save_net(name=self.current_net_name)
-                    self.save_net()
-                    os.system('rm '+f)
 
                 except IOError:
                     print "unable to read ",f
@@ -1014,7 +1018,7 @@ class GottaCatchemAllTrainer(PokemonTrainer):
             image_path = self.image_path
 
         for b in range(1):
-            self.bm.draw_debug_image("train_b_%03i_i_%08i_f_%i" % (b, self.iterations, self.free_voxel),
+            self.bm.draw_debug_image("train_p_%i_b_%03i_i_%08i" % (os.getpid(), b, self.iterations),
                                      path=image_path, b=b, plot_height_pred=True)
 
 

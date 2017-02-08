@@ -87,6 +87,7 @@ class HoneyBatcherPredict(object):
         self.global_prediction_map_FC = None
         self.preselect_batches = None
         self.hard_regions = None
+        self.global_prediction_map_nq = None
 
         self.timo_min_len = 5
         self.timo_sigma = 0.3
