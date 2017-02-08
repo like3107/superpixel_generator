@@ -1,13 +1,13 @@
 import copy
 from os import system
-
+import sys
 
 a = open('./../data/config/validation_validtmp.conf', 'r').read()
 
 sigmas = [3]
 holes = [0]
 # versions = ['valid', 'test', 'train']
-versions = ['vaild']
+versions = ['valid']
 sigmas = [6]
 holes = [10]
 versions = ['train', 'test', 'valid']

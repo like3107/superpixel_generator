@@ -136,9 +136,10 @@ def set_prediction_options(options, val_options):
     options.fc_prec = True
     return options
 
+
 if __name__ == '__main__':
 
-    options = get_options(script='validation_toy_nh0_sig3_test')
+    options = get_options(script='full_conf_pred')
     print 'save net path', options.save_net_path
     options.slices = range(options.slices_total)
 

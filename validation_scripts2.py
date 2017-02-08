@@ -126,7 +126,7 @@ if __name__ == '__main__':
 
 
     # print
-    pred_path='./../data/nets/ft_evol_rescale_noreg/validation_net_600/slice_concat.h5'
+    pred_path='./../data/nets/ft_evol_adam_all/validation_net_1400/slice_concat.h5'
     pred_path='./../data/we.h5'
     # pred_path='./../data/nets/ft_evol_adam/validation_net_1400/slice_concat.h5'
 

@@ -12,6 +12,7 @@ from scipy import ndimage
 from validation_scripts2 import validate_segmentation
 import progressbar
 import time
+import data_provider as dp
 
 class Watershednator(object):
     def __init__(self):
@@ -95,12 +96,12 @@ class EvaluateWSs(object):
         self.label = label
         self.edges = None
         self.init_WSs()
-        self.sigmas = [0., 0.1, 0.5, 1, 1.5, 2, 4, 8]
-        # self.sigmas = [0., 0.5]
+        # self.sigmas = [0., 0.1, 0.5, 1, 1.5, 2, 4, 8]
+        self.sigmas = [0.]
 
     def init_WSs(self):
-        # self.WSs = [PWS('MSF_Kruskal')]
-        self.WSs = [PWS('MSF_Kruskal'), PWS('MSF_Prim'), PWS('PWS')]
+        self.WSs = [PWS('MSF_Kruskal')]
+        # self.WSs = [PWS('MSF_Kruskal'), PWS('MSF_Prim'), PWS('PWS')]
 
     def preprocess_data(self, sigma=2):
         if sigma != 0:
@@ -112,8 +113,8 @@ class EvaluateWSs(object):
 
     def evaluate_ws(self):
         n_z = (1 if len(self.raw.shape) == 2 else self.raw.shape[0])
-        bests_segs = []
         bests_edges = [None] * len(self.WSs)
+        bests_segs = [None] * len(self.WSs)
         bar = progressbar.ProgressBar(max_value=len(self.WSs) * len(self.sigmas))
         i = 0
         best_scores = np.empty(len(self.WSs))
@@ -132,26 +133,29 @@ class EvaluateWSs(object):
                 if score < best_scores[num]:
                     bests_edges[num] = self.edges
                     best_scores[num] = score
-                    best_segs = segs
+                    bests_segs[num] = segs
                     print 'best score', score
-            bests_segs.append(best_segs)
 
-        print 'bla bla', bests_segs[0][0].shape
-        print 'best edges', bests_edges[0].shape
+        print 'best scores', best_scores
+        print 'label', self.label.shape
+        gt_edges, _ = dp.segmenation_to_membrane_core(self.label[0])
+        print 'gt edges', gt_edges.shape
+        bests_segs[0][0][gt_edges == 1] = 0
+
 
         fig, ax = plt.subplots(3, 3)
         print 'raw', self.raw.shape
         ax[0, 0].imshow(self.raw[0], interpolation='none', cmap='gray')
         ax[1, 0].imshow(self.label[0], interpolation='none')
 
-        ax[0, 1].imshow(bests_edges[0][0], interpolation='none', cmap='gray')
-        ax[0, 2].imshow(bests_segs[0][0], interpolation='none')
+        ax[0, 1].imshow(bests_edges[0][2], interpolation='none', cmap='gray')
+        ax[0, 2].imshow(bests_segs[0][2], interpolation='none')
 
-        ax[1, 1].imshow(bests_edges[1][0], interpolation='none', cmap='gray')
-        ax[1, 2].imshow(bests_segs[1][0], interpolation='none')
-
-        ax[2, 1].imshow(bests_edges[2][0], interpolation='none', cmap='gray')
-        ax[2, 2].imshow(bests_segs[1][0], interpolation='none')
+        # ax[1, 1].imshow(bests_edges[1][0], interpolation='none', cmap='gray')
+        # ax[1, 2].imshow(bests_segs[1][0], interpolation='none')
+        #
+        # ax[2, 1].imshow(bests_edges[2][0], interpolation='none', cmap='gray')
+        # ax[2, 2].imshow(bests_segs[1][0], interpolation='none')
         plt.show()
 
 
@@ -161,8 +165,10 @@ if __name__ == '__main__':
     raw = np.zeros((2, 100, 100))
     raw[:, 50:52, :] = 1.
 
-    raw = dp.load_h5('./../data/volumes/input_toy_ISNR0_valid.h5', 'data')[0][:, 0]
-    label = dp.load_h5('./../data/volumes/label_toy_ISNR0_valid.h5', 'data')[:][0]
+    raw = dp.load_h5('./../data/nets/toy_nh10_sig9_valid/edges/edges.h5', 'data')[0][:, 0]
+    label = dp.load_h5('./../data/volumes/label_toy_nh10_sig9_valid.h5', 'data')[0]
+    print label.shape
+    # exit()
 
     # pws = PWS('PWS')
     # pws.do_ws(raw, label)

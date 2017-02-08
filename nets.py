@@ -109,7 +109,7 @@ class NetBuilder:
             if 'conv' in layer_old_key:
                 layers['static_' + layer_old_key] = layers_static[layer_old_key]
         layers['l_in_static_00'] = layers_static['l_in_00']
-        # print 'layers', layers
+        print 'layers', layers
         # build dynamic net bottom
         self.fov = 69 + 2
         n_classes = 1
@@ -223,6 +223,7 @@ class NetBuilder:
                                        [loss_train, loss_individual_batch, l_out_train],
                                        updates=updates)
         loss_valid_f = theano.function([layers['l_in_00'].input_var, target], loss_valid)
+        # loss_train_f, loss_valid_f = [None, None]
         probs_f = theano.function([layers['l_in_00'].input_var], l_out_valid)
 
         return loss_train_f, loss_valid_f, probs_f
