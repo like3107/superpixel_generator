@@ -904,6 +904,8 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
             for f in glob.glob(self.exp_path+'*.h5'):
                 print "learning from ",f
                 self.images_counter += 1
+                if self.images_counter % 100 == 0:
+                    self.decrease_lr()
                 try:
                     with h5py.File(f,"r") as h5f:
                         if not self.check_escalation(h5f["grad_mean"].value):
