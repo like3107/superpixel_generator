@@ -952,12 +952,16 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
     def validate(self):
         for f in glob.glob(self.save_net_path+"/nets/net_*"):
             if f not in self.val_path_history:
-                self.val_path_history.append(f)
-                counter = u.get_network_iterration(f)
-                if counter is not None:
-                    self.images_counter = counter
-                    u.load_network(f, self.l_out)
-                    super(FCRecMasterFinePokemonTrainer, self).validate()
+                try:
+                    counter = u.get_network_iterration(f)
+                    if counter is not None:
+                        self.images_counter = counter
+                        u.load_network(f, self.l_out)
+                        super(FCRecMasterFinePokemonTrainer, self).validate()
+                    self.val_path_history.append(f)
+                except IOError:
+                    print "unable to read ",f
+        time.sleep(5)
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
     def init_BM(self):
