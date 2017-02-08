@@ -1489,13 +1489,13 @@ class HoneyBatcherRec(HoneyBatcherPath):
         # if -1 in bt_pos or self.image_shape[-1] in bt_pos:
         #     print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
         #     embed()
+        bt_pos = self.update_position(center, direction)
+        bt_direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
 
-        if direction == -1:      # stop 1 step before reaching seed (seed is given)
+        if bt_direction == -1:      # stop 1 step before reaching seed (seed is given)
             bt_error[key_mask] = True
             return bt_error
         else:
-            bt_pos = self.update_position(center, direction)
-            bt_direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
             bt_error[key_center] = bt_pos
             old_direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
             old_old_pos = self.update_position(bt_pos, old_direction)
