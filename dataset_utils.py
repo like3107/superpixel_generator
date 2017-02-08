@@ -1464,9 +1464,10 @@ class HoneyBatcherRec(HoneyBatcherPath):
             new_path_error = self.reverse_path(new_path_error, err_type + "_mask")
             error_selection += new_path_error
             init_err_pos = current_error[err_type + "_pos"]
-            init_err_dir = current_error[err_type + "_direction"]
-            origin = self.update_position(init_err_pos, init_err_dir)
-            hidden_coords.append([current_error["batch"], origin])
+            # TODO: check me some time :)
+            # init_err_dir = current_error[err_type + "_direction"]
+            # origin = self.update_position(init_err_pos, init_err_dir)
+            hidden_coords.append([current_error["batch"], init_err_pos])
         return error_selection, hidden_coords
 
     def backtrace_error_step(self, error, key_time, key_center, key_id, key_direction, key_mask):
@@ -1484,18 +1485,17 @@ class HoneyBatcherRec(HoneyBatcherPath):
             print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
             raise Exception("")
 
-        bt_pos = self.update_position(center, direction)
+        # # debug
+        # if -1 in bt_pos or self.image_shape[-1] in bt_pos:
+        #     print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
+        #     embed()
 
-        # debug
-        if -1 in bt_pos or self.image_shape[-1] in bt_pos:
-            print 'err type', error, key_time, key_center, key_id, key_direction, key_mask
-            embed()
-
-        bt_direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
-        if bt_direction == -1:      # stop 1 step before reaching seed (seed is given)
+        if direction == -1:      # stop 1 step before reaching seed (seed is given)
             bt_error[key_mask] = True
             return bt_error
         else:
+            bt_pos = self.update_position(center, direction)
+            bt_direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
             bt_error[key_center] = bt_pos
             old_direction = self.global_directionmap_batch[batch, bt_pos[0] - self.pad, bt_pos[1] - self.pad]
             old_old_pos = self.update_position(bt_pos, old_direction)
