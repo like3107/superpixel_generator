@@ -45,7 +45,7 @@ class PokemonTrainer(object):
         self.init_BM()
         self.bm = self.BM(self.options)
 
-        if "val_options" in self.options and self.master:
+        if "val_options" in self.options:
             self.options.val_options.patch_len = self.builder.fov
             self.val_bm = self.BM(self.options.val_options)
         else:
@@ -60,6 +60,7 @@ class PokemonTrainer(object):
         self.grad_history = [[], []]
         self.val_loss_history = [[], []]
         self.val_update_history = []
+        self.val_path_history = []
         self.epoch = 0
 
     def network_i_choose_you(self):
@@ -163,7 +164,7 @@ class PokemonTrainer(object):
             counter = self.iterations
         if name is None:
             name = 'net_%i' % counter
-        u.save_network(path, self.l_out, name, options=self.options)
+        u.save_network(path, self.l_out, name, options=self.options, iteration=counter)
         return
 
     def load_net(self, file_path=None):
@@ -630,6 +631,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                     grads_av = [g / self.err_b_counter for g in self.grads_sum]
                     grad_mean, grad_std = train_infos / self.err_b_counter 
                     return grads_av, grad_mean, grad_std, self.train_eval
+                else:
+                    return None
             self.draw_loss(self.train_eval, self.train_eval, counter=self.images_counter)
             self.draw_grads(grad_mean, grad_mean + grad_std)
             if not self.check_escalation(grad_mean):
@@ -868,7 +871,11 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                 u.load_network(self.save_net_path+"/nets/"+self.current_net_name, self.l_out)
             else:
                 self.save_net(name=self.current_net_name)
+            self.val_bm = None
             print "starting Master"
+        elif self.options.validation_slave:
+            self.master = False
+            print "starting validation Slave"
         else:
             self.master = False
             self.val_bm = None
@@ -913,11 +920,13 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
                             print "escalation detected ", h5f["grad_mean"].value
                         os.system('rm '+f)
                             
-
-
                 except IOError:
                     print "unable to read ",f
             time.sleep(5)
+
+        elif self.options.validation_slave:
+            self.validate()
+
 
         else:
             np.random.seed(np.random.seed(int(time.time())))
@@ -928,16 +937,27 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
             except:
                 print "unable to load network, predicting with previous parameters"
 
-            average_grad, grad_mean, grad_std, train_eval = super(FCRecMasterFinePokemonTrainer, self).train(slave=True)
-            print grad_mean
-            self.save_gradients(average_grad,
-                                grad_mean,
-                                grad_std,
-                                train_eval)
+            g = super(FCRecMasterFinePokemonTrainer, self).train(slave=True)
+            if g is not None:
+                average_grad, grad_mean, grad_std, train_eval = g
+                print grad_mean
+                self.save_gradients(average_grad,
+                                    grad_mean,
+                                    grad_std,
+                                    train_eval)
 
             if self.images_counter % self.options.observation_counter == 0:
                 trainer.draw_debug(reset=True)
 
+    def validate(self):
+        for f in glob.glob(self.save_net_path+"/nets/net_*"):
+            if f not in self.val_path_history:
+                self.val_path_history.append(f)
+                counter = u.get_network_iterration(f)
+                if counter is not None:
+                    self.images_counter = counter
+                    u.load_network(f, self.l_out)
+                    super(FCRecMasterFinePokemonTrainer, self).validate()
 
 class FCERecFinePokemonTrainer(FCRecFinePokemonTrainer):
     def init_BM(self):
@@ -1066,6 +1086,7 @@ if __name__ == '__main__':
         while not trainer.converged():
             trainer.train()
             if trainer.val_bm is not None \
+                                and not options.master_training\
                                 and trainer.epoch % options.save_counter == 0 \
                                 and trainer.epoch != last_val_epoch:
                 last_val_epoch = trainer.epoch

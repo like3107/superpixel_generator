@@ -61,6 +61,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--padding_b', action='store_true')
     p.add('--master_training', action='store_true')
     p.add('--master', action='store_true')
+    p.add('--validation_slave', action='store_true')
     p.add('--merge_seeds', dest='merge_seeds', action='store_true')
     p.add('--train_merge', dest='train_merge', action='store_true')
     p.add('--dropout_b', action='store_true', default=False)
@@ -83,6 +84,7 @@ def get_options(script='training', ignore_config=False):
 
     # RNN
     p.add('--n_recurrent_hidden', default=128, type=int)
+    p.add('--feature_map_size_reduction', default=1, type=int)
     p.add('--backtrace_length', default=5, type=int)
     p.add('--n_batch_errors', default=1, type=int)
     p.add('--weight_fct', default="hard", type=str)

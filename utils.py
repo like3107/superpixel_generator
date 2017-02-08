@@ -138,10 +138,14 @@ def make_bash_executable(base_path, add_option=''):
 
 
 def save_network(save_path, l_last, net_name, poolings=None, filter_sizes=None,
-                 n_filter=None,options=None):
+                 n_filter=None,options=None, iteration=None):
 
     h5_values = []
     h5_keys = []
+
+    if iteration is not None:
+        h5_keys.append("iteration")
+        h5_values.append(iteration)
 
     # load network parameter
     all_params = las.layers.get_all_params(l_last)
@@ -353,6 +357,13 @@ def load_network(load_path, l_last=None):
         las.layers.set_all_param_values(l_last, all_param_values)
     else:
         return all_param_values
+
+def get_network_iterration(load_path):
+    with h5py.File(load_path, 'r') as net_file:
+        if "iteration" in net_file:
+            return net_file["iteration"].value
+        else:
+            return None
 
 def load_options(load_path, options={}):
     print 'loading options from', load_path
