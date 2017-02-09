@@ -940,8 +940,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
                     # go one step back
                     # start_position = self.update_position(start_position, start_direction)
-                    error["e2_pos"], error["e2_direction"] = self.find_end_of_plateau(start_position, start_direction,
+                    error["e2_pos"], _ = self.find_end_of_plateau(start_position, start_direction,
                                                                                       batch, error)
+                    pos = error["e2_pos"]
+                    error["e2_direction"] = self.global_directionmap_batch[batch, pos[0] - self.pad,  pos[1] - self.pad]
                     # slow intruder never reaches root
                     assert(self.global_directionmap_batch[error["batch"], error["small_pos"][0] - self.pad,
                                                                           error["small_pos"][1] - self.pad] != -1)

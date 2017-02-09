@@ -502,13 +502,16 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         # if np.all(centers == self.debug_pos):
         #     verbose = True
+        #     self.mem_height = height_probs[[0, self.dir]]
+        #
         #     self.mem_stat = inputs[:, 2:]
         # if np.all(centers == self.debug_pos_orig):
+        #     self.mem = inputs[:, :2]
+        #
         #     self.mem_merge = merges[0]
         #     self.mem_befo_rec = befo_rec
-        #     self.mem = inputs[:, :2]
-        #     self.mem_rec_in = hidden_out[:, 0, :]
-        #
+            # self.mem_rec_in = hidden_out[:, 0, :]
+
         # hidden diff
         # d_height_probsd, d_hidden_outd, d_precomp_input_sliced = self.builder.probs_f(inputs[:, :2], inputs[:, 2:],
         #                                                                                   hiddens, rnn_mask, 1)
@@ -581,7 +584,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.images_counter += 1
 
         with progressbar.ProgressBar(max_value=self.free_voxel_empty) as bar:
-            while (self.free_voxel > 0):
+            while self.free_voxel > 0:
                 self.iterations += 1
                 self.free_voxel -= 1
                 self.update_BM()
@@ -663,6 +666,10 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                               batch_mask_ft, options.backtrace_length, grad_weights)
         ft_loss_train, individual_loss_fine, heights, grad_mean, grad_std = outs[:5]
         grads_new = outs[5:]
+
+        # self.debug_plots(heights, batch_mask_ft, batch_inits, None, batch_ft, batch_inits, None,
+        #                  None)
+
         if self.grads_sum is None:
             self.grads_sum = [np.array(g, dtype=np.float32) for g in grads_new]
         else:
@@ -720,141 +727,175 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                                 self.save_net_path + '/heights.png', names=['h1s', 'h2s'],
                                 log_scale=False)
 
-    # def debug_plots(self, all_heights, masks, hiddens, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec):
-    #
-    #     for mask in masks:
-    #         if not np.any(mask):
-    #             embed()
-    #     masks = np.array(masks.reshape((2, -1)), dtype=np.bool)
-    #     all_heights_tmp = all_heights.reshape((2, -1))
-    #     print 'shapes', all_heights_tmp.shape, masks.shape
-    #     # for i, (ei, heights, mask, err_selection) in enumerate(zip(['e1', 'e2'], all_heights_tmp, masks,
-    #     #                                                            self.bm.error_selections)):
-    #     #
-    #     #     print 'ei', ei, heights.shape, mask.shape, np.array(err_selection).shape
-    #     #     err_selection = np.array(err_selection)[mask]
-    #     #     print 'amsk', err_selection.shape
-    #     #     all_ei_pos = np.array([err[ei + '_pos'] for err in err_selection])
-    #     #     all_b = [err['batch'] for err in err_selection]
-    #     #     dirs = self.bm.global_directionmap_batch[all_b, all_ei_pos[:, 0] - self.bm.pad,
-    #     #                                                     all_ei_pos[:, 1] - self.bm.pad]
-    #     #     origins = [self.bm.update_position(pos, dir) if dir != -1 else pos for pos, dir in zip(all_ei_pos, dirs)]
-    #     #     origins = np.array(origins)
-    #     #     all_orig_h = self.bm.global_prediction_map_nq[all_b, all_ei_pos[:, 0] - self.bm.pad,
-    #     #                                                   all_ei_pos[:, 1] - self.bm.pad, dirs]
-    #     #     all_rec_h = heights[mask]
-    #     #     print 'dirs', dirs
-    #     #     print 'update height diff', ei
-    #     #     h_diffs = all_orig_h - all_rec_h
-    #     #     all_orig_h = self.bm.global_prediction_map_nq[all_b, origins[:, 0] - self.bm.pad,
-    #     #                                                          origins[:, 1] - self.bm.pad, dirs]
-    #     #     all_rec_h = heights[mask]
-    #     #     print 'no height diff', ei
-    #     #     print 'pos', zip(all_ei_pos, origins)
-    #     #     print 'h_diffs', zip(h_diffs, all_orig_h - all_rec_h)
-    #     # exit()
-    #     # exit()
-    #     # self.bm.draw_batch(batch_ft, 'batch_tmp')
-    #     ts = self.options.backtrace_length
-    #     n_err = len(self.bm.error_selections[0]) / ts
-    #     all_e1 = np.array(self.bm.error_selections[0]).reshape(n_err, ts)
-    #     all_e2 = np.array(self.bm.error_selections[1]).reshape(n_err, ts)
-    #     all_heights= all_heights.flatten()
-    #     print 'nerr', n_err, 'ts', ts, 'h', len(all_heights), all_heights
-    #     all_h1 = all_heights[:n_err * ts].reshape(n_err, ts)
-    #     all_h2 = all_heights[n_err * ts:].reshape(n_err, ts)
-    #     # height diffs, hiddens, hiddens rec, stat_convs
-    #     # e1_pos = []
-    #
-    #     print
-    #     k = -1
-    #     for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
-    #         k += 1
-    #         for rec_b, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
-    #             print 'next error', e_type
-    #             for t, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
-    #                 number = t + rec_b * ts + k * n_err * ts
-    #
-    #                 pos = err_t[e_type + '_pos']
-    #                 b = err_t['batch']
-    #                 dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
-    #
-    #                 if dir < 0 or not masks[k, rec_b * ts + t]:
-    #                     print 'continue', pos, dir, masks[k, rec_b * ts + t]
-    #                     continue
-    #
-    #                 old_pos = self.bm.update_position(pos, dir)
-    #
-    #                 # conv check
-    #                 stat_conv_masks = [stat_conv[number, :, 0, 0] != 0]
-    #                 orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
-    #                 diff = np.abs(orig_conv[stat_conv_masks] - stat_conv[number, :, 0, 0][stat_conv_masks]*2)
-    #                 verbose = True
-    #                 if np.max(diff) > 10 ** -4 or np.all(pos == self.debug_pos):
-    #                     verbose = True
-    #                     print 'conv comparison', np.max(diff), np.mean(diff), 'where', np.where(diff == np.max(diff))
-    #                     print 'orig conv', orig_conv[:5], 'rconst conv', stat_conv[number, :5, 0, 0] / 2
-    #
-    #                 err_h = self.bm.global_prediction_map_nq[b, old_pos[0] - self.bm.pad, old_pos[1] - self.bm.pad,
-    #                                                          dir]
-    #                 diff = np.abs(h_t - err_h)
-    #                 # print 'height diff', diff
-    #                 if diff > 10 ** -2 or np.all(pos == self.debug_pos) and not masks[k, rec_b * ts + t]:
-    #                     verbose = True
-    #                     print 'height differences %.5f err h %.5f, diff %.5f hiddens max %.5f' \
-    #                           % (h_t, err_h, (h_t - err_h), np.max(hiddens_rec)), masks[k, rec_b * ts + t]
-    #                 # input check
-    #                 old_stat = self.bm.crop_input(pos, b)[None, ...][0, :, 1:-1, 1:-1]
-    #                 new_stat = batch_ft[number, 2:, :, :]
-    #                 stat_inp_diff = np.mean((old_stat - new_stat).astype(np.float))
-    #                 if stat_inp_diff > 10 ** -4:
-    #                     verbose = True
-    #                     print 'static inputs equals', np.mean(stat_inp_diff)
-    #
-    #                 if np.all(pos == self.debug_pos):
-    #                     if self.dir == 0:
-    #                         dx, dy = (0,0)
-    #                         sx, ex, sy, ey = (None,-2, 1,-1)
-    #                     if self.dir == 1:
-    #                         dx, dy = (0,1)
-    #                         sx, ex, sy, ey = (1,-1, None, -2)
-    #                     if self.dir == 2:
-    #                         dx, dy = (1, 0)
-    #                         sx, ex, sy, ey = (2, None, 1, -1)
-    #                     if self.dir == 3:
-    #                         dx, dy = (1, 1)
-    #                         sx, ex, sy, ey = (1, -1, 2, None)
-    #
-    #                     print 'rec time err', err_t[e_type + '_time'], self.dir
-    #                     print 'pred time', self.bm.global_timemap[0, self.debug_pos_orig[0], self.debug_pos_orig[1]]
-    #                     verbose = True
-    #                     # self.mem[0, 1, 1, 1] = 2
-    #                     print 'input comparison', np.sum(np.abs(self.mem[0, :, sx:ex, sy:ey] - batch_ft[number, :2, :, :]))
-    #                     print 'stat comparison', np.sum(np.abs(self.mem_stat[0, :, 1:-1, 1:-1] - batch_ft[number, 2:, :, :]))
-    #                     print 'merge comparison', np.sum(np.abs(self.mem_merge[:, dx, dy] - reco_merges[number, :, 0, 0]))
-    #                     print 'merge diff stat', np.sum(np.abs(self.mem_merge[320-64:, dx, dy] - reco_merges[number, 320-64:, 0, 0]))
-    #                     print 'befo rec comparison', np.sum(np.abs(self.mem_befo_rec[dir + b*4,0 , :] - reco_befo_rec[0, 0, :]))
-    #
-    #                     diff =np.abs(self.mem_rec_in[dir + b * 4 , :] - hiddens[0, 0, :])
-    #                     print 'recurrent input differences', np.mean(diff), np.max(diff), np.where(diff == np.max(diff))
-    #
-    #
-    #                     # print 'recurrent input mem', self.mem_rec_in[3 + b * 4 , :8]
-    #                     # print 'recurrent input reconst', hiddens[0, 0, :8]
-    #                     # print 'mem merges', self.mem_merge[320-64-2:, dx, dy][:4]
-    #                     # print 'reco merges', reco_merges[number, 320-64-2:, 0, 0][:4]
-    #                     # print 'reco_befo_rec', reco_befo_rec[0, 0, :5]
-    #                     # print 'mem befo rec', self.mem_befo_rec[dir + b*4,0 , :5]
-    #
-    #                 if verbose:
-    #                     print 'number', number
-    #                     t_rec = self.bm.global_timemap[b, old_pos[0], old_pos[1]]
-    #                     print 'type', e_type, 'pos', pos, 'b', b, 'orig pos', old_pos, 'dir', dir, 'trec', t_rec
-    #                     if self.bm.pad in pos or self.bm.image_shape[-1] - self.bm.pad - 1 in pos:
-    #                         print 'boundary case.............'
-    #                     print
+    def debug_plots(self, all_heights, masks, hiddens, stat_conv, batch_ft, hiddens_rec, reco_merges, reco_befo_rec):
+
+        for mask in masks:
+            if not np.any(mask):
+                embed()
+        masks = np.array(masks.reshape((2, -1)), dtype=np.bool)
+        all_heights_tmp = all_heights.reshape((2, -1))
+        print 'shapes', all_heights_tmp.shape, masks.shape
+        # for i, (ei, heights, mask, err_selection) in enumerate(zip(['e1', 'e2'], all_heights_tmp, masks,
+        #                                                            self.bm.error_selections)):
+        #
+        #     print 'ei', ei, heights.shape, mask.shape, np.array(err_selection).shape
+        #     err_selection = np.array(err_selection)[mask]
+        #     print 'amsk', err_selection.shape
+        #     all_ei_pos = np.array([err[ei + '_pos'] for err in err_selection])
+        #     all_b = [err['batch'] for err in err_selection]
+        #     dirs = self.bm.global_directionmap_batch[all_b, all_ei_pos[:, 0] - self.bm.pad,
+        #                                                     all_ei_pos[:, 1] - self.bm.pad]
+        #     origins = [self.bm.update_position(pos, dir) if dir != -1 else pos for pos, dir in zip(all_ei_pos, dirs)]
+        #     origins = np.array(origins)
+        #     all_orig_h = self.bm.global_prediction_map_nq[all_b, all_ei_pos[:, 0] - self.bm.pad,
+        #                                                   all_ei_pos[:, 1] - self.bm.pad, dirs]
+        #     all_rec_h = heights[mask]
+        #     print 'dirs', dirs
+        #     print 'update height diff', ei
+        #     h_diffs = all_orig_h - all_rec_h
+        #     all_orig_h = self.bm.global_prediction_map_nq[all_b, origins[:, 0] - self.bm.pad,
+        #                                                          origins[:, 1] - self.bm.pad, dirs]
+        #     all_rec_h = heights[mask]
+        #     print 'no height diff', ei
+        #     print 'pos', zip(all_ei_pos, origins)
+        #     print 'h_diffs', zip(h_diffs, all_orig_h - all_rec_h)
+        # exit()
+        # exit()
+        # self.bm.draw_batch(batch_ft, 'batch_tmp')
+        ts = self.options.backtrace_length
+        n_err = len(self.bm.error_selections[0]) / ts
+        all_e1 = np.array(self.bm.error_selections[0]).reshape(n_err, ts)
+        all_e2 = np.array(self.bm.error_selections[1]).reshape(n_err, ts)
+        all_heights= all_heights.flatten()
+        print 'nerr', n_err, 'ts', ts, 'h', len(all_heights), all_heights
+        all_h1 = all_heights[:n_err * ts].reshape(n_err, ts)
+        all_h2 = all_heights[n_err * ts:].reshape(n_err, ts)
+        # height diffs, hiddens, hiddens rec, stat_convs
+        # e1_pos = []
+
+        print
+        k = -1
+        sa = -1
+        for e_type, all_type_i_errs, all_type_i_hs in zip(['e1', 'e2'], [all_e1, all_e2], [all_h1, all_h2]):
+            k += 1
+            for rec_b, (sequ_errs, sequ_h) in enumerate(zip(all_type_i_errs, all_type_i_hs)):
+                sa += 1
+                print 'next error', e_type
+                for t, (err_t, h_t) in enumerate(zip(sequ_errs, sequ_h)):
+                    number = t + rec_b * ts + k * n_err * ts
+
+                    print 'batch hiddes', sa, hiddens[sa].shape
+
+                    pos = err_t[e_type + '_pos']
+                    b = err_t['batch']
+
+                    t_max = np.sum(masks[k, rec_b * ts:rec_b * ts + 5])
+                    if not self.bm.error_selections[k][rec_b * ts + t]['slow_intruder'] and t == t_max-1 and e_type == 'e2':
+                        print 'this is happening'
+                        dir = self.bm.error_selections[k][rec_b * ts + t]['e2_direction']
+                    else:
+                        dir = self.bm.global_directionmap_batch[b, pos[0] - self.bm.pad, pos[1] - self.bm.pad]
+
+                    print 'hiddenss'
+                    print 'shape', self.bm.global_hidden_states[b, :, :, :, :].shape
+
+                    abs_diff = (self.bm.global_hidden_states[b, :, :, :, :] - hiddens[sa])**2
+                    print 'abs diff', abs_diff.shape
+                    hidden_diff = np.sum(abs_diff, axis=3)
+                    amin = np.amin(hidden_diff)
+                    coods = np.where(hidden_diff == amin)
+                    print 'hidden state came from', coods
+                    # print np.argmin(np.sum(np.square(self.bm.global_hidden_states[b, :, :, :, :] - hiddens[sa]),
+                    #                        axis=4))
 
 
+                    if dir < 0 or not masks[k, rec_b * ts + t]:
+                        print 'continue', pos, dir, masks[k, rec_b * ts + t]
+                        print
+                        continue
+
+                    old_pos = self.bm.update_position(pos, dir)
+                    print 'old pos'
+
+                    # conv check
+                    # stat_conv_masks = [stat_conv[number, :, 0, 0] != 0]
+                    # orig_conv = self.precomp_input[b, :, pos[0] - self.bm.pad + 1, pos[1] - self.bm.pad + 1]
+                    # diff = np.abs(orig_conv[stat_conv_masks] - stat_conv[number, :, 0, 0][stat_conv_masks]*2)
+                    verbose = True
+                    # if np.max(diff) > 10 ** -4 or np.all(pos == self.debug_pos):
+                    #     verbose = True
+                    #     print 'conv comparison', np.max(diff), np.mean(diff), 'where', np.where(diff == np.max(diff))
+                        # print 'orig conv', orig_conv[:5], 'rconst conv', stat_conv[number, :5, 0, 0] / 2
+
+                    err_h = self.bm.global_prediction_map_nq[b, old_pos[0] - self.bm.pad, old_pos[1] - self.bm.pad,
+                                                             dir]
+                    diff = np.abs(h_t - err_h)
+                    # print 'height diff', diff
+                    print 'height differences %.5f err h %.5f, diff %.5f hiddens max %.5f' \
+                              % (h_t, err_h, (h_t - err_h), np.max(hiddens_rec)), masks[k, rec_b * ts + t]
+
+                    print 'plauteau', self.bm.error_selections[k][rec_b * ts + t]['plateau']
+                    print 'slow_intruder', self.bm.error_selections[k][rec_b * ts + t]['slow_intruder']
+
+                    if diff > 10 ** -2 or np.all(pos == self.debug_pos) and not masks[k, rec_b * ts + t]:
+                        print 'warning high height diff'
+                        verbose = True
+                        # embed()
+                    # input check
+                    old_stat = self.bm.crop_input(pos, b)[None, ...][0, :, 1:-1, 1:-1]
+                    new_stat = batch_ft[number, 2:, :, :]
+                    stat_inp_diff = np.mean((old_stat - new_stat).astype(np.float))
+
+
+                    if np.all(pos == self.debug_pos):
+                        if self.dir == 0:
+                            dx, dy = (0,0)
+                            sx, ex, sy, ey = (None,-2, 1,-1)
+                        if self.dir == 1:
+                            dx, dy = (0,1)
+                            sx, ex, sy, ey = (1,-1, None, -2)
+                        if self.dir == 2:
+                            dx, dy = (1, 0)
+                            sx, ex, sy, ey = (2, None, 1, -1)
+                        if self.dir == 3:
+                            dx, dy = (1, 1)
+                            sx, ex, sy, ey = (1, -1, 2, None)
+
+                        print 'rec time err', err_t[e_type + '_time'], self.dir
+                        print 'pred time', self.bm.global_timemap[0, self.debug_pos_orig[0], self.debug_pos_orig[1]]
+                        verbose = True
+                        # self.mem[0, 1, 1, 1] = 2
+                        print 'input comparison', np.sum(np.abs(self.mem[0, :, sx:ex, sy:ey] - batch_ft[number, :2, :, :]))
+                        # print 'stat comparison', np.sum(np.abs(self.mem_stat[0, :, 1:-1, 1:-1] - batch_ft[number, 2:, :, :]))
+                        # print 'merge comparison', np.sum(np.abs(self.mem_merge[:, dx, dy] - reco_merges[number, :, 0, 0]))
+                        # print 'merge diff stat', np.sum(np.abs(self.mem_merge[320-64:, dx, dy] - reco_merges[number, 320-64:, 0, 0]))
+                        # print 'merge diff stat', np.sum(np.abs(self.mem_merge[320-64:, dx, dy] - reco_merges[number, 320-64:, 0, 0]))
+                        # print 'befo rec comparison', np.sum(np.abs(self.mem_befo_rec[dir + b*4,0 , :] - reco_befo_rec[0, 0, :]))
+
+                        try:
+                            diff = np.abs(self.mem_rec_in[dir + b * 4, :] - hiddens[0, 0, :])
+                            print 'recurrent input differences', np.mean(diff), np.max(diff), np.where(diff == np.max(diff))
+                        except:
+                            None
+
+                        # print 'recurrent input mem', self.mem_rec_in[3 + b * 4 , :8]
+                        # print 'recurrent input reconst', hiddens[0, 0, :8]
+                        # print 'mem merges', self.mem_merge[320-64-2:, dx, dy][:4]
+                        # print 'reco merges', reco_merges[number, 320-64-2:, 0, 0][:4]
+                        # print 'reco_befo_rec', reco_befo_rec[0, 0, :5]
+                        # print 'mem befo rec', self.mem_befo_rec[dir + b*4,0 , :5]
+
+                    if verbose:
+                        print 'number', number
+                        t_rec = self.bm.global_timemap[b, old_pos[0], old_pos[1]]
+                        print 'type', e_type, 'pos', pos, 'b', b, 'orig pos', old_pos, 'dir', dir, 'trec', t_rec
+                        if self.bm.pad in pos or self.bm.image_shape[-1] - self.bm.pad - 1 in pos:
+                            print 'boundary case.............'
+                        print
+                    if diff > 10 ** -2 or np.all(pos == self.debug_pos) and not masks[k, rec_b * ts + t]:
+                        # verbose = True
+                        embed()
+            # embed()
 class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
     def init_BM(self):
         self.BM = du.HoneyBatcherRec

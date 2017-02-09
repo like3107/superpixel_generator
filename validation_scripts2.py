@@ -83,7 +83,7 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
             # string for easy copy to google doc
             print ','.join(['%.3f,+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
         text = ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
-        return np.sqrt((all_means[0] + all_means[1]) * all_means[2])
+        return np.sqrt((all_means[0] + all_means[1]) * all_means[2]), all_means[2]
         # return make_val_dic(all_means, all_vars), text
 
     else:
@@ -126,8 +126,9 @@ if __name__ == '__main__':
 
 
     # print
-    pred_path='./../data/nets/ft_evol_adam_all/validation_net_1400/slice_concat.h5'
-    pred_path='./../data/we.h5'
+    pred_path='./../data/nets/dt_toy_nh0_sig6/validation_net_800/slice_concat.h5'
+    # pred_path='/home/lschott_local/mounts/hcigpu04/superpixel_generator/data/nets/dt_toy_nh0_sig3_valid/validation_net_800/slice_concat.h5'
+    # pred_path='./../data/we.h5'
     # pred_path='./../data/nets/ft_evol_adam/validation_net_1400/slice_concat.h5'
 
     # # pred_path='./data/preds/timo_first_repr_zstack.h5'
@@ -136,18 +137,18 @@ if __name__ == '__main__':
     # pred_path='./../data/nets/pretrain_cremi_noz_ft_180_C10/final.h5'
     # # pred_path='./data/preds/random.h5'
     # # pred_path = '/home/liory/src/superpixel_generator/data/pred_10000.h5'
-    gt_path = './../data/volumes/label_CREMI_noz_test.h5'
+    gt_path = './../data/volumes/label_toy_nh0_sig6_valid.h5'
     #
     # print 'gt path'
     # print pred_path
     #
     validate_segmentation(pred_path=pred_path, gt_path=gt_path, slice_by_slice=True,
-                          start_z=0, n_z=150, gel=1180, offset_xy=35, defect_slices=True,
-                          resolution=4, border_thresh=25)
+                          start_z=0, n_z=100, gel=252-70, offset_xy=35, defect_slices=True,
+                          resolution=1, border_thresh=2)
 
     #
     # pred_path='./../data/nets/ft_bn_dowbd/validation_net_2000/baseline_concat.h5'
-    pred_path='./../data/timo.h5'
+    pred_path='./../data/nets/dt_nh0_sig3_valid/baseline_concat.h5'
 
 
     # # pred_path='./data/preds/timo_first_repr_zstack.h5'
@@ -162,5 +163,5 @@ if __name__ == '__main__':
     # print pred_path
     #
     validate_segmentation(pred_path=pred_path, gt_path=gt_path, slice_by_slice=True,
-                          start_z=0, n_z=150, gel=1180, offset_xy=35, defect_slices=True,
-                          resolution=4, border_thresh=25)
+                          start_z=0, n_z=100, gel=252-70, offset_xy=35, defect_slices=True,
+                          resolution=1, border_thresh=2)
