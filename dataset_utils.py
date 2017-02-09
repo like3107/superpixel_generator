@@ -975,6 +975,12 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         mask = self.crop_time_mask(centers, timepoints, batches)
         raw_batch[:, 0, :, :][mask] = 0
         raw_batch[:, 1, :, :][mask] = 0
+        if self.options.claim_channels > 2:
+            raw_batch[:, 2, :, :][mask] = 1
+        if self.options.claim_channels > 3:
+            # simple masking of time does not work here, since the nearest neighbor
+            # can change over time
+            raise NotImplementedError()
         self.mask = mask
         return raw_batch
 
