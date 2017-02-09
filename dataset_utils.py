@@ -971,7 +971,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             centers.append(center)
 
             timepoints.append(error[key_time])
-            raw_batch[i, :, :, :] = self.get_network_input(center, batch, Id, raw_batch[i, :, :, :])
+            self.get_network_input(center, batch, Id, raw_batch[i, :, :, :])
         mask = self.crop_time_mask(centers, timepoints, batches)
         raw_batch[:, 0, :, :][mask] = 0
         raw_batch[:, 1, :, :][mask] = 0
@@ -1412,6 +1412,12 @@ class HoneyBatcherPatchFast(HoneyBatcherPath):
         mask = self.crop_time_mask(centers, timepoints, batches)
         raw_batch[:, 0, :, :][mask] = 0
         raw_batch[:, 1, :, :][mask] = 0
+        if self.options.claim_channels > 2:
+            raw_batch[:, 2, :, :][mask] = 1
+        if self.options.claim_channels > 3:
+            # simple masking of time does not work here, since the nearest neighbor
+            # can change over time
+            raise NotImplementedError()
         return raw_batch
 
 
@@ -1421,6 +1427,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.global_hidden_states = np.empty((options.batch_size, 4, self.label_shape[1], self.label_shape[2],
                                                   options.n_recurrent_hidden))      # pre pq [<-->]
         self.n_recurrent_hidden = options.n_recurrent_hidden
+        self.initial_hiddens = None
 
     def init_batch(self, start=None, allowed_slices=None):
         super(HoneyBatcherRec, self).init_batch(start=start, allowed_slices=None)
@@ -1430,6 +1437,13 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.global_hidden_states[b, :, center[0] - self.pad, center[1] - self.pad, :] = hidden_states[b, :, :]
         super(HoneyBatcherRec, self).update_priority_queue_i(b, center, Id, height)
 
+    def initialize_hiddens(callback):
+        sequ_len = 1
+        rnn_mask = np.ones((self.bs, sequ_len), dtype=np.float32)
+        callback(inputs, np.zeros((self.n_recurrent_hidden), dtype=np.float32), rnn_mask, 1)
+                inputs[:, :self.options.claim_channels],
+                                                           precomp_input_sliced,  hiddens, rnn_mask, 1
+
     def get_hidden(self, b, center):
         try:
             direction = self.global_directionmap_batch[b, center[0] - self.pad, center[1] - self.pad]
@@ -1437,7 +1451,11 @@ class HoneyBatcherRec(HoneyBatcherPath):
             print e.message, e.args
             embed()
         if direction == -1:  # seed
-            return np.zeros((self.n_recurrent_hidden), dtype=np.float32)
+            if self.initial_hiddens is not None:
+                return self.initial_hiddens[(center[0],center[1])]
+            else:
+                print "WARNING: using zero hidden state"
+                return np.zeros((self.n_recurrent_hidden), dtype=np.float32)
         else:
             origin = self.update_position(center, self.global_directionmap_batch[b, center[0] - self.pad,
                                                                                     center[1] - self.pad])
