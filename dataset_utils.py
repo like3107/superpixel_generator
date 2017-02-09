@@ -1509,7 +1509,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
 
         if not error["slow_intruder"] and error["first_rec"] and 'e2' in key_time:
             direction = error[key_direction]        # first e2 of fast intruder (last in time) is not claimed
-            error["first_rec"] = False
+            bt_error["first_rec"] = False
         else:
             direction = self.global_directionmap_batch[batch, center[0] - self.pad, center[1] - self.pad]
 
