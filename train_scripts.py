@@ -897,10 +897,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                         embed()
             # embed()
 class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
-    def init_BM(self):
-        self.BM = du.HoneyBatcherRec
-        self.images_counter = -1
-
+    def __init__(self, options):
+        super(FCRecMasterFinePokemonTrainer, self).__init__(options)
         self.exp_path = self.save_net_path+"/experiences/"
         self.current_net_name = "masternet.h5"
         if self.options.master:
@@ -922,7 +920,12 @@ class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
             self.master = False
             self.val_bm = None
             np.random.seed(np.random.seed(int(time.time())))
-            print "starting Slave"
+
+
+    # def init_BM(self):
+    #     self.BM = du.HoneyBatcherRec
+    #     self.images_counter = -1
+    #         print "starting Slave"
 
     def save_gradients(self, average_grad, grad_mean, grad_std, train_eval):
         with h5py.File(self.exp_path+"/%i_%f.h5"%(os.getpid(), time.time()),"w") as f:

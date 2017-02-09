@@ -8,6 +8,8 @@ import os
 import sys
 import h5py
 import data_provider as dp
+import itertools
+
 
 matplotlib.rcParams.update({'font.size': 5})
 
@@ -440,12 +442,15 @@ def plot_val_errors(all_y_values, x_values, save_path, names,
     fig = plt.figure()
     plots = []
     for i, y_values in enumerate(all_y_values):
-        plot, = plt.plot(x_values, y_values)
+
+        lists = sorted(itertools.izip(*[x_values, y_values]))
+        new_x, new_y = list(itertools.izip(*lists))
+        plot, = plt.plot(new_x, new_y)
         if i == 0:
-	        best_index = np.argmin(y_values)
-	        plt.axhline(y=y_values[best_index])
-	        plt.axvline(x=x_values[best_index])
-	        plt.title('best validation at '+str(x_values[best_index])+" with "+str((1-y_values[best_index])*100.)+"\%")
+	        best_index = np.argmin(new_y)
+	        plt.axhline(y=new_y[best_index])
+	        plt.axvline(x=new_x[best_index])
+	        plt.title('best validation at '+str(new_x[best_index])+" with "+str((1-new_y[best_index])*100.)+"\%")
         if log_scale:
             plt.yscale('log')
 
