@@ -446,7 +446,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # private
         self.add_height_b = False
         # All no padding
-        self.global_directionmap_batch = np.zeros(self.image_shape, dtype=np.int) - 1       # post PQ
+        self.global_directionmap_batch = None       # post PQ
         self.global_timemap = np.empty(self.image_shape, dtype=np.int)
         self.global_errormap = np.zeros(self.image_shape, dtype=np.int)
 
@@ -1496,12 +1496,10 @@ class HoneyBatcherRec(HoneyBatcherPath):
             new_path_error = self.reverse_path(new_path_error, err_type + "_mask")
             error_selection += new_path_error
             init_err_pos = current_error[err_type + "_pos"]
-            current_error[err_type+"_pos_hidden"] = init_err_pos
-            # TODO: check me some time :)
-            # init_err_dir = current_error[err_type + "_direction"]
-            # origin = self.update_position(init_err_pos, init_err_dir)
-
-            hidden_coords.append([current_error["batch"], init_err_pos])
+            init_err_dir = current_error[err_type + "_direction"]
+            origin = self.update_position(init_err_pos, init_err_dir)
+            hidden_coords.append([current_error["batch"], origin])
+            current_error[err_type+"_pos_hidden"] = origin
         return error_selection, hidden_coords
 
     def backtrace_error_step(self, error, key_time, key_center, key_id, key_direction, key_mask):
