@@ -1581,59 +1581,51 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.selection = selection
         return reconst_es[0], reconst_es[1], rnn_masks[0], rnn_masks[1], rnn_hidden_inits[0], rnn_hidden_inits[1]
 
-    def draw_error_dict(self, path, image_name):
+    def draw_error_selection(self, path, image_name):
         counter = 0
         if len(self.error_selections) == 2:
-            # try:
-            if True:
-                for e1, e2 in zip(self.error_selections[0], self.error_selections[1]):
-                    plot_images = []
-                    b = e1["batch"]
-                    print e1
-                    print e2
-                    batch, claims = self.get_image_crops(b)
-                    e1_pos = [np.array(e1["e1_pos"])]
-                    e1_direction = self.global_directionmap_batch[b, e1["e1_pos"][0] - self.pad, e1["e1_pos"][1] - self.pad]
-                    bt_pos = self.update_position(e1_pos[0], e1_direction)
-                    e1_pos.append(bt_pos)
-                    e1_color = ["g","b"]
-                    if "e1_pos_hidden" in e1 and e1["e1_pos_hidden"] is not None:
-                        e1_pos.append(np.array(e1["e1_pos_hidden"]))
-                        e1_color.append("r")
-                    e1_pos = np.array(e1_pos) - self.pad
+            for e1, e2 in zip(self.error_selections[0], self.error_selections[1]):
+                plot_images = []
+                b = e1["batch"]
+                batch, claims = self.get_image_crops(b)
+                e1_pos = [np.array(e1["e1_pos"])]
+                e1_direction = self.global_directionmap_batch[b, e1["e1_pos"][0] - self.pad, e1["e1_pos"][1] - self.pad]
+                bt_pos = self.update_position(e1_pos[0], e1_direction)
+                e1_pos.append(bt_pos)
+                e1_color = ["g","b"]
+                if "e1_pos_hidden" in e1 and e1["e1_pos_hidden"] is not None:
+                    e1_pos.append(np.array(e1["e1_pos_hidden"]))
+                    e1_color.append("r")
+                e1_pos = np.array(e1_pos) - self.pad
 
 
-                    e2_pos = [np.array(e2["e2_pos"])]
-                    if not e2["slow_intruder"] and e2["first_rec"] and 'e2' in "e2_time":
-                        e2_direction = e2["e2_direction"]        # first e2 of fast intruder (last in time) is not claimed
-                        e2["first_rec"] = False
-                    else:
-                        e2_direction = self.global_directionmap_batch[b, e2["e2_pos"][0] - self.pad, e2["e2_pos"][1] - self.pad]
-                    bt_pos = self.update_position(e2_pos[0], e2_direction)
-                    e2_pos.append(bt_pos)
-                    e2_color = ["g","b"]
-                    if "e2_pos_hidden" in e2 and e2["e2_pos_hidden"] is not None:
-                        e2_pos.append(np.array(e2["e2_pos_hidden"]))
-                        e2_color.append("r")
+                e2_pos = [np.array(e2["e2_pos"])]
+                if not e2["slow_intruder"] and e2["first_rec"] and 'e2' in "e2_time":
+                    e2_direction = e2["e2_direction"]        # first e2 of fast intruder (last in time) is not claimed
+                else:
+                    e2_direction = self.global_directionmap_batch[b, e2["e2_pos"][0] - self.pad, e2["e2_pos"][1] - self.pad]
+                bt_pos = self.update_position(e2_pos[0], e2_direction)
+                e2_pos.append(bt_pos)
+                e2_color = ["g","b"]
+                if "e2_pos_hidden" in e2 and e2["e2_pos_hidden"] is not None:
+                    e2_pos.append(np.array(e2["e2_pos_hidden"]))
+                    e2_color.append("r")
 
-                    plot_images.append({"title": "Ground Truth Label "+str("e1_mask" in e1),
-                                        'scatter':e1_pos,
-                                        'scatter_color': e1_color,
-                                        "cmap": "rand",
-                                        'im': self.global_label_batch[b, :, :],
-                                        'interpolation': 'none'})
-                    plot_images.append({"title": "Claims "+str("e2_mask" in e2),
-                                        'cmap': "rand",
-                                        'scatter':np.array(e2_pos) - self.pad,
-                                        'scatter_color': e2_color,
-                                        'im': claims,
-                                        'interpolation': 'none'})
-                    u.save_images(plot_images, path=path+"/", name=image_name+"_%f_%05i.png"%(time.time(), counter), column_size=2)
-                    counter += 1
-            # except Exception as e:
-            #     print e.message
-            #     embed()
-            #     exit()
+                plot_images.append({"title": "Ground Truth Label "+str("e1_mask" in e1),
+                                    'scatter':e1_pos,
+                                    'scatter_color': e1_color,
+                                    "cmap": "rand",
+                                    'im': self.global_label_batch[b, :, :],
+                                    'interpolation': 'none'})
+                plot_images.append({"title": "Claims "+str("e2_mask" in e2),
+                                    'cmap': "rand",
+                                    'scatter':np.array(e2_pos) - self.pad,
+                                    'scatter_color': e2_color,
+                                    'im': claims,
+                                    'interpolation': 'none'})
+                bt_pos = np.array(bt_pos) - self.pad
+                u.save_images(plot_images, path=path+"/", name=image_name+"_%f_%05i"%(time.time(), counter)+".png", column_size=2)
+                counter += 1
 
 
 class HoneyBatcherERec(HoneyBatcherRec):
