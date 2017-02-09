@@ -1437,12 +1437,20 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.global_hidden_states[b, :, center[0] - self.pad, center[1] - self.pad, :] = hidden_states[b, :, :]
         super(HoneyBatcherRec, self).update_priority_queue_i(b, center, Id, height)
 
-    def initialize_hiddens(callback):
-        sequ_len = 1
-        rnn_mask = np.ones((self.bs, sequ_len), dtype=np.float32)
-        callback(inputs, np.zeros((self.n_recurrent_hidden), dtype=np.float32), rnn_mask, 1)
-                inputs[:, :self.options.claim_channels],
-                                                           precomp_input_sliced,  hiddens, rnn_mask, 1
+    # def initialize_hiddens(self, callback):
+    #     self.initial_hiddens = {}
+    #     sequ_len = 1
+    #     rnn_mask = np.ones((self.bs, sequ_len), dtype=np.float32)
+    #     for b, (seeds, ids) in enumerate(zip(self.global_seeds,
+    #                                          self.global_seed_ids)):
+    #         for seed, Id in zip(seeds, ids):
+    #             raw_batch = np.zeros((1, self.n_channels, self.pl, self.pl), dtype='float32')
+    #             self.get_network_input(seed, b, Id, raw_batch[0])
+    #             new_hidden = callback(raw_batch[:, 0:self.options.claim_channels,1:-1, 1:-1], raw_batch[:, self.options.claim_channels:,1:-1, 1:-1],
+    #                              np.zeros((4, self.n_recurrent_hidden), dtype=np.float32), rnn_mask, 1)
+    #             print (b, seed[0], seed[1]),"new_hidden",new_hidden
+    #             self.initial_hiddens[(b, seed[0], seed[1])] = np.mean(new_hidden[0],axis=0)
+    #             print (b, seed[0], seed[1]),"new_hidden stored",np.mean(new_hidden[0],axis=0)
 
     def get_hidden(self, b, center):
         try:
@@ -1452,9 +1460,9 @@ class HoneyBatcherRec(HoneyBatcherPath):
             embed()
         if direction == -1:  # seed
             if self.initial_hiddens is not None:
-                return self.initial_hiddens[(center[0],center[1])]
+                print "getting hidden state"
+                return self.initial_hiddens[(b, center[0],center[1])]
             else:
-                print "WARNING: using zero hidden state"
                 return np.zeros((self.n_recurrent_hidden), dtype=np.float32)
         else:
             origin = self.update_position(center, self.global_directionmap_batch[b, center[0] - self.pad,

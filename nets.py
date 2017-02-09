@@ -243,12 +243,6 @@ class NetBuilder:
                                         self.sequ_len],
                                        [l_out, l_out_hidden, conv6])
 
-        self.hidden_f = theano.function([layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
-                                        layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
-                                        self.sequ_len],
-                                       [l_out_hidden])
-                                        # on_unused_input='ignore')
-
         l_out_old = L.get_output(self.layers_static['l_out_cross'], deterministic=True)
         self.old_f = theano.function([self.layers['l_in_static_00'].input_var], [l_out_old])
                                      # on_unused_input='ignore')
@@ -312,6 +306,12 @@ class NetBuilder:
                                                   self.sequ_len, weight_vector],
                                                  [loss_train, individual_batch, l_out_prediciton,
                                                   grads_mean, grads_std] + grads)
+        
+        # l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+        # self.hidden_f = theano.function([layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
+        #                                 layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
+        #                                 self.sequ_len],
+        #                                [l_out_hidden])
 
         symbolic_grad_params = [T.zeros_like(param) for param in all_params]
         updates = self.get_update_rule(symbolic_grad_params, all_params, optimizer=self.options.optimizer)

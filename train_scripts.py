@@ -576,6 +576,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         inputs = self.update_BM_FC()
         # precompute fc partf
         self.precomp_input = self.builder.fc_prec_conv_body(inputs)
+        # self.bm.initialize_hiddens(self.builder.hidden_f)
 
         self.images_counter += 1
 
