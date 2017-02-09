@@ -72,7 +72,7 @@ def draw_image(image_info, target):
                 sc_color = image_info['scatter_color']
             centers = np.array(image_info['scatter'])
             target.scatter(centers[:, 1], centers[:, 0], s=1, marker='.',
-                           color=sc_color)
+                           color=sc_color, alpha=0.8)
     target.imshow(image_info["im"], interpolation=interp, cmap=color_map)
     target.axis('off')
 
