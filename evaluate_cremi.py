@@ -31,6 +31,11 @@ def pred_wrapper(options, slices, gpu):
         save_h5(save_slice_path, 'data', data=pred.bm.get_ws_segmentation(), overwrite='w')
 
 
+def validate_claims(seg, gt):
+    err = [adapted_rand(seg[i], gt[i]) for i in range(seg.shape[0])]
+    return np.mean(err)
+
+
 def concat_h5_in_folder(path_to_folder, slice_size, n_slices, base_file_name='slice', label_b=False):
     import glob
     from data_provider import load_h5, save_h5
