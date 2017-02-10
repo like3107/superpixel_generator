@@ -572,7 +572,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             self.val_bm.draw_debug_image("%i_validation_b_%03i_i_%08i_f_%i" % (b, 0, self.iterations, self.free_voxel),
                                         path=self.image_path_validation, b=b)
 
-        return score
+        return rand_error
 
     def predict(self):
         self.bm.init_batch()
