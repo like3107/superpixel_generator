@@ -651,7 +651,7 @@ if __name__ == '__main__':
         [ars, arsp],
         alpha_range,
         './../data/debug/alpha_evaluation.png',
-        names=['Adapted Rand error', 'Adapted Rand error precision'])
+        names=['Adapted Rand error', 'CREMI Score'])
 
     # save_h5('./data/preds/timo_%s.h5' %version, 'pred', segmentation, 'w')
     # f = open('./data/preds/timo_seeds_%s.pkl' % version, mode='w`')

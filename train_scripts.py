@@ -554,13 +554,13 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             self.update_BM(bm=self.val_bm)
             bar.update(i)
 
-        score, _ = vs.validate_segmentation(self.val_bm.global_claims[:,
+        cremi_score, rand_error = vs.validate_segmentation(self.val_bm.global_claims[:,
                                             self.val_bm.pad:-self.val_bm.pad,
                                             self.val_bm.pad:-self.val_bm.pad],
                                             self.val_bm.global_label_batch)
 
-        self.val_loss_history[0].append(1-score['Adapted Rand error'])
-        self.val_loss_history[1].append(1-score['Adapted Rand error precision'])
+        self.val_loss_history[0].append(rand_error)
+        self.val_loss_history[1].append(cremi_score)
         self.val_update_history.append(self.images_counter)
 
         u.plot_val_errors([self.val_loss_history[0],
