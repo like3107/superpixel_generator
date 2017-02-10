@@ -89,7 +89,9 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         print 'Adapted Rand error recall    :       ', recall
 
 
-
+def validate_claims(seg, gt):
+    err = [adapted_rand(seg[i], gt[i]) for i in range(seg.shape[0])]
+    return np.mean(err)
 
 
 if __name__ == '__main__':

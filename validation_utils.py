@@ -1,17 +1,10 @@
 import matplotlib
 matplotlib.use('Agg')
 import sys
-sys.path.append('/home/lschott_local/git/cremi_python/')
-# from cremi.evaluation import NeuronIds
-# from cremi.evaluation import voi
-# from cremi.evaluation import adapted_rand
-import numpy as np
-import data_provider as du
 import h5py
 import numpy as np
 import scipy
 import scipy.sparse as sparse
-
 
 
 class NeuronIds:
@@ -75,6 +68,7 @@ class NeuronIds:
         # print "Computing RAND..."
 
         return adapted_rand(np.array(segmentation.data), self.gt, all_stats=True)
+
 
 class CremiData(object):
     def __init__(self, gt, resolution=4):
@@ -222,6 +216,7 @@ def voi(reconstruction, groundtruth, ignore_reconstruction=[], ignore_groundtrut
     (hyxg, hxgy) = split_vi(reconstruction, groundtruth, ignore_reconstruction, ignore_groundtruth)
     return (hxgy, hyxg)
 
+
 def split_vi(x, y=None, ignore_x=[0], ignore_y=[0]):
     """Return the symmetric conditional entropies associated with the VI.
 
@@ -257,6 +252,7 @@ def split_vi(x, y=None, ignore_x=[0], ignore_y=[0]):
     _, _, _ , hxgy, hygx, _, _ = vi_tables(x, y, ignore_x, ignore_y)
     # false merges, false splits
     return np.array([hygx.sum(), hxgy.sum()])
+
 
 def vi_tables(x, y=None, ignore_x=[0], ignore_y=[0]):
     """Return probability tables used for calculating VI.
@@ -312,6 +308,7 @@ def vi_tables(x, y=None, ignore_x=[0], ignore_y=[0]):
 
     return [pxy] + list(map(np.asarray, [px, py, hxgy, hygx, lpygx, lpxgy]))
 
+
 def contingency_table(seg, gt, ignore_seg=[0], ignore_gt=[0], norm=True):
     """Return the contingency table for all regions in matched segmentations.
 
@@ -351,6 +348,7 @@ def contingency_table(seg, gt, ignore_seg=[0], ignore_gt=[0], norm=True):
         cont /= float(cont.sum())
     return cont
 
+
 def divide_columns(matrix, row, in_place=False):
     """Divide each column of `matrix` by the corresponding element in `row`.
 
@@ -388,6 +386,7 @@ def divide_columns(matrix, row, in_place=False):
     else:
         out /= row[np.newaxis, :]
     return out
+
 
 def divide_rows(matrix, column, in_place=False):
     """Divide each row of `matrix` by the corresponding element in `column`.
@@ -427,6 +426,7 @@ def divide_rows(matrix, column, in_place=False):
         out /= column[:, np.newaxis]
     return out
 
+
 def xlogx(x, out=None, in_place=False):
     """Compute x * log_2(x).
 
@@ -460,10 +460,7 @@ def xlogx(x, out=None, in_place=False):
     z[nz] *= np.log2(z[nz])
     return y
 
-# coding=utf-8
 
-import numpy as np
-import scipy.sparse as sparse
 
 # Evaluation code courtesy of Juan Nunez-Iglesias, taken from
 # https://github.com/janelia-flyem/gala/blob/master/gala/evaluate.py
@@ -563,6 +560,7 @@ def adapted_rand(seg, gt, all_stats=False):
         return (are, precision, recall)
     else:
         return are
+
 
 def create_border_mask(input_data, target, max_dist, background_label, axis=0):
     """
