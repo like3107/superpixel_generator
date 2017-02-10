@@ -328,6 +328,7 @@ class NetBuilder:
         sum_height = l_out_train
 
         if backtrace_length > 1:
+            disc_vec = 1
             if discount_factor:
                 # automatically broadcasts
                 disc_vec = (np.zeros(backtrace_length, dtype=np.float32) + 0.9) ** np.arange(backtrace_length - 1, -1, -1,
