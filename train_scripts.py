@@ -617,7 +617,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 only_once = True
             train_infos += np.array(self.path_training())
 
-        if self.images_counter % self.options.save_counter == 0:            # save before update
+        if self.images_counter % self.options.save_counter == 0 and not slave:
             self.save_net(counter=self.images_counter)
 
         if self.images_counter % 100 == 0:
