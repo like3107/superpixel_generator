@@ -164,6 +164,7 @@ class PokemonTrainer(object):
             counter = self.iterations
         if name is None:
             name = 'net_%i' % counter
+        print "saving network to ",path,name
         u.save_network(path, self.l_out, name, options=self.options, iteration=counter)
         return
 
