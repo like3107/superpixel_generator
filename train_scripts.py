@@ -554,13 +554,13 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             self.update_BM(bm=self.val_bm)
             bar.update(i)
 
-        _, _, score, _ = vs.validate_segmentation(self.val_bm.global_claims[:,
+        cremi_score, rand_error, _, _ = vs.validate_segmentation(self.val_bm.global_claims[:,
                                             self.val_bm.pad:-self.val_bm.pad,
                                             self.val_bm.pad:-self.val_bm.pad],
                                             self.val_bm.global_label_batch)
 
-        self.val_loss_history[0].append(1-score['Adapted Rand error'])
-        self.val_loss_history[1].append(1-score['Adapted Rand error precision'])
+        self.val_loss_history[0].append(rand_error)
+        self.val_loss_history[1].append(cremi_score)
         self.val_update_history.append(self.images_counter)
 
         u.plot_val_errors([self.val_loss_history[0],
@@ -572,7 +572,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             self.val_bm.draw_debug_image("%i_validation_b_%03i_i_%08i_f_%i" % (b, 0, self.iterations, self.free_voxel),
                                         path=self.image_path_validation, b=b)
 
-        return score
+        return rand_error
 
     def predict(self):
         self.bm.init_batch()
@@ -617,7 +617,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 only_once = True
             train_infos += np.array(self.path_training())
 
-        if self.images_counter % self.options.save_counter == 0:            # save before update
+        if self.images_counter % self.options.save_counter == 0 and not slave:
             self.save_net(counter=self.images_counter)
 
         if self.images_counter % 100 == 0:

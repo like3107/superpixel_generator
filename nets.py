@@ -356,6 +356,9 @@ class NetBuilder:
             print 'using adam',
             self.options.learningrate_shared = lr
             updates = las.updates.adam(loss_train_or_grads, all_params, lr, epsilon=1e-6)
+        elif optimizer == 'rmsprop':
+            print "using rmsprop",
+            updates = las.updates.rmsprop(loss_train_or_grads, all_params, learning_rate=lr)
         elif optimizer == "sgd":
             print 'using sgd',
             updates = las.updates.sgd(loss_train_or_grads, all_params, lr)
