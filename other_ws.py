@@ -9,10 +9,11 @@ import os
 import subprocess
 from dataset_utils import SeedMan
 from scipy import ndimage
-from validation_scripts2 import validate_segmentation
+from validation_scripts import validate_segmentation
 import progressbar
 import time
 import data_provider as dp
+
 
 class Watershednator(object):
     def __init__(self):
@@ -128,7 +129,7 @@ class EvaluateWSs(object):
                 for z in range(n_z):
                     seg = ws.do_ws(self.edges[z], self.label[z])
                     segs.append(seg[:, :, 0])
-                score = validate_segmentation(np.array(segs), self.label, resolution=1, border_thresh=2,
+                score, _, _, _ = validate_segmentation(np.array(segs), self.label, resolution=1, border_thresh=2,
                                               verbose=False)[1]
                 if score < best_scores[num]:
                     bests_edges[num] = self.edges

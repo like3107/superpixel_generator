@@ -1,4 +1,5 @@
 from validation_utils import *
+import data_provider as dp
 
 
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
@@ -15,18 +16,18 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         if n_z is not None:
             print 'slicing gt start z: %i, end z: %i, start x: % end x %i' %\
                   (start_z, start_z+n_z, offset_xy, offset_xy+gel)
-            gt = du.load_h5(gt_path, h5_key=gt_key)[0][start_z:start_z+n_z,
+            gt = dp.load_h5(gt_path, h5_key=gt_key)[0][start_z:start_z+n_z,
                                                        offset_xy:offset_xy+gel,
                                                        offset_xy:offset_xy+gel]
 
         else:
-            gt = du.load_h5(gt_path, h5_key=gt_key)[0][:,
+            gt = dp.load_h5(gt_path, h5_key=gt_key)[0][:,
                   offset_xy:offset_xy + gel,
                   offset_xy:offset_xy + gel]
 
 
     if isinstance(pred_path, str):
-        pred = du.load_h5(pred_path, h5_key=pred_key)[0]
+        pred = dp.load_h5(pred_path, h5_key=pred_key)[0]
     if not np.all(gt.shape == pred.shape):
         print 'gt', gt.shape, 'pred', pred.shape
         assert(gt.shape == pred.shape)
@@ -74,9 +75,8 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
             # string for easy copy to google doc
             print ','.join(['%.3f,+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
         text = ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
-        return np.sqrt((all_means[0] + all_means[1]) * all_means[2]), all_means[2]
+        return np.sqrt((all_means[0] + all_means[1]) * all_means[2]), all_means[2], make_val_dic(all_means, all_vars), text
         # return make_val_dic(all_means, all_vars), text
-
     else:
         # variational information of split and merge error,  i.e., H(X|Y) and H(Y|X)
         split, merge = voi(pred.copy(), gt.copy())
@@ -92,6 +92,21 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
 def validate_claims(seg, gt):
     err = [adapted_rand(seg[i], gt[i]) for i in range(seg.shape[0])]
     return np.mean(err)
+
+
+def make_val_dic(all_means, all_vars):
+    val_dic = {}
+    val_dic['Variational information split'] = all_means[0]
+    val_dic['Variational information split_error'] = all_vars[0]
+    val_dic['Variational information merge'] = all_means[1]
+    val_dic['Variational information merge_error'] = all_vars[1]
+    val_dic['Adapted Rand error'] = all_means[2]
+    val_dic['Adapted Rand error_error'] = all_vars[2]
+    val_dic['Adapted Rand error precision'] = all_means[3]
+    val_dic['Adapted Rand error precision_error'] = all_vars[3]
+    val_dic['Adapted Rand error recall'] = all_means[4]
+    val_dic['Adapted Rand error recall_error'] = all_vars[4]
+    return val_dic
 
 
 if __name__ == '__main__':

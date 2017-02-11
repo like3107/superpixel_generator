@@ -52,12 +52,23 @@ def evaluate_h5_files(prediction_path, gt_path, name, options):
     import validation_scripts as vs
     fov = 70
     print "############ Evaliation for ", name, "############"
-    _, results = vs.validate_segmentation(pred_path=prediction_path, gt_path=gt_path,
+    resolution = 4              # cremi style
+    border_threshold = 25       # cremi style
+    if 'toy' in gt_path or 'toy' in prediction_path:
+        resolution = 1  # cremi style
+        border_threshold = 2  # cremi style
+
+    _, _, _, results = vs.validate_segmentation(pred_path=prediction_path, gt_path=gt_path,
                                           offset_xy=int(fov)/2, start_z=options.start_slice_z,
                                           n_z=options.slices_total,
                                           gel=options.global_edge_len,
-                                          defect_slices=options.defect_slices_b)
-    f = open(options.validation_save_path+'/'+name+'results.txt', 'w')
+                                          defect_slices=options.defect_slices_b,
+                                          resolution=resolution,
+                                          border_thresh=border_threshold
+                                          )
+    print 'options val save path', options.validation_save_path
+    f = open(options.validation_save_path+'/' + name + 'results.txt', 'w')
+    print 'results', results
     f.write(results)
     f.close()
     print "####################################################"
@@ -94,7 +105,7 @@ if __name__ == '__main__':
         os.mkdir(options.validation_save_path)
     if not os.path.exists(options.validation_save_path + '/images/'):
         os.mkdir(options.validation_save_path + '/images/')
-
+    #
     if options.max_processes > 1:
         pool = Pool(processes=options.max_processes)
         for i, start in enumerate(range(start_z, start_z+total_z_lenght, options.batch_size)):

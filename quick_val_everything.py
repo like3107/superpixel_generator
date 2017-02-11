@@ -18,7 +18,7 @@ if __name__ == '__main__':
             net_number = netparamfiles[-1]
             ouput_path = subdir+'/preds_'+net_number
             if not os.path.exists(ouput_path):
-                import prediction_scripts as ps
+                import prediction_scripts as ps     # is now evalute cremi
                 print "validating ",net_name,net_number
                 os.makedirs(ouput_path)
                 print "calling ",'python prediction_scripts.py --net_number '+net_number+' --net_name '+net_name

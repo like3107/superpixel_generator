@@ -554,7 +554,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             self.update_BM(bm=self.val_bm)
             bar.update(i)
 
-        score, _ = vs.validate_segmentation(self.val_bm.global_claims[:,
+        _, _, score, _ = vs.validate_segmentation(self.val_bm.global_claims[:,
                                             self.val_bm.pad:-self.val_bm.pad,
                                             self.val_bm.pad:-self.val_bm.pad],
                                             self.val_bm.global_label_batch)

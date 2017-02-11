@@ -638,7 +638,7 @@ if __name__ == '__main__':
         u.save_images(p, './../data/debug/', 'ws_%f_timo2'%alpha+'.png')
 
 
-        scores = validation_scripts.validate_segmentation(segmentation, gt)
+        _, _, scores, _ = validation_scripts.validate_segmentation(segmentation, gt)
         ars.append(scores['Adapted Rand error'])
         arsp.append(scores['Adapted Rand error precision'])
 
