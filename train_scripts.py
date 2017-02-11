@@ -648,6 +648,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 print "ignoring escalated gradients"
 
 
+    def 
+
     def path_training(self):
         self.err_b_counter += 1
         # if self.images_counter % options.save_counter == 0:
