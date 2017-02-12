@@ -14,7 +14,6 @@ from skimage import measure
 from matplotlib import pyplot as plt
 from Queue import PriorityQueue
 from scipy.ndimage.measurements import watershed_ift
-from scipy.sparse.coo_matrix import coordmatrix
 import utils as u
 from scipy import ndimage
 from scipy import stats
@@ -119,7 +118,7 @@ class HoneyBatcherPredict(object):
                                              self.global_seed_ids)):
             q = PriorityQueue()
             for seed, Id in zip(seeds, ids):
-                q.put((-np.inf, 0., seed[0], seed[1], Id, -1, 0, 0))
+                q.put((-np.inf, 0., seed[0], seed[1], Id, -1, (0,0,0), 0))
             self.priority_queue.append(q)
 
     def walk_cross_coords(self, center):
@@ -329,24 +328,29 @@ class HoneyBatcherPredict(object):
                 already_claimed = False
             else:
                 # find type II errors
-                if self.global_error_set is not None and 
-                  Id != cid and #ignore late claims (we only want the first error)
+                #ignore late claims (we only want the first error)
                   #check if this would have been the right claim
+                if self.global_error_set is not None and \
+                  Id != cid and \
                   self.global_id2gt[b][Id] == self.global_label_batch[b, center_x - self.pad, center_y - self.pad]:
                     source_pos = self.update_position((center_x, center_y),direction)
-                    self.global_error_set.append({'batch':batch,
+                    uid = len(self.global_error_set)+1
+                    self.global_error_set.append({'batch':b,
                           'source_pos':source_pos,
                           'pos':(center_x, center_y),
-                          'time': self.global_time[b, source_pos[0], source_pos[1]],
+                          'time': self.global_timemap[b, source_pos[0], source_pos[1]],
                           'direction':direction,
                           'type':'e2',
+                          'unique_id': uid,
+                          'id':Id,
+                          'weight':1.,
                           # should be higher, so sign > 0
                           'sign':1.})
                     self.error_priority_queue[b].put((height, r, center_x, center_y, Id, direction, tuple(error_indicator), time_put))
 
 
         assert (self.global_claims[b, center_x, center_y] == 0)
-        return height, _, center_x, center_y, Id, direction, error_indicator, \
+        return height, r, center_x, center_y, Id, direction, error_indicator, \
                 time_put
 
     def get_network_input(self, center, b, Id, out):
@@ -523,7 +527,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.global_error_dict = {}
         self.global_error_set = []
         # channel 0: error id, channel 1: path length
-        self.global_error_path_info = np.zeros((self.bs, 2, self.label_shape[1], self.label_shape[2]), dtype=np.int)
+        self.global_error_path_info = np.zeros((self.bs, 3, self.label_shape[1], self.label_shape[2]), dtype=np.int)
         self.error_priority_queue = [PriorityQueue() for b in range(self.bs)]
 
         self.global_directionmap_batch = np.zeros(self.batch_data_provider.get_label_shape(), dtype=np.int) - 1
@@ -578,7 +582,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         self.global_directionmap_batch[b, center_x - self.pad, center_y - self.pad] = direction
         self.global_timemap[b, center_x, center_y] = self.global_time
 
-        error_indicator_pass[b] = error_indicator
+        self.error_indicator_pass[b] = error_indicator
 
         # pass on if type I error already occured
         if error_indicator[0] > 0:
@@ -587,10 +591,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                 self.error_indicator_pass[b, 0] = 0.
             else:   # remember to pass on
                 self.error_indicator_pass[b, 0] = 1
-            error_indicator_pass[b, 2] += 1
+            self.error_indicator_pass[b, 2] += 1
             # save overflow error id and path length
-            self.global_error_path_info[b, 1, center_x - self.pad, center_y - self.pad] = error_indicator_pass[b, 1]
-            self.global_error_path_info[b, 2, center_x - self.pad, center_y - self.pad] = error_indicator_pass[b, 2]
+            self.global_error_path_info[b, 1, center_x - self.pad, center_y - self.pad] = self.error_indicator_pass[b, 1]
+            self.global_error_path_info[b, 2, center_x - self.pad, center_y - self.pad] = self.error_indicator_pass[b, 2]
             # set overflow indicator
             self.global_errormap[b, 1, center_x - self.pad, center_y - self.pad] = 1
         # check for type I errors
@@ -601,13 +605,15 @@ class HoneyBatcherPath(HoneyBatcherPredict):
 
             source_pos = self.update_position((center_x, center_y),direction)
             uid = len(self.global_error_set)+1
-            self.global_error_set.append({'batch':batch,
+            self.global_error_set.append({'batch':b,
                                           'source_pos':source_pos,
                                           'pos':(center_x, center_y),
-                                          'time': self.global_time[b, source_pos[0], source_pos[1]],
+                                          'time': self.global_timemap[b, source_pos[0], source_pos[1]],
                                           'direction':direction,
                                           'type':'e1',
-                                          'unique_id': uid, 
+                                          'unique_id': uid,
+                                          'id':Id,
+                                          'weight':1.,
                                           # should be higher, so sign < 0
                                           'sign':-1.})
 
@@ -1046,7 +1052,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         return (direction + 2) % 4
 
     def count_new_path_errors(self):
-        return len([v for v in self.global_error_dict.values() if self.check_error(v)])
+        if self.options.weight_by_pathlength_b:
+            return len(self.global_error_set)
+        else:
+            return len([v for v in self.global_error_dict.values() if self.check_error(v)])
 
     def select_errors(self):
         # take approx this many errors or all
@@ -1246,7 +1255,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_errormap[b, 2, :, :],
                             'interpolation': 'none'})
 
-        if global_error_path_info is not None:
+        if self.global_error_path_info is not None:
             plot_images.append({"title": "Error Path Map ID",
                                 'im': self.global_error_path_info[b, 1, :, :],
                                 'interpolation': 'none'})
@@ -1607,6 +1616,15 @@ class HoneyBatcherRec(HoneyBatcherPath):
                 embed()
             bt_error[key_direction] = old_direction
             return bt_error
+
+    def reconstruct_path_batch(self):
+        selection = self.global_error_set[:self.options.n_batch_errors]
+        self.global_error_set = self.global_error_set[self.options.n_batch_errors:]
+        inputs = self.reconstruct_input_at_timepoint(selection, "time", "pos", "id", "direction")
+        weights = [e['weight']*e['sign'] for e in selection]
+        hiddens = [self.get_hidden(e['batch'], e['source_pos']) for e in selection]
+        batch_mask_ft = np.array(True * len(selection), dtype=np.bool).reshape((-1, self.options.backtrace_length))
+        return inputs, batch_mask_ft, np.array(hiddens, dtype='float32'), np.array(weights, dtype='float32') 
 
     def reconstruct_path_error_inputs(self, backtrace_length=0):
         selection = self.select_errors()

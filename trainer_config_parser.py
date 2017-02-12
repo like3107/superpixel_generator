@@ -66,6 +66,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--train_merge', dest='train_merge', action='store_true')
     p.add('--dropout_b', action='store_true', default=False)
     p.add('--bnorm_b', action='store_true', default=False)
+    p.add('--weight_by_pathlength_b', action='store_true', default=False)
     p.add('--weight_by_distance_b', action='store_true', default=False)
     p.add('--weight_by_RI_b', action='store_true', default=False)
     p.add('--weight_by_importance', action='store_true', default=False)

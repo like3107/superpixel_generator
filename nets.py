@@ -305,8 +305,12 @@ class NetBuilder:
                                                   layers['l_in_rec_mask_08'].input_var,
                                                   self.sequ_len, weight_vector],
                                                  [loss_train, individual_batch, l_out_prediciton,
-                                                  grads_mean, grads_std] + grads)
+                                                  grads_mean, grads_std] + grads,
+                                                  on_unused_input='ignore')
         
+        self.get_instance_loss_fct(layers, self.options.backtrace_length,
+                                         l_out_train, mask, L1_weight, all_params,
+                                         weight_vector=weight_vector)
         # l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
         # self.hidden_f = theano.function([layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
         #                                 layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
@@ -343,6 +347,36 @@ class NetBuilder:
             print 'reguralizing with', L1_weight
             loss_train = loss_valid + L1_weight * L1_norm
         return loss_train, individual_batch, loss_valid
+
+    def get_instance_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, all_params,
+                     weight_vector):
+
+        bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
+        step = backtrace_length
+        sum_height = l_out_train
+
+        if backtrace_length > 1:
+            raise NotImplementedError("backtracing not implemented yet")
+
+        sum_height = T.sum(sum_height * weight_vector)
+
+        L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
+
+        loss_valid = T.mean(sum_height)
+        if L1_weight > 0:
+            print 'reguralizing with', L1_weight
+            loss_train = loss_valid + L1_weight * L1_norm
+
+        grads_mean = T.mean(T.stacklists([T.mean(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        grads = theano.grad(loss_train, all_params)
+
+        self.loss_instance_f = theano.function([layers['l_in_dyn_00'].input_var,
+                                                  layers['l_in_static_00'].input_var,
+                                                  layers['l_in_hid_08'].input_var,
+                                                  layers['l_in_rec_mask_08'].input_var,
+                                                  self.sequ_len, weight_vector],
+                                                 [loss_train, grads_mean, grads_std] + grads)
 
 
     def get_update_rule(self, loss_train_or_grads, all_params, optimizer=None):
