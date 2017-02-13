@@ -1751,7 +1751,6 @@ class HoneyBatcherRec(HoneyBatcherPath):
 
         self.error_bm = self.copy()
         ebm = self.error_bm
-        ebm.draw_debug_image("remove_errors_b4.png")
         mask = ebm.global_errormap[:, 1]
         ebm.global_claims[:, ebm.pad:-ebm.pad, ebm.pad:-ebm.pad][mask] = 0
         ebm.global_directionmap_batch[:][mask] = -1
@@ -1759,7 +1758,6 @@ class HoneyBatcherRec(HoneyBatcherPath):
         ebm.global_prediction_map[mask] = 0
         ebm.global_error_path_info[:] = 0
 
-        ebm.draw_debug_image("remove_errors.png")
         # run with perfect play
         ebm.perfect_play = True
         ebm.priority_queue = self.error_priority_queue
@@ -1767,7 +1765,6 @@ class HoneyBatcherRec(HoneyBatcherPath):
 
     def weight_e2_errors(self):
 
-        self.error_bm.draw_debug_image("remove_errors_after.png")
         total = 0.
         for s in self.global_error_set:
             b = s['batch']
