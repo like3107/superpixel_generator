@@ -67,7 +67,7 @@ class NetBuilder:
         ELU = las.nonlinearities.elu
         ReLU = las.nonlinearities.rectify
         ident = las.nonlinearities.identity
-        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU, ReLU,   cs.elup1]
+        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ELU, ELU,   cs.elup1]
         names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc', 'fc', 'fc']
         assert(nfs == len(dils) and nfs == len(dropouts) and
                nfs == len(n_filts) and len(names) == len(act_fcts) and nfs == len(names) and 
@@ -121,7 +121,7 @@ class NetBuilder:
         l_prev = layers['l_in_dyn_00']
         for i, (filt, dil, n_filt, name) in enumerate(zip(filts, dils, n_filts, names)):
 
-            l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil))
+            l_next = L.DilatedConv2DLayer(l_prev, n_filt, filt, dilation=(dil, dil), nonlinearity=las.nonlinearities.elu)
             if self.options.bnorm_b:
                 l_next = L.batch_norm(l_next, name=name,  epsilon=1e-2, alpha=0.01)
             if self.options.dropout_b:
@@ -291,22 +291,22 @@ class NetBuilder:
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
         weight_vector = T.fvector()
-        loss_train, individual_batch, loss_valid = self.get_loss_fct(layers, self.options.backtrace_length,
-                                                                     l_out_train, mask, L1_weight,
-                                                                     weight_vector=weight_vector)
+        # loss_train, individual_batch, loss_valid = self.get_loss_fct(layers, self.options.backtrace_length,
+        #                                                              l_out_train, mask, L1_weight,
+        #                                                              weight_vector=weight_vector)
 
-        grads_mean = T.mean(T.stacklists([T.mean(T.abs_(T.grad(loss_train, param))) for param in all_params]))
-        grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))
-        grads = theano.grad(loss_train, all_params)
+        # grads_mean = T.mean(T.stacklists([T.mean(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        # grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        # grads = theano.grad(loss_train, all_params)
 
-        self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
-                                                  layers['l_in_static_00'].input_var,
-                                                  layers['l_in_hid_08'].input_var,
-                                                  layers['l_in_rec_mask_08'].input_var,
-                                                  self.sequ_len, weight_vector],
-                                                 [loss_train, individual_batch, l_out_prediciton,
-                                                  grads_mean, grads_std] + grads,
-                                                  on_unused_input='ignore')
+        # self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
+        #                                           layers['l_in_static_00'].input_var,
+        #                                           layers['l_in_hid_08'].input_var,
+        #                                           layers['l_in_rec_mask_08'].input_var,
+        #                                           self.sequ_len, weight_vector],
+        #                                          [loss_train, individual_batch, l_out_prediciton,
+        #                                           grads_mean, grads_std] + grads,
+        #                                           on_unused_input='ignore')
         
         self.get_instance_loss_fct(layers, self.options.backtrace_length,
                                          l_out_train, mask, L1_weight, all_params,
@@ -358,7 +358,7 @@ class NetBuilder:
         if backtrace_length > 1:
             raise NotImplementedError("backtracing not implemented yet")
 
-        sum_height = T.sum(sum_height * weight_vector)
+        sum_height = l_out_train.reshape((bs, backtrace_length)) * weight_vector
 
         L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
 
@@ -376,7 +376,9 @@ class NetBuilder:
                                                   layers['l_in_hid_08'].input_var,
                                                   layers['l_in_rec_mask_08'].input_var,
                                                   self.sequ_len, weight_vector],
+                                                  # [l_out_train], on_unused_input='ignore')
                                                  [loss_train, grads_mean, grads_std] + grads)
+        self.loss_train_fine_f = None
 
 
     def get_update_rule(self, loss_train_or_grads, all_params, optimizer=None):

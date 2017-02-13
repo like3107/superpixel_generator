@@ -91,6 +91,8 @@ class HoneyBatcherPredict(object):
 
         self.global_error_set = None
         self.global_error_path_info = None
+        self.error_priority_queue = None
+        self.perfect_play = False
 
         self.timo_min_len = 5
         self.timo_sigma = 0.3
@@ -312,11 +314,17 @@ class HoneyBatcherPredict(object):
 
         return centers, ids, heights
 
+    def check_all_empty(self):
+        return np.all([p.empty() for p in self.priority_queue])
+
     def get_center_i_from_queue(self, b):
         # pull from pq at free pixel position
         already_claimed = True
         while already_claimed:
             if self.priority_queue[b].empty():
+                if self.perfect_play:
+                    already_claimed = False
+                    return None, 0, 0, 0, None, -1, (0,0,0), None
                 self.serialize_to_h5("empty_queue_state")
                 self.draw_debug_image("empty_queue")
                 raise Exception('priority queue empty. All pixels labeled')
@@ -331,6 +339,7 @@ class HoneyBatcherPredict(object):
                 #ignore late claims (we only want the first error)
                   #check if this would have been the right claim
                 if self.global_error_set is not None and \
+                  self.error_priority_queue is not None and \
                   Id != cid and \
                   self.global_id2gt[b][Id] == self.global_label_batch[b, center_x - self.pad, center_y - self.pad]:
                     source_pos = self.update_position((center_x, center_y),direction)
@@ -346,8 +355,12 @@ class HoneyBatcherPredict(object):
                           'weight':1.,
                           # should be higher, so sign > 0
                           'sign':1.})
-                    self.error_priority_queue[b].put((height, r, center_x, center_y, Id, direction, tuple(error_indicator), time_put))
+                    self.error_priority_queue[b].put((height, r, center_x, center_y, Id, direction, (1, uid, 1), time_put))
 
+            if self.perfect_play:
+                # only_accept if claim matches ground truth
+                if self.global_id2gt[b][Id] != self.global_label_batch[b, center_x - self.pad, center_y - self.pad]:
+                    already_claimed = True
 
         assert (self.global_claims[b, center_x, center_y] == 0)
         return height, r, center_x, center_y, Id, direction, error_indicator, \
@@ -363,7 +376,8 @@ class HoneyBatcherPredict(object):
         # TODO: use input batch
         raw_batch = np.zeros((self.bs, self.n_channels, self.pl, self.pl), dtype='float32')
         for b, (center, height, Id) in enumerate(zip(centers, heights, ids)):
-            self.get_batch_i(b, center, height, Id, raw_batch)
+            if Id is not None:
+                self.get_batch_i(b, center, height, Id, raw_batch)
         return raw_batch, centers, ids
 
     def get_batch_i(self,  b, center, height, Id, raw_batch):
@@ -379,8 +393,9 @@ class HoneyBatcherPredict(object):
     def update_priority_queue(self, heights_batch, centers, ids, **kwargs):
         assert(np.all(np.isfinite(heights_batch)))
         for b, center, Id, height in zip(range(self.bs), centers, ids, heights_batch):
-            self.global_prediction_map_nq[b, center[0] - self.pad, center[1] - self.pad, :] = height
-            self.update_priority_queue_i(b, center, Id, height, **kwargs)
+            if Id is not None:
+                self.global_prediction_map_nq[b, center[0] - self.pad, center[1] - self.pad, :] = height
+                self.update_priority_queue_i(b, center, Id, height, **kwargs)
 
     def update_priority_queue_i(self, b, center, Id, height, **kwargs):
         # if possibly wrong
@@ -391,8 +406,8 @@ class HoneyBatcherPredict(object):
             print "encountered inf for prediction center !!!!", \
                 b, center, Id, height, lower_bound
             raise Exception('encountered inf for prediction center')
-
-        self.max_new_old_pq_update(b, cross_x, cross_y, height, lower_bound, Id, cross_d, center,
+        if Id is not None:
+            self.max_new_old_pq_update(b, cross_x, cross_y, height, lower_bound, Id, cross_d, center,
                                    input_time=self.global_time)
 
     def max_new_old_pq_update(self, b, x, y, heights, lower_bound, Id,
@@ -529,22 +544,23 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # channel 0: error id, channel 1: path length
         self.global_error_path_info = np.zeros((self.bs, 3, self.label_shape[1], self.label_shape[2]), dtype=np.int)
         self.error_priority_queue = [PriorityQueue() for b in range(self.bs)]
-
+        self.perfect_play = False
+        
         self.global_directionmap_batch = np.zeros(self.batch_data_provider.get_label_shape(), dtype=np.int) - 1
 
     def get_batches(self):
         raw_batch, centers, ids = super(HoneyBatcherPath, self).get_batches()
         gts = np.zeros((self.bs, 4, 1, 1), dtype='float32')
         for b in range(self.bs):
-            if self.add_height_b:
-                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b, ids[b])
-            else:
-                gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
+            if ids[b] is not None:
+                if self.add_height_b:
+                    gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b, ids[b])
+                else:
+                    gts[b, :, 0, 0] = self.get_adjacent_heights(centers[b], b)
         assert (not np.any(gts < 0))
         assert (np.any(np.isfinite(raw_batch)))
         assert (not np.any(raw_batch < 0))
         assert (np.any(np.isfinite(centers)))
-        assert (np.any(np.isfinite(ids)))
         assert (np.any(np.isfinite(gts)))
         return raw_batch, gts, centers, ids
 
@@ -579,6 +595,11 @@ class HoneyBatcherPath(HoneyBatcherPredict):
     def get_center_i_from_queue(self, b):
         height, _, center_x, center_y, Id, direction, error_indicator, time_put = \
             super(HoneyBatcherPath, self).get_center_i_from_queue(b)
+
+        if Id is None:
+            return height, _, center_x, center_y, Id, direction, error_indicator, \
+                    time_put
+
         self.global_directionmap_batch[b, center_x - self.pad, center_y - self.pad] = direction
         self.global_timemap[b, center_x, center_y] = self.global_time
 
@@ -587,7 +608,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         # pass on if type I error already occured
         if error_indicator[0] > 0:
             # went back into own territory --> reset error counter
-            if self.global_id2gt[b][Id] == self.global_label_batch[b, center_x - self.pad, center_y - self.pad]:
+            if self.global_id2gt[b][Id] == self.global_label_batch[b, center_x - self.pad, center_y - self.pad] and \
+                not self.perfect_play:
                 self.error_indicator_pass[b, 0] = 0.
             else:   # remember to pass on
                 self.error_indicator_pass[b, 0] = 1
@@ -1256,12 +1278,31 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'interpolation': 'none'})
 
         if self.global_error_path_info is not None:
+            e1_pos = np.array([np.array(e["source_pos"]) - self.pad
+                  for e in self.global_error_set
+                  if e["batch"] == b  and e["type"]=='e1' and  e["weight"] > 0])
+            e2_pos = np.array([np.array(e["source_pos"]) - self.pad
+                  for e in self.global_error_set
+                  if e["batch"] == b  and e["type"]=='e2' and e["weight"] > 0])
+
+            # e1_color = ["g" if e["weight"] > 0. else 'r'\
+            #      for e in self.global_error_set
+            #       if e["batch"] == b  and e["type"]=='e1']
+
+            # e2_color = ["g" if e["weight"] > 0. else 'r'\
+            #      for e in self.global_error_set
+            #       if e["batch"] == b  and e["type"]=='e2']
+
             plot_images.append({"title": "Error Path Map ID",
                                 'im': self.global_error_path_info[b, 1, :, :],
+                                'scatter': e1_pos,
+                                # 'scatter_color': e1_color,
                                 'interpolation': 'none'})
 
             plot_images.append({"title": "Error Path Map sum",
                                 'im': self.global_error_path_info[b, 2, :, :],
+                                'scatter': e2_pos,
+                                # 'scatter_color': e2_color,
                                 'interpolation': 'none'})
 
 
@@ -1501,6 +1542,17 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.n_recurrent_hidden = options.n_recurrent_hidden
         self.initial_hiddens = None
 
+    def copy(self):
+        newbm = type(self)(self.options)
+        for n, l in [(s, getattr(self, s)) for s in dir(self)]:
+            try:
+                setattr(newbm, n, copy.deepcopy(l))
+            except:
+                pass
+                # print "can not copy",n,type(l)
+                
+        return newbm
+
     def init_batch(self, start=None, allowed_slices=None):
         super(HoneyBatcherRec, self).init_batch(start=start, allowed_slices=None)
         self.global_hidden_states.fill(np.nan)
@@ -1623,8 +1675,64 @@ class HoneyBatcherRec(HoneyBatcherPath):
         inputs = self.reconstruct_input_at_timepoint(selection, "time", "pos", "id", "direction")
         weights = [e['weight']*e['sign'] for e in selection]
         hiddens = [self.get_hidden(e['batch'], e['source_pos']) for e in selection]
-        batch_mask_ft = np.array(True * len(selection), dtype=np.bool).reshape((-1, self.options.backtrace_length))
-        return inputs, batch_mask_ft, np.array(hiddens, dtype='float32'), np.array(weights, dtype='float32') 
+        batch_mask_ft = np.ones((len(selection), self.options.backtrace_length), dtype=np.bool)
+        return inputs[:, :, 1:-1, 1:-1], batch_mask_ft, np.array(hiddens, dtype='float32'), np.array(weights, dtype='float32') 
+
+    def weight_e1_errors(self):
+        total = 0.
+        for s in self.global_error_set:
+            b = s['batch']
+            if s['type'] == 'e1':
+                mask = self.global_error_path_info[b, 1] == s['unique_id']
+                # s['weight'] = np.mean(self.global_error_path_info[b, 2][mask])
+                s['weight'] = np.log(np.sum(mask))
+                total += s['weight']
+
+        for s in self.global_error_set:
+            if s['type'] == 'e1':
+                s['weight'] /= total
+
+
+    def reset_error_regions(self):
+        # reset to no errors
+
+        self.error_bm = self.copy()
+        ebm = self.error_bm
+        ebm.draw_debug_image("remove_errors_b4.png")
+        mask = ebm.global_errormap[:, 1]
+        ebm.global_claims[:, ebm.pad:-ebm.pad, ebm.pad:-ebm.pad][mask] = 0
+        ebm.global_directionmap_batch[:][mask] = -1
+        ebm.global_heightmap_batch[mask] = np.inf
+        ebm.global_prediction_map[mask] = 0
+        ebm.global_error_path_info[:] = 0
+
+        ebm.draw_debug_image("remove_errors.png")
+        # run with perfect play
+        ebm.perfect_play = True
+        ebm.priority_queue = self.error_priority_queue
+        ebm.error_priority_queue = None
+
+    def weight_e2_errors(self):
+
+        self.error_bm.draw_debug_image("remove_errors_after.png")
+        total = 0.
+        for s in self.global_error_set:
+            b = s['batch']
+            if s['type'] == 'e2':
+                mask = self.error_bm.global_error_path_info[b, 1] == s['unique_id']
+                if np.sum(mask) > 0:
+                    s['weight'] = np.log(np.sum(mask))
+                    # s['weight'] = np.mean(self.error_bm.global_error_path_info[b, 2][mask])
+                    total += s['weight']
+                else:
+                    s['weight'] = 0.
+
+        if total > 0:
+            for s in self.global_error_set:
+                if s['type'] == 'e2':
+                    s['weight'] /= total
+
+        del self.error_bm
 
     def reconstruct_path_error_inputs(self, backtrace_length=0):
         selection = self.select_errors()

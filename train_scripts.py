@@ -490,11 +490,12 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         n_c_prec = self.precomp_input.shape[1]
         precomp_input_sliced = np.zeros((bm.bs, n_c_prec, 2, 2)).astype(np.float32)
         for b, seed in enumerate(centers):
-            cross_x, cross_y, _ = bm.get_cross_coords(seed)
-            # + 1 because we face the FOV for the BM + 2 because the cross is a inherent FC conv formulation
-            precomp_input_sliced[b, :, :, :] = \
-                            self.precomp_input[b, :, cross_x - bm.pad + 1,
-                                                     cross_y - bm.pad + 1].swapaxes(0,1).reshape(n_c_prec, 2, 2)
+            if ids[b] is not None:
+                cross_x, cross_y, _ = bm.get_cross_coords(seed)
+                # + 1 because we face the FOV for the BM + 2 because the cross is a inherent FC conv formulation
+                precomp_input_sliced[b, :, :, :] = \
+                                self.precomp_input[b, :, cross_x - bm.pad + 1,
+                                                         cross_y - bm.pad + 1].swapaxes(0,1).reshape(n_c_prec, 2, 2)
         sequ_len = 1
         rnn_mask = np.ones((bm.bs*4, sequ_len), dtype=np.float32)
         hiddens = np.repeat(hiddens, 4, axis=0).astype(np.float32)
@@ -600,19 +601,28 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         # self.debug_pos = np.array([98, 41])
         # self.dir = 2
         # self.debug_pos_orig = self.bm.update_position(self.debug_pos, self.dir)
-
         self.predict()
-
-        print 'hiddens mean', np.mean(self.bm.global_hidden_states), 'max', np.max(np.abs(self.bm.global_hidden_states))
-
-        self.bm.find_global_error_paths()
-        print "found ", self.bm.count_new_path_errors(), "errors"
 
         claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
         self.train_eval = np.array([vs.validate_claims(claims, self.bm.global_label_batch)], dtype='float32')[0]
+        print 'hiddens mean', np.mean(self.bm.global_hidden_states), 'max', np.max(np.abs(self.bm.global_hidden_states))
 
-        # if self.options.weight_by_pathlength_b:
+        # self.bm.find_global_error_paths()
+        # print "found ", self.bm.count_new_path_errors(), "errors"
 
+        self.bm.weight_e1_errors()
+        self.bm.reset_error_regions()
+
+        while not self.bm.error_bm.check_all_empty():
+            self.update_BM(bm=self.bm.error_bm)
+
+        self.bm.weight_e2_errors()
+
+        print [e['weight'] for e in self.bm.global_error_set]
+        # for e in self.bm.global_error_set:
+        #     print e
+        if self.images_counter % self.options.observation_counter == 0:
+            trainer.draw_debug(reset=True, counter=self.images_counter)
 
         self.err_b_counter, train_infos, self.grads_sum, only_once = 0, 0, None, False
         while self.bm.count_new_path_errors() > 0 and not only_once:
@@ -627,8 +637,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         if self.images_counter % 100 == 0:
             self.decrease_lr()
 
-        if self.images_counter % self.options.observation_counter == 0:
-            trainer.draw_debug(reset=True, counter=self.images_counter)
 
         if self.free_voxel == 0:
             self.free_voxel = self.free_voxel_empty
@@ -650,22 +658,31 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             else:
                 self.draw_debug(image_name='escalation')
                 print "ignoring escalated gradients"
+
     def path_training(self):
         self.err_b_counter += 1
 
-
         batch_ft, batch_mask_ft, batch_inits, grad_weights = self.bm.reconstruct_path_batch()
+        # print batch_ft[:, :self.options.claim_channels, :, :].shape, batch_ft[:, self.options.claim_channels:, :, :].shape, batch_inits.shape, batch_mask_ft.shape, options.backtrace_length, grad_weights.shape
+        # error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
+        #     self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
+        # grad_weights = self.weight_gradients(RI_error=self.train_eval)
+        # batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
+        # batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
+        # batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
 
-        print batch_mask_ft.shape
-        print batch_ft.shape
-        print batch_inits.shape
-        print grad_weights.shape
+        # print batch_ft[:, :self.options.claim_channels, :, :].shape, batch_ft[:, self.options.claim_channels:, :, :].shape, batch_inits.shape, batch_mask_ft.shape, options.backtrace_length, grad_weights.shape
+
         outs = self.builder.loss_instance_f(batch_ft[:, :self.options.claim_channels, :, :],
                                               batch_ft[:, self.options.claim_channels:, :, :], batch_inits,
                                               batch_mask_ft, options.backtrace_length, grad_weights)
-
+        # print outs
+        # print grad_weights
+        # print outs*grad_weights
         ft_loss_train, grad_mean, grad_std = outs[:3]
         grads_new = outs[3:]
+
+        print "ft_loss_train", ft_loss_train, grad_weights, grad_mean
 
         if self.grads_sum is None:
             self.grads_sum = [np.array(g, dtype=np.float32) for g in grads_new]
