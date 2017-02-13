@@ -351,6 +351,7 @@ class HoneyBatcherPredict(object):
                           'direction':direction,
                           'type':'e2',
                           'unique_id': uid,
+                          'mask': True,
                           'id':Id,
                           'weight':1.,
                           # should be higher, so sign > 0
@@ -634,6 +635,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                                           'direction':direction,
                                           'type':'e1',
                                           'unique_id': uid,
+                                          'mask': True,
                                           'id':Id,
                                           'weight':1.,
                                           # should be higher, so sign < 0
@@ -1277,32 +1279,43 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'im': self.global_errormap[b, 2, :, :],
                             'interpolation': 'none'})
 
+        plot_images.append({"title": "Max Hidden",
+                            'im': np.max(np.amax(self.global_hidden_states[b],axis=3),axis=0),
+                            'interpolation': 'none'})
+
         if self.global_error_path_info is not None:
             e1_pos = np.array([np.array(e["source_pos"]) - self.pad
                   for e in self.global_error_set
-                  if e["batch"] == b  and e["type"]=='e1' and  e["weight"] > 0])
+                  if e["batch"] == b  and e["type"]=='e1'])# and  e["weight"] > 0])
             e2_pos = np.array([np.array(e["source_pos"]) - self.pad
                   for e in self.global_error_set
-                  if e["batch"] == b  and e["type"]=='e2' and e["weight"] > 0])
+                  if e["batch"] == b  and e["type"]=='e2'])# and e["weight"] > 0])
 
-            # e1_color = ["g" if e["weight"] > 0. else 'r'\
-            #      for e in self.global_error_set
-            #       if e["batch"] == b  and e["type"]=='e1']
+            e1_color = ["g" if e["weight"] > 0. else 'r'\
+                 for e in self.global_error_set
+                  if e["batch"] == b  and e["type"]=='e1']
 
-            # e2_color = ["g" if e["weight"] > 0. else 'r'\
-            #      for e in self.global_error_set
-            #       if e["batch"] == b  and e["type"]=='e2']
+            e2_color = ["g" if e["weight"] > 0. else 'r'\
+                 for e in self.global_error_set
+                  if e["batch"] == b  and e["type"]=='e2']
+
+            e1_scatter_radius = [e["weight"]*100+1 for e in self.global_error_set
+                  if e["batch"] == b  and e["type"]=='e1']
+            e2_scatter_radius = [e["weight"]*100+1 for e in self.global_error_set
+                  if e["batch"] == b  and e["type"]=='e2']
 
             plot_images.append({"title": "Error Path Map ID",
                                 'im': self.global_error_path_info[b, 1, :, :],
                                 'scatter': e1_pos,
-                                # 'scatter_color': e1_color,
+                                'scatter_color': e1_color,
+                                'scatter_radius':e1_scatter_radius,
                                 'interpolation': 'none'})
 
             plot_images.append({"title": "Error Path Map sum",
                                 'im': self.global_error_path_info[b, 2, :, :],
                                 'scatter': e2_pos,
-                                # 'scatter_color': e2_color,
+                                'scatter_color': e2_color,
+                                'scatter_radius':e2_scatter_radius,
                                 'interpolation': 'none'})
 
 
@@ -1669,14 +1682,54 @@ class HoneyBatcherRec(HoneyBatcherPath):
             bt_error[key_direction] = old_direction
             return bt_error
 
-    def reconstruct_path_batch(self):
+    def simple_backtrace(self, error, discount = 1):
+        bt_error = copy.copy(error)
+        bt_pos = error['source_pos']
+        direction = self.global_directionmap_batch[error['batch'], bt_pos[0] - self.pad, bt_pos[1] - self.pad]
+        if direction == -1:
+            bt_error['mask'] = False
+            return bt_error
+
+        source_pos = self.update_position(bt_pos, direction)
+        bt_error['pos'] = bt_pos
+        bt_error['direction'] = direction
+        bt_error['source_pos'] = source_pos
+        bt_error['time'] = self.global_timemap[error['batch'], source_pos[0], source_pos[1]]
+        return bt_error
+
+
+    def simple_backtrace_error(self, selection, backtrace_length, discount = 1):
+        error_selection = []
+        hiddens = []
+        for sel in selection:
+            current_error = sel
+            new_path_error = [sel]
+            new_path_error.append(current_error)
+            for t_back in range(1, backtrace_length-1):
+                current_error = self.simple_backtrace(current_error)
+                if discount != 1:
+                    current_error['weight'] *= discount
+                new_path_error.append(current_error)
+            new_path_error = self.reverse_path(new_path_error, "mask")
+            error_selection += new_path_error
+            hiddens.append(self.get_hidden(current_error['batch'], current_error['source_pos']))
+        return error_selection, hiddens
+
+
+    def reconstruct_path_batch(self, backtrace_length=1):
         selection = self.global_error_set[:self.options.n_batch_errors]
         self.global_error_set = self.global_error_set[self.options.n_batch_errors:]
+
+        if backtrace_length > 1:
+            selection, hiddens = self.simple_backtrace_error(selection, self.options.backtrace_length , discount = 0.4)
+        else:
+            hiddens = [self.get_hidden(e['batch'], e['source_pos']) for e in selection]
+
         inputs = self.reconstruct_input_at_timepoint(selection, "time", "pos", "id", "direction")
         weights = [e['weight']*e['sign'] for e in selection]
-        hiddens = [self.get_hidden(e['batch'], e['source_pos']) for e in selection]
-        batch_mask_ft = np.ones((len(selection), self.options.backtrace_length), dtype=np.bool)
-        return inputs[:, :, 1:-1, 1:-1], batch_mask_ft, np.array(hiddens, dtype='float32'), np.array(weights, dtype='float32') 
+        # batch_mask_ft = np.ones((len(selection), self.options.backtrace_length), dtype=np.bool)
+        batch_mask_ft = np.array([e['mask'] for e in selection], dtype=np.bool).reshape((-1, backtrace_length))
+        return inputs[:, :, 1:-1, 1:-1], batch_mask_ft, np.array(hiddens, dtype='float32'), np.array(weights, dtype='float32')
 
     def weight_e1_errors(self):
         total = 0.
@@ -1685,7 +1738,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
             if s['type'] == 'e1':
                 mask = self.global_error_path_info[b, 1] == s['unique_id']
                 # s['weight'] = np.mean(self.global_error_path_info[b, 2][mask])
-                s['weight'] = np.log(np.sum(mask))
+                s['weight'] = np.sum(mask)
                 total += s['weight']
 
         for s in self.global_error_set:
@@ -1721,7 +1774,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
             if s['type'] == 'e2':
                 mask = self.error_bm.global_error_path_info[b, 1] == s['unique_id']
                 if np.sum(mask) > 0:
-                    s['weight'] = np.log(np.sum(mask))
+                    s['weight'] = np.sum(mask)
                     # s['weight'] = np.mean(self.error_bm.global_error_path_info[b, 2][mask])
                     total += s['weight']
                 else:

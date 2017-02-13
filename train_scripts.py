@@ -289,7 +289,6 @@ class FinePokemonTrainer(PokemonTrainer):
                     self.loss_train_fine_f(batch_ft[:, :self.options.claim_channels], batch_ft[:, self.options.claim_channels:],
                                            batch_dir_ft)
 
-            print "ft_loss_train", ft_loss_train
             self.update_history.append(self.iterations)
             self.loss_history.append(ft_loss_train)
         u.plot_train_val_errors(
@@ -618,7 +617,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         self.bm.weight_e2_errors()
 
-        print [e['weight'] for e in self.bm.global_error_set]
+        self.bm.global_error_set = [e for e in self.bm.global_error_set if e['weight'] > 0.]
+
+        # print [e['weight'] for e in self.bm.global_error_set]
         # for e in self.bm.global_error_set:
         #     print e
         if self.images_counter % self.options.observation_counter == 0:
@@ -634,7 +635,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         if self.images_counter % self.options.save_counter == 0 and not slave:
             self.save_net(counter=self.images_counter)
 
-        if self.images_counter % 100 == 0:
+        if self.images_counter % self.options.lr_decrease_counter == 0:
             self.decrease_lr()
 
 
@@ -645,15 +646,15 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
             grad_mean, grad_std = train_infos / self.err_b_counter
             if slave:
                 if not self.check_escalation(grad_mean):
-                    grads_av = [g / self.err_b_counter for g in self.grads_sum]
-                    grad_mean, grad_std = train_infos / self.err_b_counter 
+                    grads_av = [g / np.float32(self.err_b_counter) for g in self.grads_sum]
+                    grad_mean, grad_std = train_infos 
                     return grads_av, grad_mean, grad_std, self.train_eval
                 else:
                     return None
             self.draw_loss(self.train_eval, self.train_eval, counter=self.images_counter)
             self.draw_grads(grad_mean, grad_mean + grad_std)
             if not self.check_escalation(grad_mean):
-                grads_av = [g / self.err_b_counter for g in self.grads_sum]
+                grads_av = [g / np.float32(self.err_b_counter) for g in self.grads_sum]
                 self.builder.apply_grads(*grads_av)
             else:
                 self.draw_debug(image_name='escalation')
@@ -662,7 +663,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def path_training(self):
         self.err_b_counter += 1
 
-        batch_ft, batch_mask_ft, batch_inits, grad_weights = self.bm.reconstruct_path_batch()
+        batch_ft, batch_mask_ft, batch_inits, grad_weights = self.bm.reconstruct_path_batch(backtrace_length=self.options.backtrace_length)
         # print batch_ft[:, :self.options.claim_channels, :, :].shape, batch_ft[:, self.options.claim_channels:, :, :].shape, batch_inits.shape, batch_mask_ft.shape, options.backtrace_length, grad_weights.shape
         # error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
         #     self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
@@ -672,18 +673,16 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         # batch_ft = exp.flatten_stack(exp.stack_batch(error_b_type1, error_b_type2)).astype(np.float32)
 
         # print batch_ft[:, :self.options.claim_channels, :, :].shape, batch_ft[:, self.options.claim_channels:, :, :].shape, batch_inits.shape, batch_mask_ft.shape, options.backtrace_length, grad_weights.shape
-
         outs = self.builder.loss_instance_f(batch_ft[:, :self.options.claim_channels, :, :],
                                               batch_ft[:, self.options.claim_channels:, :, :], batch_inits,
-                                              batch_mask_ft, options.backtrace_length, grad_weights)
+                                              batch_mask_ft, self.options.backtrace_length, grad_weights)
         # print outs
         # print grad_weights
         # print outs*grad_weights
         ft_loss_train, grad_mean, grad_std = outs[:3]
         grads_new = outs[3:]
 
-        print "ft_loss_train", ft_loss_train, grad_weights, grad_mean
-
+        print "ft_loss_train", ft_loss_train
         if self.grads_sum is None:
             self.grads_sum = [np.array(g, dtype=np.float32) for g in grads_new]
         else:

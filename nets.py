@@ -67,7 +67,7 @@ class NetBuilder:
         ELU = las.nonlinearities.elu
         ReLU = las.nonlinearities.rectify
         ident = las.nonlinearities.identity
-        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ELU, ELU,   cs.elup1]
+        act_fcts =      [ELU,  ELU,     ELU,    ELU,    ELU,    ELU,    ELU,    ReLU, ReLU,   cs.elup1]
         names       =   ['conv','conv','conv','conv','conv', 'conv', 'conv', 'fc', 'fc', 'fc']
         assert(nfs == len(dils) and nfs == len(dropouts) and
                nfs == len(n_filts) and len(names) == len(act_fcts) and nfs == len(names) and 
@@ -346,6 +346,8 @@ class NetBuilder:
         if L1_weight > 0:
             print 'reguralizing with', L1_weight
             loss_train = loss_valid + L1_weight * L1_norm
+        else:
+            loss_train = loss_valid
         return loss_train, individual_batch, loss_valid
 
     def get_instance_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, all_params,
@@ -353,12 +355,7 @@ class NetBuilder:
 
         bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
         step = backtrace_length
-        sum_height = l_out_train
-
-        if backtrace_length > 1:
-            raise NotImplementedError("backtracing not implemented yet")
-
-        sum_height = l_out_train.reshape((bs, backtrace_length)) * weight_vector
+        sum_height = T.flatten(l_out_train) * weight_vector
 
         L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
 
@@ -366,6 +363,8 @@ class NetBuilder:
         if L1_weight > 0:
             print 'reguralizing with', L1_weight
             loss_train = loss_valid + L1_weight * L1_norm
+        else:
+            loss_train = loss_valid
 
         grads_mean = T.mean(T.stacklists([T.mean(T.abs_(T.grad(loss_train, param))) for param in all_params]))
         grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))

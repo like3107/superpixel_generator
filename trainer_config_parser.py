@@ -99,6 +99,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--stochastic_update_b', default=False, action='store_true')
     p.add('--learningrate', default=0.000001, type=float)
     p.add('--lr_decrase', default=0.95, type=float)
+    p.add('--lr_decrease_counter', default=100, type=int)
 
 
     # experience replay
