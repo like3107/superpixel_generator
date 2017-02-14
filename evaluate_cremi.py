@@ -89,9 +89,9 @@ if __name__ == '__main__':
     start_z = options.start_slice_z
     assert(total_z_lenght % options.batch_size == 0)
     if options.gpu != 'all':
-        gpus = [options.gpu] * 4
+        gpus = [options.gpu] * options.max_num_gpus
     else:
-        gpus = ["gpu%i"%i for i in range(4)]
+        gpus = ["gpu%i"%i for i in range(options.max_num_gpus)]
 
     if not os.path.exists(options.save_net_path):
         os.makedirs(options.save_net_path)
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     if options.max_processes > 1:
         pool = Pool(processes=options.max_processes)
         for i, start in enumerate(range(start_z, start_z+total_z_lenght, options.batch_size)):
-            g = gpus[i % 4]
+            g = gpus[i % options.max_num_gpus]
             pool.apply_async(pred_wrapper,  args=(options, range(start, start+options.batch_size), g))
             time.sleep(8)  # for GPU claim
         pool.close()

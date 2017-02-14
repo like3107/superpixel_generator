@@ -45,7 +45,8 @@ def get_options(script='training', ignore_config=False):
     # valid data paths
     def_valid_version = 'first_repr'
     p.add('--valid_version', default=def_valid_version)
-    p.add('--max_processes', default=2, type=int) 
+    p.add('--max_processes', default=2, type=int)
+    p.add('--max_num_gpus', default=4, type=int)
     p.add('--defect_slices_b', default=False, action='store_true')      # if true defect slices will be excluded
 
     # training general
