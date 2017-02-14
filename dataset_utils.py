@@ -1280,7 +1280,7 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'interpolation': 'none'})
 
         plot_images.append({"title": "Max Hidden",
-                            'im': np.amax(np.max(self.global_hidden_states[b],axis=0),axis=2),
+                            'im': np.argmax(np.max(self.global_hidden_states[b],axis=0),axis=2),
                             'cmap': 'rand',
                             'interpolation': 'none'})
 
@@ -1747,7 +1747,8 @@ class HoneyBatcherRec(HoneyBatcherPath):
         for s in self.global_error_set:
             b = s['batch']
             if s['type'] == 'e1':
-                mask = self.global_error_path_info[b, 1] == s['unique_id']
+                p = np.array(s['pos']) - self.pad
+                mask = self.global_error_path_info[b, 1, max(0,p[0]-self.pad):p[0]+self.pad, max(0,p[1]-self.pad):p[1]+self.pad] == s['unique_id']
                 # s['weight'] = np.mean(self.global_error_path_info[b, 2][mask])
                 s['weight'] = np.sum(mask)
                 total += s['weight']
@@ -1779,7 +1780,9 @@ class HoneyBatcherRec(HoneyBatcherPath):
         for s in self.global_error_set:
             b = s['batch']
             if s['type'] == 'e2':
-                mask = self.error_bm.global_error_path_info[b, 1] == s['unique_id']
+                # mask = self.error_bm.global_error_path_info[b, 1] == s['unique_id']
+                p = np.array(s['pos']) - self.pad
+                mask = self.error_bm.global_error_path_info[b, 1, max(0,p[0]-self.pad):p[0]+self.pad, max(0,p[1]-self.pad):p[1]+self.pad] == s['unique_id']
                 if np.sum(mask) > 0:
                     s['weight'] = np.sum(mask)
                     # s['weight'] = np.mean(self.error_bm.global_error_path_info[b, 2][mask])

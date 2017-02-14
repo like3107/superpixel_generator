@@ -632,7 +632,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
             train_infos += np.array(self.path_training())
 
-        if self.images_counter % self.options.save_counter == 0 and not slave:
+        if self.images_counter % self.options.save_counter == 0:
             self.save_net(counter=self.images_counter)
 
         if self.images_counter % self.options.lr_decrease_counter == 0:
@@ -682,7 +682,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         ft_loss_train, grad_mean, grad_std = outs[:3]
         grads_new = outs[3:]
 
-        print "ft_loss_train", ft_loss_train
         if self.grads_sum is None:
             self.grads_sum = [np.array(g, dtype=np.float32) for g in grads_new]
         else:
