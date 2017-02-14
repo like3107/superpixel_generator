@@ -1262,10 +1262,10 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'scatter': np.array(self.global_seeds[b]) - self.pad,
                             'interpolation': 'none'})
 
-        plot_images.append({"title": "Height Differences",
-                            'im': self.global_heightmap_batch[b, :, :] -
-                                  self.global_height_gt_batch[b, :, :],
-                            'interpolation': 'none'})
+        # plot_images.append({"title": "Height Differences",
+        #                     'im': self.global_heightmap_batch[b, :, :] -
+        #                           self.global_height_gt_batch[b, :, :],
+        #                     'interpolation': 'none'})
 
         plot_images.append({"title": "Direction Map",
                             'im': self.global_directionmap_batch[b, :, :],
@@ -1280,7 +1280,8 @@ class HoneyBatcherPath(HoneyBatcherPredict):
                             'interpolation': 'none'})
 
         plot_images.append({"title": "Max Hidden",
-                            'im': np.max(np.amax(self.global_hidden_states[b],axis=3),axis=0),
+                            'im': np.amax(np.max(self.global_hidden_states[b],axis=0),axis=2),
+                            'cmap': 'rand',
                             'interpolation': 'none'})
 
         if self.global_error_path_info is not None:
@@ -1304,18 +1305,20 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             e2_scatter_radius = [e["weight"]*100+1 for e in self.global_error_set
                   if e["batch"] == b  and e["type"]=='e2']
 
-            plot_images.append({"title": "Error Path Map ID",
+            plot_images.append({"title": "Error Path ID e1",
                                 'im': self.global_error_path_info[b, 1, :, :],
                                 'scatter': e1_pos,
                                 'scatter_color': e1_color,
                                 'scatter_radius':e1_scatter_radius,
+                                'cmap': 'rand',
                                 'interpolation': 'none'})
 
-            plot_images.append({"title": "Error Path Map sum",
+            plot_images.append({"title": "Error Path ID e2",
                                 'im': self.global_error_path_info[b, 2, :, :],
                                 'scatter': e2_pos,
                                 'scatter_color': e2_color,
                                 'scatter_radius':e2_scatter_radius,
+                                'cmap': 'rand',
                                 'interpolation': 'none'})
 
 
@@ -1764,7 +1767,6 @@ class HoneyBatcherRec(HoneyBatcherPath):
         ebm.error_priority_queue = None
 
     def weight_e2_errors(self):
-
         total = 0.
         for s in self.global_error_set:
             b = s['batch']
@@ -1782,6 +1784,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
                 if s['type'] == 'e2':
                     s['weight'] /= total
 
+        self.global_error_path_info[:, 2] = self.error_bm.global_error_path_info[:, 1]
         del self.error_bm
 
     def reconstruct_path_error_inputs(self, backtrace_length=0):
