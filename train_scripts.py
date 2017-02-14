@@ -610,6 +610,9 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         claims = self.bm.global_claims[:, self.bm.pad:-self.bm.pad, self.bm.pad:-self.bm.pad]
         self.train_eval = np.array([vs.validate_claims(claims, self.bm.global_label_batch)], dtype='float32')[0]
+        if self.options.weight_by_surface:
+            self.bm.weight_by_surface()
+
 
         self.err_b_counter, train_infos, self.grads_sum, only_once = 0, 0, None, False
         while self.bm.count_new_path_errors() > 0 and not only_once:
@@ -647,7 +650,6 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                 self.draw_debug(image_name='escalation')
                 print "ignoring escalated gradients"
 
-
     def path_training(self):
         self.err_b_counter += 1
         # if self.images_counter % options.save_counter == 0:
@@ -681,6 +683,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def weight_gradients(self, RI_error=None):
         n_err = len(self.bm.error_selections[0]) * 2 / self.options.backtrace_length
         weights = np.ones(n_err, dtype=np.float32)
+        if self.options.weight_by_surface:
+            weights[:] = self.bm.err_weights
         if self.options.weight_by_distance_b:
             i = -1
             for es, e_type in zip(self.bm.error_selections, ['e1', 'e2']):
@@ -897,6 +901,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                         # verbose = True
                         embed()
             # embed()
+
+
 class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
     def __init__(self, options):
         super(FCRecMasterFinePokemonTrainer, self).__init__(options)

@@ -69,6 +69,8 @@ def get_options(script='training', ignore_config=False):
     p.add('--weight_by_distance_b', action='store_true', default=False)
     p.add('--weight_by_RI_b', action='store_true', default=False)
     p.add('--weight_by_importance', action='store_true', default=False)
+    p.add('--weight_by_surface', action='store_true', default=False)
+    p.add('--no_dilatate_b', action='store_false', default=True, dest='dilatate_b')
     p.add('--fully_conf_valildation_b', action='store_true', default=False)
 
     # pre-training

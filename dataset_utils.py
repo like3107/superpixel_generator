@@ -26,6 +26,7 @@ from itertools import product
 import h5py
 # from cv2 import dilate, erode
 import data_provider
+import data_provider as dp
 import time
 import copy
 from theano import tensor as T
@@ -797,16 +798,118 @@ class HoneyBatcherPath(HoneyBatcherPredict):
             area = max(area, 200)
             self.global_error_dict[k]['importance'] = float(underflow) / area
 
-    def get_plateau_indicator(self):
-        return self.global_prediction_map_nq  < self.global_prediction_map
+    def weight_by_surface(self):
+        def calc_wrong_labeled_per_error(segmentation, global_errormap, overflow=False):
+            overundflowerrors = np.empty(global_errormap[:, 1, :, :].shape, dtype=np.uint32)
+            overundflowerrors[:] = global_errormap[:, 1, :, :]
+            boundary = np.empty(overundflowerrors.shape, dtype=np.bool)
+            # set at gt boudnaries to 0 get amount of overundflowerrors per id and connected component
+            for b, seg_sice in enumerate(segmentation):
+                boundary[b] = dp.segmenation_to_membrane_core(seg_sice)[0]
+            # print boundary.shape
+            # print 'overflow errors', overundflowerrors.shape
+            # if overflow:
+            boundary = np.logical_and(boundary, np.logical_not(overundflowerrors))
+
+            overundflowerrors[boundary] = 0
+
+            ccs = []  # number of pixels error missed out
+            for i, overundflowerrors_slice in enumerate(overundflowerrors):
+                overundflowerrors[i] = label(overundflowerrors_slice, background=0)
+                ccs.append(np.bincount(overundflowerrors[i].ravel()))
+                ccs[i][0] = -1
+            return ccs, overundflowerrors
+
+        # underflow for e2 weighting
+        cc_underflow, underflow = calc_wrong_labeled_per_error(self.global_label_batch, self.global_errormap)
+        # overflow for e1 weighting
+        cc_overflow, overflow = \
+            calc_wrong_labeled_per_error(self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad],
+                                         self.global_errormap)
+        i = -1
+        ids = []
+        all_pos = []
+        self.all_errors_keys = self.global_error_dict.keys()
+        weights = np.empty(len(self.all_errors_keys) * 2, dtype=np.float32)
+
+        for err_key in self.all_errors_keys:
+            err = self.global_error_dict[err_key]
+            for err_type in ['e1', 'e2']:
+                i += 1
+                b = np.array(err['batch'])
+                pos = np.array(err['large_pos'])
+                pos -= self.pad
+                if err_type == 'e1':
+                    Id = overflow[b, pos[0], pos[1]]
+                    weights[i] = cc_overflow[b][Id]
+                else:
+                    Id = underflow[b, pos[0], pos[1]]
+                    weights[i] = cc_underflow[b][Id]
+                ids.append(Id)
+                all_pos.append(pos)
+
+        ids = np.array(ids, dtype=np.uint32)
+        all_pos = np.array(all_pos)
+        e1_weights = weights[::2]
+        e2_weights = weights[1::2]
+        e1_ids = ids[::2]
+        e2_ids = ids[1::2]
+
+        def normalize(weights, ids):
+            occurences = np.bincount(ids)[ids]
+            weights -= np.min(weights) -0.1
+            weights /= (np.max(weights) + 0.1)
+            weights /= (occurences + 1)
+
+            return weights
+
+        e1_weights = normalize(e1_weights, e1_ids)
+        e2_weights = normalize(e2_weights, e2_ids)
+
+        for err_key, e1_weight, e2_weight in zip(self.all_errors_keys, e1_weights, e2_weights):
+            self.global_error_dict[err_key]['e1_weight'] = e1_weight
+            self.global_error_dict[err_key]['e2_weight'] = e2_weight
+        return
+
+
+#
+# %matplotlib
+# f, ax = plt.subplots(3, 3)
+# ax[0, 0].imshow(self.global_errormap[0, 1], interpolation='none')
+# ax[0, 1].scatter(all_pos[:, 1], all_pos[:, 0], s=1, alpha=1, color='red')
+# ax[0, 2].scatter(all_pos[:, 1], all_pos[:, 0], s=1, alpha=1, color='red')
+#
+# ax[1, 0].scatter(all_pos[:, 1], all_pos[:, 0], s=1, alpha=1, color='red')
+# ax[2, 0].scatter(all_pos[:, 1], all_pos[:, 0], s=1, alpha=1, color='red')
+#
+# ax[0, 1].imshow(self.global_label_batch[0], interpolation='none')
+# ax[0, 2].imshow(self.global_errormap[0, 1], interpolation='none')
+#
+# ax[0, 2].imshow(self.global_claims[0, self.pad:-self.pad, self.pad:-self.pad], interpolation = 'none')
+#
+# ax[1, 0].imshow(overflow[0], interpolation='none')
+# ax[2, 0].imshow(underflow[0], interpolation='none')
+#
+# seeds = np.array(self.global_seeds[0]) - self.pad
+# ax[1,1].scatter(seeds[ :,1], seeds[:,0], s=1, alpha=1, color='red')
+# ax[1,1].imshow(self.global_height_gt_batch[0, :, :], cmap='gray')
+#
+
+
+
+        def get_plateau_indicator(self):
+            return self.global_prediction_map_nq  < self.global_prediction_map
 
     def find_global_error_paths(self):
         print 'searching for hard regions'
+        self.all_errors = [[], []]
 
-        for b in range(self.bs):
-            self.global_errormap[b, 0] = np.logical_and(self.global_errormap[b, 1],
-                                                        binary_dilation(binary_erosion(self.global_errormap[b, 1])))
-
+        if self.options.dilatate_b:
+            for b in range(self.bs):
+                self.global_errormap[b, 0] = np.logical_and(self.global_errormap[b, 1],
+                                                            binary_dilation(binary_erosion(self.global_errormap[b, 1])))
+        else:
+            self.global_errormap[b, 0] =self.global_errormap[b, 1]
         self.find_hard_regions()
         self.locate_global_error_path_intersections()
         # now errors have been found so start and end of paths shall be found
@@ -1549,11 +1652,11 @@ class HoneyBatcherRec(HoneyBatcherPath):
 
     def reconstruct_path_error_inputs(self, backtrace_length=0):
         selection = self.select_errors()
-
         rnn_masks = []
         rnn_hidden_inits = []
         reconst_es = []
         error_selections = []
+        error_weights = []
         for err_type, id_type in zip(['e1', 'e2'], ['large', 'small']):
             if backtrace_length == 0:
                 error_selection = [global_error_dict[e] for e in selection]
@@ -1563,6 +1666,9 @@ class HoneyBatcherRec(HoneyBatcherPath):
             rnn_hidden_init = [self.get_hidden(b, hidden_coord) for b, hidden_coord in hidden_coords]
             rnn_mask = [err_type + '_mask' not in e for e in error_selection]
             rnn_mask = np.array(rnn_mask, dtype=np.bool).reshape((-1, backtrace_length))
+
+            if self.options.weight_by_surface:
+                error_weights += [e[err_type + '_weight'] for e in error_selection[::backtrace_length]]
 
             reconst_e = self.reconstruct_input_at_timepoint(error_selection, err_type + "_time", err_type + "_pos",
                                                             id_type + "_id", err_type + "_direction")[:, :, 1:-1, 1:-1]
@@ -1579,6 +1685,7 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.rnn_masks = rnn_masks
         self.reconst_es = reconst_es
         self.error_selections = error_selections
+        self.err_weights = error_weights
         self.rnn_hidden_inits = rnn_hidden_inits
         self.selection = selection
         return reconst_es[0], reconst_es[1], rnn_masks[0], rnn_masks[1], rnn_hidden_inits[0], rnn_hidden_inits[1]
