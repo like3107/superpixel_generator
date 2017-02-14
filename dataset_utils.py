@@ -1719,6 +1719,14 @@ class HoneyBatcherRec(HoneyBatcherPath):
         return error_selection, hiddens
 
 
+    def simple_plateau_backtrace(self, error):
+        while self.global_plateau_indicator[batch, step_back_pos[0] - self.pad, step_back_pos[1] - self.pad,
+                                             node_direction] and \
+                    error['direction'] > 0:
+            error = self.simple_backtrace(error)
+        return error
+
+
     def reconstruct_path_batch(self, backtrace_length=1):
         selection = self.global_error_set[:self.options.n_batch_errors]
         self.global_error_set = self.global_error_set[self.options.n_batch_errors:]
