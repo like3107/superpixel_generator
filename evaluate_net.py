@@ -124,7 +124,7 @@ def set_prediction_options(options, val_options):
     options.input_data_path = val_options.input_data_path
     options.height_gt_path = val_options.height_gt_path
     options.label_path = val_options.label_path
-    options.s_minsize = 0
+    options.s_minsize = val_options.s_minsize
     options.padding_b = val_options.padding_b
     options.fully_conf_valildation_b = val_options.fully_conf_valildation_b
     # default options
