@@ -41,6 +41,7 @@ def get_options(script='training', ignore_config=False):
           dest='seed_method')
     p.add('--s_minsize', type=int, default=0)
     p.add('--input_data_path', type=str, default="None")
+    p.add('--all_edges', type=str, default="")
 
     # valid data paths
     def_valid_version = 'first_repr'
@@ -72,6 +73,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--weight_by_RI_b', action='store_true', default=False)
     p.add('--weight_by_importance', action='store_true', default=False)
     p.add('--fully_conf_valildation_b', action='store_true', default=False)
+    p.add('--discount_factor', default=0.4, type=float)
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)
@@ -151,7 +153,7 @@ def get_options(script='training', ignore_config=False):
     # options.fc_prec = False
 
     if options.input_data_path == "None":
-        options.input_data_path ='./../data/volumes/input_%s.h5' % options.train_version
+        options.input_data_path ='./../data/volumes/%sinput_%s.h5' % (options.all_edges, options.train_version)
     if options.raw_path == "None":
         options.raw_path ='./../data/volumes/raw_%s.h5' % options.train_version
     if options.membrane_path == "None":

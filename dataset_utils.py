@@ -89,9 +89,9 @@ class HoneyBatcherPredict(object):
         self.hard_regions = None
         self.global_prediction_map_nq = None
 
-        self.global_error_set = None
-        self.global_error_path_info = None
-        self.error_priority_queue = None
+        self.global_error_set = None                # global errors in list
+        self.global_error_path_info = None          # array, pre
+        self.error_priority_queue = None            # continue with perfect play after finished with this one
         self.perfect_play = False
 
         self.timo_min_len = 5
@@ -107,7 +107,7 @@ class HoneyBatcherPredict(object):
         """
         Initialize one PQ per batch:
             call get_seeds and get_seed_ids first
-            PQ: ((height, seed_x, seedy, seed_id, direction, error_indicator,
+            PQ: ((height, seed_x, seedy, seed_id, direction, (error_indicator, id, sum),
             time_put)
             Init: e.g. (-0.1, seed_x, seed_y, seed_id, None, 0
         :param global_seeds:
@@ -1332,7 +1332,9 @@ class HoneyBatcherPath(HoneyBatcherPredict):
         timemap = np.array(self.global_timemap[b, self.pad:-self.pad, self.pad:-self.pad])
         timemap[timemap < 0] = 0
         plot_images.append({"title": "Time Map ",
-                                'im': timemap})
+                                'im': timemap,
+                            'interpolation': 'none',
+                            'cmap':'gray'})
 
         if save:
             print "saving image to ",path,image_name
@@ -1732,7 +1734,8 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.global_error_set = self.global_error_set[self.options.n_batch_errors:]
 
         if backtrace_length > 1:
-            selection, hiddens = self.simple_backtrace_error(selection, self.options.backtrace_length , discount = 0.4)
+            selection, hiddens = self.simple_backtrace_error(selection, self.options.backtrace_length ,
+                                                             discount=self.options.discount_factor)
         else:
             hiddens = [self.get_hidden(e['batch'], e['source_pos']) for e in selection]
 

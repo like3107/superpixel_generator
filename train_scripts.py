@@ -663,10 +663,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
     def path_training(self):
         self.err_b_counter += 1
 
-        batch_ft, batch_mask_ft, batch_inits, grad_weights = self.bm.reconstruct_path_batch(backtrace_length=self.options.backtrace_length)
+        batch_ft, batch_mask_ft, batch_inits, grad_weights = \
+            self.bm.reconstruct_path_batch(backtrace_length=self.options.backtrace_length)
         # print batch_ft[:, :self.options.claim_channels, :, :].shape, batch_ft[:, self.options.claim_channels:, :, :].shape, batch_inits.shape, batch_mask_ft.shape, options.backtrace_length, grad_weights.shape
         # error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
-        #     self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
+        #     self.bm.reconstruct_path_error_inputs(backtrace_lenallgth=options.backtrace_length)
         # grad_weights = self.weight_gradients(RI_error=self.train_eval)
         # batch_mask_ft = exp.flatten_stack(exp.stack_batch(rnn_mask_e1, rnn_mask_e2)).astype(np.float32)
         # batch_inits = exp.flatten_stack(exp.stack_batch(rnn_hiddens_e1, rnn_hiddens_e2)).astype(np.float32)
@@ -682,7 +683,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         ft_loss_train, grad_mean, grad_std = outs[:3]
         grads_new = outs[3:]
 
-        print "ft_loss_train", ft_loss_train
+        # print "ft_loss_train", ft_loss_train
         if self.grads_sum is None:
             self.grads_sum = [np.array(g, dtype=np.float32) for g in grads_new]
         else:
@@ -1177,8 +1178,8 @@ if __name__ == '__main__':
             print "using normal trainer"
             trainer = FCRecFinePokemonTrainer(options)
 
-        if trainer.val_bm is not None:
-            trainer.val_bm.set_preselect_batches([12, 101, 53, 98, 138, 60, 20, 131, 35, 119][:trainer.val_bm.bs])
+        # if trainer.val_bm is not None:
+        #     trainer.val_bm.set_preselect_batches([12, 101, 53, 98, 138, 60, 20, 131, 35, 119][:trainer.val_bm.bs])
 
         last_val_epoch = 0
         while not trainer.converged():
