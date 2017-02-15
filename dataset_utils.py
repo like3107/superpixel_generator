@@ -50,13 +50,17 @@ class HoneyBatcherPredict(object):
         self.bs = options.batch_size
 
         self.batch_data_provider = None
-        self.set_data_provider(options)
+        self.global_claims = None
+
+        self.global_heightmap_batch = None            # post pq
         self.batch_shape = None
         self.image_shape = None
         self.label_shape = None
         self.global_input_batch = None
         self.global_label_batch = None
         self.global_height_gt_batch = None
+
+        self.set_data_provider(options)
 
         # length of field, global_batch # includes padding)
 
@@ -67,8 +71,6 @@ class HoneyBatcherPredict(object):
         self.lowercomplete_e = options.lowercomplete_e
         self.max_penalty_pixel = options.max_penalty_pixel
 
-        self.global_claims = None
-        self.global_heightmap_batch = None            # post pq
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
         self.priority_queue = None
@@ -1570,12 +1572,12 @@ class HoneyBatcherPatchFast(HoneyBatcherPath):
 class HoneyBatcherRec(HoneyBatcherPath):
     def __init__(self, options):
         super(HoneyBatcherRec, self).__init__(options)
-        self.global_hidden_states = np.empty((options.batch_size, 4, self.label_shape[1], self.label_shape[2],
-                                                  options.n_recurrent_hidden))      # pre pq [<-->]
-        self.n_recurrent_hidden = options.n_recurrent_hidden
+        self.global_hidden_states = None
+        self.n_recurrent_hidden = self.options.n_recurrent_hidden
         self.initial_hiddens = None
 
     def copy(self):
+        print 'weird stuff is going on'
         class ErrorBatchMan(type(self)):
             def set_data_provider(self, options):
                 pass
@@ -1592,6 +1594,8 @@ class HoneyBatcherRec(HoneyBatcherPath):
 
     def init_batch(self, start=None, allowed_slices=None):
         super(HoneyBatcherRec, self).init_batch(start=start, allowed_slices=None)
+        self.global_hidden_states = np.empty((self.options.batch_size, 4, self.label_shape[1], self.label_shape[2],
+                                                  self.options.n_recurrent_hidden))      # pre pq [<-->]
         self.global_hidden_states.fill(np.nan)
 
     def update_priority_queue_i(self, b, center, Id, height, hidden_states=None):
