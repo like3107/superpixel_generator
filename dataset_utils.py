@@ -50,7 +50,7 @@ class HoneyBatcherPredict(object):
         self.bs = options.batch_size
 
         self.batch_data_provider = None
-        self.set_data_provider(self, options)
+        self.set_data_provider(options)
         self.batch_shape = self.batch_data_provider.get_batch_shape()
         self.image_shape = self.batch_data_provider.get_image_shape()
         self.label_shape = self.batch_data_provider.get_label_shape()
