@@ -7,6 +7,10 @@ import re
 
 
 def pred_wrapper(options, slices, gpu):
+    save_slice_path = options.validation_save_path + "/slice_%04i_%04i.h5" % (slices[0], slices[-1])
+    if os.path.exists(save_slice_path):
+        print "skipping slice ",save_slice_path
+        return
     import evaluate_net
     from data_provider import save_h5
     options.gpu = gpu
@@ -14,7 +18,6 @@ def pred_wrapper(options, slices, gpu):
     pred = evaluate_net.Predictor(options)
     pred.predict()
 
-    save_slice_path = options.validation_save_path + "/slice_%04i_%04i.h5" % (slices[0], slices[-1])
     if not options.fully_conf_valildation_b:
         save_h5(save_slice_path, 'data',
                 data=pred.bm.global_claims[:, pred.bm.pad:-pred.bm.pad, pred.bm.pad:-pred.bm.pad].astype(np.uint64),
@@ -111,7 +114,7 @@ if __name__ == '__main__':
         for i, start in enumerate(range(start_z, start_z+total_z_lenght, options.batch_size)):
             g = gpus[i % options.max_num_gpus]
             pool.apply_async(pred_wrapper,  args=(options, range(start, start+options.batch_size), g))
-            time.sleep(8)  # for GPU claim
+            #time.sleep(8)  # for GPU claim
         pool.close()
         pool.join()
     else:
