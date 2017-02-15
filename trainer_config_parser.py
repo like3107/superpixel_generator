@@ -148,9 +148,12 @@ def get_options(script='training', ignore_config=False):
     p.add('--max_penalty_pixel', default=3, type=float)
 
 
+
     options = p.parse_args()
 
+    # options.slices = range(2000)
     # options.fc_prec = False
+    # options.dp_already_exits = True
 
     if options.input_data_path == "None":
         options.input_data_path ='./../data/volumes/%sinput_%s.h5' % (options.all_edges, options.train_version)

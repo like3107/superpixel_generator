@@ -49,8 +49,8 @@ class HoneyBatcherPredict(object):
         self.seed_method = options.seed_method
         self.bs = options.batch_size
 
-        self.batch_data_provider = data_provider.get_dataset_provider(options.dataset)(options)
-
+        self.batch_data_provider = None
+        self.set_data_provider(self, options)
         self.batch_shape = self.batch_data_provider.get_batch_shape()
         self.image_shape = self.batch_data_provider.get_image_shape()
         self.label_shape = self.batch_data_provider.get_label_shape()
@@ -98,6 +98,9 @@ class HoneyBatcherPredict(object):
         self.timo_sigma = 0.3
         self.SeedMan = SeedMan()
         assert(self.pl == self.pad * 2 + 1)
+
+    def set_data_provider(self, options):
+        self.batch_data_provider = data_provider.get_dataset_provider(options.dataset)(options)
 
     def get_seed_ids(self):
         assert (self.global_seeds is not None)  # call get seeds first
@@ -1552,6 +1555,10 @@ class HoneyBatcherPatchFast(HoneyBatcherPath):
         return raw_batch
 
 
+
+
+
+
 class HoneyBatcherRec(HoneyBatcherPath):
     def __init__(self, options):
         super(HoneyBatcherRec, self).__init__(options)
@@ -1561,14 +1568,18 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.initial_hiddens = None
 
     def copy(self):
-        newbm = type(self)(self.options)
+        class ErrorBatchMan(type(self)):
+            def set_data_provider(self, options):
+                pass
+
+        newbm = ErrorBatchMan(self.options)
         for n, l in [(s, getattr(self, s)) for s in dir(self)]:
             try:
                 setattr(newbm, n, copy.deepcopy(l))
             except:
                 pass
                 # print "can not copy",n,type(l)
-                
+
         return newbm
 
     def init_batch(self, start=None, allowed_slices=None):

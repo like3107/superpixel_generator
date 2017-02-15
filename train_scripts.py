@@ -434,7 +434,7 @@ class FCFinePokemonTrainer(FinePokemonTrainer):
                       self.builder.loss_train_fine_f(batch_ft[:, :self.options.claim_channels], batch_ft[:, self.options.claim_channels:], batch_dir_ft)
             if np.any(individual_loss_fine < 0):
                 print 'any', min(individual_loss_fine)
-            print 'loss ft', ft_loss_train
+            # print 'loss ft', ft_loss_train
             # print 'error type II ', self.bm.error_II_type
 
             # zip(heights, self.bm.e1heights + self.bm.e2heights)
