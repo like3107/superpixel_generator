@@ -154,7 +154,11 @@ class PokemonTrainer(object):
         if counter is None:
             counter=self.iterations
         for b in range(self.bm.bs):
-            self.bm.draw_debug_image("%s_b_%03i_i_%08i_f_%i" % (image_name, b, counter, self.free_voxel),
+	    if self.options.master_training:
+            	self.bm.draw_debug_image("%s_b_%03i_i_%08i_p_%i" % (image_name, b, counter, os.getpid()),
+                                     path=image_path, b=b)
+	    else:
+            	self.bm.draw_debug_image("%s_b_%03i_i_%08i_f_%i" % (image_name, b, counter, self.free_voxel),
                                      path=image_path, b=b)
 
     def save_net(self, path=None, name=None, counter=None):
