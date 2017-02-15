@@ -1577,7 +1577,6 @@ class HoneyBatcherRec(HoneyBatcherPath):
         self.initial_hiddens = None
 
     def copy(self):
-        print 'weird stuff is going on'
         class ErrorBatchMan(type(self)):
             def set_data_provider(self, options):
                 pass
