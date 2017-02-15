@@ -68,8 +68,6 @@ class HoneyBatcherPredict(object):
         self.max_penalty_pixel = options.max_penalty_pixel
 
         self.global_claims = None
-        self.global_claims.fill(-1.)
-        self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
         self.global_heightmap_batch = None            # post pq
         self.global_seed_ids = None
         self.global_seeds = None  # !!ALL!! coords include padding
@@ -101,7 +99,6 @@ class HoneyBatcherPredict(object):
 
     def set_data_provider(self, options):
         self.batch_data_provider = data_provider.get_dataset_provider(options.dataset)(options)
-        self.set_data_provider(options)
         self.batch_shape = self.batch_data_provider.get_batch_shape()
         self.image_shape = self.batch_data_provider.get_image_shape()
         self.label_shape = self.batch_data_provider.get_label_shape()
@@ -109,8 +106,9 @@ class HoneyBatcherPredict(object):
         self.global_label_batch = np.zeros(self.label_shape, dtype=np.int)
         self.global_height_gt_batch = np.zeros(self.label_shape, dtype=np.float32)
         self.global_claims = np.empty(self.image_shape)
+        self.global_claims.fill(-1.)
+        self.global_claims[:, self.pad:-self.pad, self.pad:-self.pad] = 0
         self.global_heightmap_batch = np.empty(self.label_shape)            # post pq
-
 
     def get_seed_ids(self):
         assert (self.global_seeds is not None)  # call get seeds first

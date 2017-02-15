@@ -1182,7 +1182,7 @@ if __name__ == '__main__':
             trainer = FCRecFinePokemonTrainer(options)
 
         if trainer.val_bm is not None:
-            if 'CREMI' in self.options.input_data_path:
+            if 'CREMI' in options.input_data_path:
                 trainer.val_bm.set_preselect_batches([12, 101, 53, 98, 138, 60, 20, 131, 35, 119][:trainer.val_bm.bs])
 
         last_val_epoch = 0
