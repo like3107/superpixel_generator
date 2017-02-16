@@ -622,7 +622,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.bm.weight_e2_errors()
 
         self.bm.global_error_set = [e for e in self.bm.global_error_set if e['weight'] > 0.]
-        self.bm.global_error_set = self.bm.global_error_set[np.random.permutation(range(len(self.bm.global_error_set)))]
+        self.bm.global_error_set = self.bm.global_error_set[np.random.permutation(len(self.bm.global_error_set))]
 
         # print [e['weight'] for e in self.bm.global_error_set]
         # for e in self.bm.global_error_set:
@@ -670,7 +670,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         batch_ft, batch_mask_ft, batch_inits, grad_weights = \
             self.bm.reconstruct_path_batch(backtrace_length=self.options.backtrace_length)
-        grad_weights[grad_weights < 0] *= 1.5
+        # grad_weights[grad_weights < 0] *= 1.5
         # print batch_ft[:, :self.options.claim_channels, :, :].shape, batch_ft[:, self.options.claim_channels:, :, :].shape, batch_inits.shape, batch_mask_ft.shape, options.backtrace_length, grad_weights.shape
         # error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
         #     self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
