@@ -670,6 +670,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         batch_ft, batch_mask_ft, batch_inits, grad_weights = \
             self.bm.reconstruct_path_batch(backtrace_length=self.options.backtrace_length)
+        grad_weights[grad_weights < 0] *= 1.5
         # print batch_ft[:, :self.options.claim_channels, :, :].shape, batch_ft[:, self.options.claim_channels:, :, :].shape, batch_inits.shape, batch_mask_ft.shape, options.backtrace_length, grad_weights.shape
         # error_b_type1, error_b_type2, rnn_mask_e1, rnn_mask_e2, rnn_hiddens_e1, rnn_hiddens_e2 = \
         #     self.bm.reconstruct_path_error_inputs(backtrace_length=options.backtrace_length)
