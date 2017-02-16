@@ -621,7 +621,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         self.bm.weight_e2_errors()
 
-        self.bm.global_error_set = [e for e in self.bm.global_error_set if e['weight'] > 0.]
+        self.bm.global_error_set = np.array([e for e in self.bm.global_error_set if e['weight'] > 0.])
+        # embed()
         self.bm.global_error_set = self.bm.global_error_set[np.random.permutation(len(self.bm.global_error_set))]
 
         # print [e['weight'] for e in self.bm.global_error_set]
