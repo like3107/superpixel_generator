@@ -135,7 +135,6 @@ if __name__ == '__main__':
         versions = ["height"]
 
     for label_b, bn in zip(label_types, versions):
-
         concat_h5_in_folder(options.validation_save_path, options.batch_size, total_z_lenght, base_file_name=bn,
                             label_b=label_b)
 

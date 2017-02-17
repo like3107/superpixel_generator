@@ -129,6 +129,7 @@ def set_prediction_options(options, val_options):
     options.fully_conf_valildation_b = val_options.fully_conf_valildation_b
     # default options
     # options.net_arch = 'v8_hydra_dilated_ft_joint'
+    options.clip_method = 'clip'
     options.validation_b = True
     options.augment_pretraining = False
     options.augment_ft = False

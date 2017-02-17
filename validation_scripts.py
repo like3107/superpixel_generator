@@ -33,9 +33,9 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
         assert(gt.shape == pred.shape)
 
     if defect_slices:
-        print 'removing defect slices'
-        # defect_slices_ind = [14, 15]
-        defect_slices_ind = [66, 67, 95, 96, 115]
+        #defect_slices_ind = []
+        defect_slices_ind = [64, 65, 66, 114]
+        print 'removing defect slices ', defect_slices_ind
         pred = np.delete(pred, defect_slices_ind, axis=0)
         gt = np.delete(gt, defect_slices_ind, axis=0)
 
@@ -54,9 +54,9 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
                 print '\r %.3f' % (float(i) / pred.shape[0]),
             split, merge = ni.voi(segmentation)
             are, prec, rec = ni.adapted_rand(segmentation2)
-
             vals = [split, merge, are, prec, rec]
             # print 'spolit merge', split, merge
+            # print i," score ",1-are, prec, rec
             for val, meas in zip(vals, all_measures):
                 meas.append(val)
         all_measures = np.array(all_measures)
