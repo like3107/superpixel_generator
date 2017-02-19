@@ -98,10 +98,10 @@ class EvaluateWSs(object):
         self.edges = None
         self.init_WSs()
         self.sigmas = [0, 0.2, 0.5, 1, 2, 4, 8, 16]
-        # self.sigmas = [0.]
+        # self.sigmas = [0., 1, 2]
 
     def init_WSs(self):
-        self.WSs = [PWS('PWS')]
+        # self.WSs = [PWS('PWS')]
         self.WSs = [PWS('MSF_Kruskal'), PWS('MSF_Prim'), PWS('PWS')]
 
     def preprocess_data(self, sigma=2):
@@ -129,13 +129,15 @@ class EvaluateWSs(object):
                 for z in range(n_z):
                     seg = ws.do_ws(self.edges[z], self.label[z])
                     segs.append(seg[:, :, 0])
-                score, _, _, _ = validate_segmentation(np.array(segs), self.label, resolution=1, border_thresh=2,
-                                              verbose=False)[1]
-                if score < best_scores[num]:
+                score, rand_score, _, _ = validate_segmentation(np.array(segs), self.label,
+                                                                resolution=1, border_thresh=2,
+                                              verbose=False)
+                print 'rand score', rand_score
+                if rand_score < best_scores[num]:
                     bests_edges[num] = self.edges
-                    best_scores[num] = score
+                    best_scores[num] = rand_score
                     bests_segs[num] = segs
-                    print 'best score', score
+                    print 'best score', rand_score
 
         print 'best scores', best_scores
         print 'label', self.label.shape
@@ -149,8 +151,8 @@ class EvaluateWSs(object):
         ax[0, 0].imshow(self.raw[0], interpolation='none', cmap='gray')
         ax[1, 0].imshow(self.label[0], interpolation='none')
 
-        ax[0, 1].imshow(bests_edges[0][2], interpolation='none', cmap='gray')
-        ax[0, 2].imshow(bests_segs[0][2], interpolation='none')
+        ax[0, 1].imshow(bests_edges[0][0], interpolation='none', cmap='gray')
+        ax[0, 2].imshow(bests_segs[0][0], interpolation='none')
         if len(self.WSs) > 1:
             ax[1, 1].imshow(bests_edges[1][0], interpolation='none', cmap='gray')
             ax[1, 2].imshow(bests_segs[1][0], interpolation='none')
@@ -158,7 +160,8 @@ class EvaluateWSs(object):
             ax[2, 1].imshow(bests_edges[2][0], interpolation='none', cmap='gray')
             ax[2, 2].imshow(bests_segs[1][0], interpolation='none')
         plt.show()
-
+        dp.save_h5('../data/tmp/best_edges_sig6', 'data', data=bests_edges[0])
+        dp.save_h5('../data/tmp/best_seg_sig6', 'data', data=bests_segs[0])
 
 if __name__ == '__main__':
     label = np.ones((2, 100, 100))
@@ -166,9 +169,10 @@ if __name__ == '__main__':
     raw = np.zeros((2, 100, 100))
     raw[:, 50:52, :] = 1.
 
-    # raw = dp.load_h5('./../data/nets/toy_nh0_sig3_valid/edges/edges.h5', 'data')[0][:, 0]
-    raw = dp.load_h5('./../data/volumes/toy_nh0_sig9_edges_valid.h5', 'data')[0][:, 0]
-    raw = dp.load_h5('./../data/volumes/input_toy_nh0_sig9_valid.h5', 'data')[0][:, 0]
+    raw = dp.load_h5('./../data/volumes/toy_nh0_sig6_edges_valid.h5', 'data')[0][:, 0]
+    print 'raw', raw.shape
+    #raw = dp.load_h5('./../data/volumes/toy_nh0_sig6_edges_valid.h5', 'data')[0][:, 0]
+   # raw = dp.load_h5('./../data/volumes/input_toy_nh0_sig6_valid.h5', 'data')[0][:, 0]
     label = dp.load_h5('./../data/volumes/label_toy_nh0_sig6_valid.h5', 'data')[0]
     print label.shape
     # exit()

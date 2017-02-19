@@ -467,6 +467,18 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
+def make_axis_great_again(ax):
+    try:
+        ax.shape
+        if len(ax.shape) == 1:
+            return ax[:, None]
+        else:
+            return ax
+    except:
+        new_ax = np.array([[ax]])
+        return new_ax
+
+
 class ApproxMultivariateNormal(object):
     def __init__(self, inv_cov):
         self.d = inv_cov.shape[0]

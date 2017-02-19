@@ -51,6 +51,7 @@ class NetBuilder:
         n_classes = 1
         r = self.options.feature_map_size_reduction
         n_hidd = self.options.n_recurrent_hidden
+        #               1          2     3      4       5       6       7       9       9           10
         filts =         [5,       3,     3,      3,      3,      3,     3,      1,      1,            1]
         dils  =         [1,       1,     2,      4,      8,     16,     1,      1,      1,            1]
         n_filts =       [32/r, 32/r,  64/r,   64/r,  128/r,  128/r, 256/r, 2048/r, n_hidd,    n_classes]
@@ -112,6 +113,7 @@ class NetBuilder:
         # build dynamic net bottom
         self.fov = 69 + 2
         n_classes = 1
+        #            1, 2, 3, 4
         filts =     [5, 3, 3, 5]
         dils =      [4, 8, 16, 1]
         n_filts =   [32, 32, 64, 64]
