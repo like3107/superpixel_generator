@@ -1729,10 +1729,12 @@ class HoneyBatcherRec(HoneyBatcherPath):
         error_selection = []
         hiddens = []
         for sel in selection:
-            current_error = sel
-            new_path_error = [sel]
-            new_path_error.append(current_error)
-            for t_back in range(1, backtrace_length-1):
+            # if sel['type'] == 'e2':
+            current_error = self.simple_plateau_backtrace(sel)
+            # else:
+                # current_error = sel
+            new_path_error = [current_error]
+            for t_back in range(1, backtrace_length):
                 current_error = self.simple_backtrace(current_error)
                 if discount != 1:
                     current_error['weight'] *= discount
@@ -1744,12 +1746,19 @@ class HoneyBatcherRec(HoneyBatcherPath):
 
 
     def simple_plateau_backtrace(self, error):
-        while self.global_plateau_indicator[batch, step_back_pos[0] - self.pad, step_back_pos[1] - self.pad,
-                                             node_direction] and \
+        while self.global_plateau_indicator[error['batch'], error['source_pos'][0] - self.pad, error['source_pos'][1] - self.pad,
+                                             error['direction']] and \
                     error['direction'] > 0:
             error = self.simple_backtrace(error)
         return error
 
+    # def filter_small_errors(self, dist=4):
+    #     filter_errors = [e for e in self.global_error_set if e['weight'] > dist]
+    #     if len(filter_errors) > 0:
+    #         print "filtering ...",len(filter_errors),"/",len(self.global_error_set)
+    #         self.global_error_set = filter_errors
+    #     else:
+    #         print "not filtering ...",len(filter_errors),"/",len(self.global_error_set)
 
     def reconstruct_path_batch(self, backtrace_length=1):
         selection = self.global_error_set[:self.options.n_batch_errors]
@@ -1773,9 +1782,13 @@ class HoneyBatcherRec(HoneyBatcherPath):
             b = s['batch']
             if s['type'] == 'e1':
                 p = np.array(s['pos']) - self.pad
-                mask = self.global_error_path_info[b, 1, max(0,p[0]-self.pad):p[0]+self.pad, max(0,p[1]-self.pad):p[1]+self.pad] == s['unique_id']
+                # mask = self.global_error_path_info[b, 1, max(0,p[0]-self.pad):p[0]+self.pad, max(0,p[1]-self.pad):p[1]+self.pad] == s['unique_id']
+                # s['weight'] = np.sum(mask)
+                mask = self.global_error_path_info[b, 1] == s['unique_id']
+                # print self.global_error_path_info[b, 2][mask]
+                s['weight'] = np.sum(self.options.future_discount_factor ** self.global_error_path_info[b, 2][mask])
+                # print "e1",np.sum(mask),s['weight']
                 # s['weight'] = np.mean(self.global_error_path_info[b, 2][mask])
-                s['weight'] = np.sum(mask)
                 total += s['weight']
 
         for s in self.global_error_set:
@@ -1805,15 +1818,18 @@ class HoneyBatcherRec(HoneyBatcherPath):
         for s in self.global_error_set:
             b = s['batch']
             if s['type'] == 'e2':
-                # mask = self.error_bm.global_error_path_info[b, 1] == s['unique_id']
-                p = np.array(s['pos']) - self.pad
-                mask = self.error_bm.global_error_path_info[b, 1, max(0,p[0]-self.pad):p[0]+self.pad, max(0,p[1]-self.pad):p[1]+self.pad] == s['unique_id']
-                if np.sum(mask) > 0:
-                    s['weight'] = np.sum(mask)
-                    # s['weight'] = np.mean(self.error_bm.global_error_path_info[b, 2][mask])
-                    total += s['weight']
-                else:
-                    s['weight'] = 0.
+                # p = np.array(s['pos']) - self.pad
+                # mask = self.error_bm.global_error_path_info[b, 1, max(0,p[0]-self.pad):p[0]+self.pad, max(0,p[1]-self.pad):p[1]+self.pad] == s['unique_id']
+                mask = self.error_bm.global_error_path_info[b, 1] == s['unique_id']
+                s['weight'] = np.sum(self.options.future_discount_factor ** self.error_bm.global_error_path_info[b, 2][mask])
+
+                # print "e2",np.sum(mask),s['weight']
+                # if np.sum(mask) > 0:
+                #     s['weight'] = np.sum(mask)
+                #     # s['weight'] = np.mean(self.error_bm.global_error_path_info[b, 2][mask])
+                # else:
+                #     s['weight'] = 0.
+                total += s['weight']
 
         if total > 0:
             for s in self.global_error_set:

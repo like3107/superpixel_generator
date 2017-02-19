@@ -613,6 +613,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         # self.bm.find_global_error_paths()
         # print "found ", self.bm.count_new_path_errors(), "errors"
+        # self.bm.filter_small_errors()
 
         self.bm.weight_e1_errors()
         self.bm.reset_error_regions()
@@ -631,6 +632,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         if self.images_counter % self.options.observation_counter == 0:
             trainer.draw_debug(reset=True, counter=self.images_counter)
 
+        self.bm.set_plateau_indicator()
+        
         self.err_b_counter, train_infos, self.grads_sum, only_once = 0, 0, None, False
         while self.bm.count_new_path_errors() > 0 and not only_once:
             if self.options.stochastic_update_b:
