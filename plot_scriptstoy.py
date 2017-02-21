@@ -51,16 +51,18 @@ def find_best_cherry(gt_seg, std_ws_seg, nn_ws_seg, criterium='diff'):
     return worst_best_stdws_insd, all_evals_std_ws[worst_best_stdws_insd], all_evals_nn_ws[worst_best_stdws_insd]
 
 
-def fix_color_table(gt_seg, std_ws_seg, nn_ws_seg):
+def fix_color_table(gt_seg, nn_ws_seg, std_ws_seg):
     sm = du.SeedMan()
     new_std_ws_seg = np.empty_like(gt_seg)
     new_nn_ws_seg = np.empty_like(gt_seg)
     for i, label_slice in enumerate(gt_seg):
         gt_seg[i] = measure.label(label_slice)
 
+    all_seeds = []
     for z, (label_slice, stdws_slice, nnws_slice) in enumerate(zip(gt_seg, std_ws_seg, nn_ws_seg)):
-        seeds = sm.get_seed_coords_gt(np.copy(label_slice), minsize=5)
+        seeds = sm.get_seed_coords_gt(np.copy(label_slice))
         gt_ids = []
+        all_seeds.append(seeds)
         for seed in seeds:
             gt_id = label_slice[seed[0], seed[1]]
             if gt_id in gt_ids:
@@ -71,17 +73,20 @@ def fix_color_table(gt_seg, std_ws_seg, nn_ws_seg):
             nnws_id = nnws_slice[seed[0], seed[1]]
 
             new_std_ws_seg[z][stdws_slice == sdtws_id] = gt_id
+            print 'seed ids', sdtws_id, 'gt', gt_id, np.sum([stdws_slice == sdtws_id])
 
             new_nn_ws_seg[z][nnws_slice == nnws_id] = gt_id
+
+        #
         # f, ax = plt.subplots(3)
         # ax[0].imshow(gt_seg[z])
         # ax[1].imshow(new_std_ws_seg[z])
         # ax[2].imshow(new_nn_ws_seg[z])
-        # print label_slice
-        # print new_std_ws_seg[z]
-        # print new_nn_ws_seg[z]
+        # print 'label', label_slice
+        # print 'std ws', new_std_ws_seg[z]
+        # print 'nnws', new_nn_ws_seg[z]
         # plt.show()
-    return gt_seg, new_std_ws_seg, new_nn_ws_seg
+    return gt_seg, new_nn_ws_seg, new_std_ws_seg, all_seeds
 
 
 def set_zero_except_boundaries(seg, n_dil=2):
@@ -93,6 +98,7 @@ def set_zero_except_boundaries(seg, n_dil=2):
 
 
 def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
+                       seeds=None,
                        slices=None,
                        criterum='best_nn_ws',      # also best_nn_ws, o diff
                        indices=None):
@@ -159,7 +165,12 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
         gt = norm(gt_seg[i].copy())
         # ax[1, 0].set_title('gt')
         # ax[0, 1].imshow(diag_image*256, interpolation='none', cmap='gray')
-        ax[1, 0].imshow(gt, interpolation='none', cmap=rcmap, alpha=0.6)
+        if seeds is not None:
+            print 'adding seeds'
+
+            seeds = np.array(seeds[0])
+            ax[1, 0].scatter(seeds[:, 1], seeds[:, 0])      # move one away from boundary for visibility
+        ax[1, 0].imshow(gt, interpolation='none', alpha=1)
         ax[1, 0].axis('off')
 
         ws = norm(std_ws_seg[i].copy())
@@ -171,7 +182,7 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
         # diag_image[tri_mask] = static_data[i, 0, :, :][tri_mask]
 
         ax[2, 0].imshow(best_edges[i, :, :], interpolation='none', cmap='gray')
-        ax[2, 0].imshow(ws, interpolation='none', cmap=rcmap, alpha=0.5)
+        ax[2, 0].imshow(ws, interpolation='none', alpha=0.4)
         # ax[1, 0].imshow(errorsnn, interpolation='none', cmap=greencmap, alpha=0.4)
         # ax[1, 0].imshow(errors, interpolation='none', cmap=redcmap, alpha=0.4)
 
@@ -179,7 +190,7 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
         ax[2, 0].axis('off')
 
         ax[3, 0].imshow(nn_hm[i, :, :], interpolation='none', cmap='gray')
-        ax[3, 0].imshow(nn, interpolation='none', cmap=rcmap, alpha=0.5)
+        ax[3, 0].imshow(nn, interpolation='none', alpha=0.4)
         # ax[1, 1].imshow(errorsnn, interpolation='none', cmap=redcmap, alpha=0.4)
         # ax[3, 0].set_title('nn ws, Rand Error %.3f' % are_nnws[i])
         ax[3, 0].axis('off')
@@ -271,7 +282,7 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
     # ax.imshow(steffens_rgb, interpolation='none')
     plt.savefig('../data/tmp/differences.pdf', bbox_inches='tight')
 
-    plt.show()
+    # plt.show()
 
     # i = 3
 
@@ -285,7 +296,9 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
     ax[0].axis('off')
 
     # ax[1].set_title('b) Groundtruth Segmentation')
+
     ax[1].imshow(gt_seg[i], interpolation='none')
+    seeds = np.array(seeds[0])
     ax[1].axis('off')
 
     # ax[2].set_title('c) Watershed Segmentation')
@@ -299,18 +312,33 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
 
 
 def make_toy_data_graph():
-    stdws_seg = [0.952, 0.836, 0.61]
-    nn_seg = [0.942, 0.875,	0.677]
-    justws_seg = [0.864, 0.51, 0.405]
+    PRIM = [0.935, 0.851, 0.666]
+    PRIM_sig = [0.8, 3.6, 1.7]
+
+    PWS = [0.935, 0.851, 0.668]
+    PWS_sig = [0.8, 1.7, 1.7]
+
+    kruskal = [0.935, 0.818, 0.668]
+    kruskal_sig = [0.8, 1.7, 1.7]
+
+    nn_seg = [0.942, 0.875,	0.678]
+    nn_seg_sig = [0.8, 1.7, 1.8]
+
+    RAW = [0.86, 0.581, 0.450]
+    RAW_sig = [0.016, 0.018]
+
     sigmas = [0.3, 0.6, 0.9]
 
     fig, ax = plt.subplots()
-    stwsl, = ax.plot(sigmas, stdws_seg)
-    nnsegl, = ax.plot(sigmas, nn_seg)
-    justws_segl, = ax.plot(sigmas, justws_seg)
-    plt.legend([stwsl, nnsegl, justws_segl], ['Standard WS + Edge detector',
-                                              'NN + Edge detector',
-                                              'WS + Gauss'])
+    PRIM, = ax.plot(sigmas, PRIM)
+    PWS, = ax.plot(sigmas, PWS)
+    kruskal, = ax.plot(sigmas, kruskal)
+    nn_seg, = ax.plot(sigmas, nn_seg)
+    RAW, = ax.plot(sigmas, RAW)
+
+    # plt.legend([stwsl, nnsegl, justws_segl], ['Standard WS + Edge detector',
+    #                                           'NN + Edge detector',
+    #                                           'WS + Gauss'])
     plt.savefig('../data/tmp/plot_toy_eval.pdf', format='pdf', bbox_inches='tight')
     print 'saved'
     plt.show()
@@ -318,6 +346,13 @@ def make_toy_data_graph():
 
 
 if __name__ == '__main__':
+
+    # plots RI over sigmas
+    # make_toy_data_graph()
+    # exit()
+
+
+
 
     volume_path = '../data/volumes/'
     dataset = 'toy_nh0_sig6_valid'     # CREMI_noz_test, toy_nh0_sig6_valid
@@ -353,27 +388,18 @@ if __name__ == '__main__':
     # gt_seg = dp.load_h5(gt_seg_p, slices=slices)[0]
     gt_seg = dp.load_h5(gt_seg_p, slices=slices)[0][:, pad:-pad, pad:-pad]
     nn_ws_seg = dp.load_h5(nn_ws_seg_p, slices=slices)[0]
-    std_ws_seg = dp.load_h5(std_ws_seg_p, slices=slices)[0][:, pad:-pad, pad:-pad]
-    best_edges = dp.load_h5(best_edges, slices=slices)[0][:, pad:-pad, pad:-pad]
+    std_ws_seg = dp.load_h5(std_ws_seg_p, slices=slices)[0]
+    best_edges = dp.load_h5(best_edges, slices=slices)[0]
     nn_hm = dp.load_h5(nn_hm_p, slices=slices)[0][:, pad:-pad, pad:-pad]
 
-    # nn_ws_seg =
-    # fix color table only once
-    gt_seg, nn_ws_seg, std_ws_seg = fix_color_table(gt_seg, nn_ws_seg, std_ws_seg)
-    # dp.save_h5('../data/nets/%s/validation_%s/fixed_slice_concat.h5' % (network, net_file), 'data', data=nn_ws_seg,
-    #            overwrite='w')
-    # dp.save_h5('../data/nets/%s/validation_%s/fixed_baseline_concat.h5' % (network, net_file), 'data',
-    #            data=std_ws_seg, overwrite='w')
-    # dp.save_h5(volume_path + 'fixed_label_' + dataset + '.h5', 'data', data=gt_seg, overwrite='w')
-
+    print 'gt shape', gt_seg.shape, 'nn ws seg', nn_ws_seg.shape, 'std ws', std_ws_seg.shape, 'beedges', best_edges.shape
+    gt_seg, nn_ws_seg, std_ws_seg, gt_seeds = fix_color_table(gt_seg, nn_ws_seg, std_ws_seg)
 
     make_toy_data_plot(gt_seg, std_ws_seg,
                        nn_ws_seg, best_edges,
                        nn_hm,
+                       seeds=gt_seeds,
                        slices=slices,
                        criterum='diff',           # best_nn_ws, diff, worst_best
                        indices=indices)                # which processes (ids) to select from image
 
-    # plots RI over sigmas
-    # make_toy_data_graph()
-    # exit()

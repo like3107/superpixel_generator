@@ -14,6 +14,7 @@ import utils as u
 
 rand_nums = np.random.rand(256, 3)
 rand_nums[:, 0] /= 100    # remove bright red colors from rgb
+rand_nums[0, 0] = 0
 rcmap = matplotlib.colors.ListedColormap(rand_nums)
 
 red_nums = np.zeros((256, 3))
@@ -91,7 +92,8 @@ def set_zero_except_boundaries(seg, n_dil=2):
         seg[boundary[i] != 1] = 0
     return seg
 
-def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, nn_hm,
+
+def make_cremi_data_plot(gt_seg, std_ws_seg, nn_ws_seg, nn_hm,
                        slices=None,
                        criterum='best_nn_ws',      # also best_nn_ws, o diff
                        indices=None):
@@ -187,7 +189,7 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, nn_hm,
         ax[1, 1].axis('off')
         print 'enter in style[[2, 726, 340], [2, 726, 340]]'
         # plt.savefig('../data/tmp/cherries_%i.pdf', bbox_inches='tight')
-        plt.show(block=False)
+        plt.show()
 
     # i = raw_input()     # enter in style[[2, 726, 340], [2, 726, 340]]
     # i = str([[2, 460, 110], [2, 470, 305], [2, 685, 1124]])
@@ -300,23 +302,115 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, nn_hm,
     # plt.show()
 
 
-def make_toy_data_graph():
-    stdws_seg = [0.952, 0.84, 0.61]
-    nn_seg = [0.942, 0.919,	0.677]
-    justws_seg = [0.864, 0.51, 0.405]
-    sigmas = [0.3, 0.6, 0.9]
+def make_network_plot(gt_seg, nn_ws_seg, std_ws_seg, nn_hm_p, slices, thresh=50):
+    print 'making network plot'
+    static_data = dp.load_h5(static_data_p, slices=slices)[0][:, :, pad:-pad, pad:-pad]
+    nn_hm = dp.load_h5(nn_hm_p, slices=slices)[0]
 
-    fig, ax = plt.subplots()
-    stwsl, = ax.plot(sigmas, stdws_seg)
-    nnsegl, = ax.plot(sigmas, nn_seg)
-    justws_segl, = ax.plot(sigmas, justws_seg)
-    plt.legend([stwsl, nnsegl, justws_segl], ['Standard WS + Edge detector',
-                                              'NN + Edge detector',
-                                              'WS + Gauss'])
-    plt.savefig('../data/tmp/plot_toy_eval.pdf', format='pdf', bbox_inches='tight')
-    print 'saved'
+
+    nn_hm[nn_hm == -np.inf] = 0
+    nn_hm /= np.max(nn_hm)
+
+    nn_ws_seg[nn_hm > thresh / 100.] = 0
+    ones = np.ones_like(nn_hm) / 2
+    nn_hm_mask = np.ma.masked_where(nn_hm <= thresh / 100., ones)
+
+    nn_hm[nn_hm > thresh / 100.] = 00.00000
+
+    # me them
+    Id = nn_ws_seg[0, 290, 228]
+    me = np.zeros_like(gt_seg[0])
+    me[nn_ws_seg[0] == Id] = 1
+    them = np.zeros_like(gt_seg[0])
+    them[(nn_ws_seg[0] != Id) & (nn_ws_seg[0] != 0)] = 1
+    nobody = np.zeros_like(gt_seg[0])
+    nobody[(them != 1) & (me != 1)] = 1
+
+    # plt.hist((np.log(nn_hm + 1)).flatten(), 100)
+    # plt.show()
+
+    i = 0
+
+    fig, ax = plt.subplots(1, 1)
+    ax = u.make_axis_great_again(ax)
+    fig.canvas.set_window_title('i' + str(slices[0]))
+    ax[0, 0].imshow(static_data[0, 0, :, :], interpolation='none', cmap='gray')
+    ax[0, 0].axis('off')
+    fig.tight_layout()
+    plt.savefig('../data/tmp/network_plot_%i' % i)
+    i += 1
+
+
+    fig, ax = plt.subplots(1, 1)
+    ax = u.make_axis_great_again(ax)
+    fig.canvas.set_window_title('i' + str(slices[0]))
+    ax[0, 0].imshow(static_data[0, 1, :, :], interpolation='none', cmap='gray')
+    ax[0, 0].axis('off')
+    fig.tight_layout()
+    plt.savefig('../data/tmp/network_plot_%i' % i)
+    i += 1
+
+    nn_hm[nn_hm > thresh / 100.] = 0.00000001
+
+    fig, ax = plt.subplots(1, 1)
+    ax = u.make_axis_great_again(ax)
+    fig.canvas.set_window_title('i' + str(slices[0]))
+    nn_hm = np.log(nn_hm)
+    ax[0, 0].imshow(nn_hm[0], interpolation='none', cmap='gray')
+    # ax[0, 0].axis('off')
+    # plt.savefig('../data/tmp/network_plot_%i' % i)
+    # i += 1
+    # plt.close()
+
+    # fig, ax = plt.subplots(1, 1)
+    # ax = u.make_axis_great_again(ax)
+    # fig.canvas.set_window_title('i' + str(slices[0]))
+    nn_hm_mask[0, 0, 0] = 0 # hack
+    ax[0, 0].imshow(nn_hm_mask[0], interpolation='none', cmap='Greens')
+    ax[0, 0].axis('off')
+    fig.tight_layout()
+    # plt.show()
+    plt.savefig('../data/tmp/network_plot_%i' % i)
     plt.show()
+    i += 1
+    plt.close()
 
+    fig, ax = plt.subplots(1, 1)
+    ax = u.make_axis_great_again(ax)
+    fig.canvas.set_window_title('i' + str(slices[0]))
+    ax[0, 0].imshow(me, interpolation='none', cmap='gray')
+    ax[0, 0].axis('off')
+    fig.tight_layout()
+    plt.savefig('../data/tmp/network_plot_%i' % i)
+    i += 1
+    plt.close()
+
+    fig, ax = plt.subplots(1, 1)
+    ax = u.make_axis_great_again(ax)
+    fig.canvas.set_window_title('i' + str(slices[0]))
+    ax[0, 0].imshow(them, interpolation='none', cmap='gray')
+    ax[0, 0].axis('off')
+    fig.tight_layout()
+    plt.savefig('../data/tmp/network_plot_%i' % i)
+    i += 1
+    plt.close()
+
+    fig, ax = plt.subplots(1, 1)
+    ax = u.make_axis_great_again(ax)
+    fig.canvas.set_window_title('i' + str(slices[0]))
+    ax[0, 0].imshow(nobody, interpolation='none', cmap='gray')
+    ax[0, 0].axis('off')
+    fig.tight_layout()
+    plt.savefig('../data/tmp/network_plot_%i' % i)
+    i += 1
+    plt.close()
+
+
+
+    # ax[3, 0].imshow(nn_ws_seg[0, :, :], interpolation='none', cmap=rcmap)
+
+    fig.tight_layout()
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -340,12 +434,18 @@ if __name__ == '__main__':
     gt_seg_p = volume_path + 'fixed_label_' + dataset + '.h5'
     pad = 70 / 2
     n_plots = 150
+
+    slices = [13]         # for network file
+
     # slices = [138, 96, 51, 50, 52]      # cherry slices for comparison, 51 current favorite
     # slices = [24, 82, 83, 81, 93, 97]     # our best nns, 83 steffens favourite
 
-    slices = [126]
-    indices = [[0, 476, 1032], [0, 122, 960], [0, 4, 1066], [0, 198, 1143], [0, 299, 1102], [0, 350, 1117],
-             [0, 446, 1118], [0, 423, 1159], [0, 464, 815], [0, 244, 640]]
+
+
+
+    # slices = [126]
+    # indices = [[0, 476, 1032], [0, 122, 960], [0, 4, 1066], [0, 198, 1143], [0, 299, 1102], [0, 350, 1117],
+    #          [0, 446, 1118], [0, 423, 1159], [0, 464, 815], [0, 244, 640]]
     # comparison cherries 1+ :[126], center 890, 460
 
     # slices = [20]
@@ -353,7 +453,7 @@ if __name__ == '__main__':
     # comparison cherries 1+ :[17], bbox: [0:500, 0:500]]
 
     # others 2+: 44, 2: 106,  2+: 116, 121, 1-: 1, 2:70, 1: 19
-    print 'using slices', slices
+    # print 'using slices', slices
 
     # sx, sy = (0, 0)
     # ex, ey = (-1, -1)
@@ -374,12 +474,15 @@ if __name__ == '__main__':
     # dp.save_h5(volume_path + 'fixed_label_' + dataset + '.h5', 'data', data=gt_seg, overwrite='w')
 
 
-    make_toy_data_plot(gt_seg, std_ws_seg,
+    make_cremi_data_plot(gt_seg, std_ws_seg,
                        nn_ws_seg, None,
                        slices=slices,
                        criterum='diff',           # best_nn_ws, diff, worst_best
                        indices=indices)                # which processes (ids) to select from image
 
-    # plots RI over sigmas
-    # make_toy_data_graph()
-    # exit()
+
+
+    make_network_plot(gt_seg, nn_ws_seg, std_ws_seg, nn_hm_p,
+                      slices=slices,
+                      # thresh=16.1) # percent of total height
+                      thresh=3.2) # percent of total height
