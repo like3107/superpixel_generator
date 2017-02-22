@@ -94,6 +94,8 @@ def get_options(script='training', ignore_config=False):
     p.add('--n_batch_errors', default=1, type=int)
     p.add('--weight_fct', default="hard", type=str)
 
+    # lesion study
+    p.add('--lesion_remove_hidden', dest='dummy_data_b', action='store_true')
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)

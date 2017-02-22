@@ -173,9 +173,14 @@ class HoneyBatcherPredict(object):
                                     center[1] - self.pad:center[1] + self.pad + 1]
         if out is None:
             out = np.zeros((self.options.claim_channels, self.pl, self.pl), dtype='float32')
+
+        if self.options.claim_aug == 'no_claims':
+            print "lesion study... no claims"
+            return out
         else:
             out[:self.options.claim_channels].fill(0)
         if len(out) == 1:
+            print "lesion study... only me claims"
             out[0, :, :][labels == Id] = 1  
         else:
             out[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
@@ -1622,6 +1627,11 @@ class HoneyBatcherRec(HoneyBatcherPath):
     #             print (b, seed[0], seed[1]),"new_hidden stored",np.mean(new_hidden[0],axis=0)
 
     def get_hidden(self, b, center):
+
+        if self.options.lesion_remove_hidden:
+            print "lesion studdy ... no hidden"
+            return np.zeros((self.n_recurrent_hidden), dtype=np.float32)
+
         try:
             direction = self.global_directionmap_batch[b, center[0] - self.pad, center[1] - self.pad]
         except Exception as e:
