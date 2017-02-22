@@ -175,9 +175,13 @@ class HoneyBatcherPredict(object):
             out = np.zeros((self.options.claim_channels, self.pl, self.pl), dtype='float32')
         else:
             out[:self.options.claim_channels].fill(0)
-        out[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
-        out[0, :, :][labels == -1] = 0                    # the others
-        out[1, :, :][labels == Id] = 1                    # me
+        if len(out) == 1:
+            out[0, :, :][labels == Id] = 1  
+        else:
+            out[0, :, :][(labels != Id) & (labels != 0)] = 1  # the others
+            out[0, :, :][labels == -1] = 0                    # the others
+            out[1, :, :][labels == Id] = 1                    # me
+
 
         if len(out) > 2:
             out[2, :, :][labels <= 0] = 1
@@ -381,7 +385,8 @@ class HoneyBatcherPredict(object):
                 time_put
 
     def get_network_input(self, center, b, Id, out):
-        self.crop_mask_claimed(center, b, Id, out=out[0:self.options.claim_channels])
+        if (self.options.claim_channels > 0):
+            self.crop_mask_claimed(center, b, Id, out=out[0:self.options.claim_channels])
         self.crop_input(center, b, out=out[self.options.claim_channels:])
         return out
 

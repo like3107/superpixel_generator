@@ -641,12 +641,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
             train_infos += np.array(self.path_training())
 
-        if self.images_counter % self.options.save_counter == 0:
+        if self.images_counter % self.options.save_counter == 0 and not slave:
             self.save_net(counter=self.images_counter)
 
         if self.images_counter % self.options.lr_decrease_counter == 0:
             self.decrease_lr()
-
 
         if self.free_voxel == 0:
             self.free_voxel = self.free_voxel_empty

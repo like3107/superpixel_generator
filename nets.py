@@ -146,8 +146,9 @@ class NetBuilder:
 
         # debug
         r = self.options.feature_map_size_reduction
-        W_fc_07_stat = np.random.random((2048/r, 256/r+64, 1, 1)).astype('float32') / 10000.
-        W_fc_07_stat[:, :-64, 0, 0] = np.array(layers_static['fc_07'].W.eval()).swapaxes(0, 1)[:, :, 0, 0]
+        rec_hidden = self.options.n_recurrent_hidden
+        W_fc_07_stat = np.random.random((2048/r, 256/r+rec_hidden, 1, 1)).astype('float32') / 10000.
+        W_fc_07_stat[:, :-rec_hidden, 0, 0] = np.array(layers_static['fc_07'].W.eval()).swapaxes(0, 1)[:, :, 0, 0]
         layers['fc_06'] = L.Conv2DLayer(layers['l_merge_05'], 2048/r, filter_size=1, name='fc',
                                         W=shared(W_fc_07_stat.astype(np.float32)),
                                         b=shared(layers_static['fc_07'].b.eval()),
@@ -155,7 +156,6 @@ class NetBuilder:
 
 
         # recurrent
-        rec_hidden = self.options.n_recurrent_hidden
         self.sequ_len = T.iscalar()
         layers['l_shuffle'] = L.DimshuffleLayer(layers['fc_06'], (0, 2, 3, 1))
         layers['l_resh_pred_07'] = L.ReshapeLayer(layers['l_shuffle'], (-1, self.sequ_len, 2048/r))
