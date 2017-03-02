@@ -74,6 +74,7 @@ def get_options(script='training', ignore_config=False):
     p.add('--weight_by_importance', action='store_true', default=False)
     p.add('--fully_conf_valildation_b', action='store_true', default=False)
     p.add('--discount_factor', default=0.4, type=float)
+    p.add('--future_discount_factor', default=0.999, type=float)
 
     # pre-training
     p.add('--pre_train_iter', default=600000, type=int)
@@ -93,6 +94,8 @@ def get_options(script='training', ignore_config=False):
     p.add('--n_batch_errors', default=1, type=int)
     p.add('--weight_fct', default="hard", type=str)
 
+    # lesion study
+    p.add('--lesion_remove_hidden', action='store_true')
 
     # fine-tuning
     p.add('--batch_size_ft', default=4, type=int)

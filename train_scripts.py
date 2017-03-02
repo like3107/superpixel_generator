@@ -584,6 +584,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.free_voxel = self.free_voxel_empty
         inputs = self.update_BM_FC()
         # precompute fc partf
+        print inputs.shape
         self.precomp_input = self.builder.fc_prec_conv_body(inputs)
         # self.bm.initialize_hiddens(self.builder.hidden_f)
 
@@ -613,6 +614,7 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
         # self.bm.find_global_error_paths()
         # print "found ", self.bm.count_new_path_errors(), "errors"
+        # self.bm.filter_small_errors()
 
         self.bm.weight_e1_errors()
         self.bm.reset_error_regions()
@@ -631,6 +633,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         if self.images_counter % self.options.observation_counter == 0:
             trainer.draw_debug(reset=True, counter=self.images_counter)
 
+        self.bm.set_plateau_indicator()
+        
         self.err_b_counter, train_infos, self.grads_sum, only_once = 0, 0, None, False
         while self.bm.count_new_path_errors() > 0 and not only_once:
             if self.options.stochastic_update_b:
@@ -638,12 +642,11 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
 
             train_infos += np.array(self.path_training())
 
-        if self.images_counter % self.options.save_counter == 0:
+        if self.images_counter % self.options.save_counter == 0 and not slave:
             self.save_net(counter=self.images_counter)
 
         if self.images_counter % self.options.lr_decrease_counter == 0:
             self.decrease_lr()
-
 
         if self.free_voxel == 0:
             self.free_voxel = self.free_voxel_empty
