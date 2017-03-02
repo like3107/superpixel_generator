@@ -5,7 +5,7 @@ import data_provider as dp
 def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
                           pred_key=None, gt_key=None, slice_by_slice=True,
                           offset_xy=0, gel=None, start_z=None, n_z=None,
-                          defect_slices=None, resolution=4, border_thresh=25, verbose=True):
+                          defect_slices=None, resolution=4, border_thresh=25, verbose=True, return_all_vals=False):
     # cremi resolution 4, border thresh=25
     assert (gt_path is not None or gt is not None)  # specify either gt path or gt as np array
     assert (pred_path is not None or pred is not None)    # specify either raw path or raw as np array
@@ -75,7 +75,10 @@ def validate_segmentation(pred=None, gt=None, gt_path=None, pred_path=None,
             # string for easy copy to google doc
             print ','.join(['%.3f,+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
         text = ','.join(['%.3f+-%.3f' % (all_means[i], all_vars[i]) for i in range(5)])
-        return np.sqrt((all_means[0] + all_means[1]) * all_means[2]), all_means[2], make_val_dic(all_means, all_vars), text
+        if return_all_vals:
+            return all_measures
+        else:
+            return np.sqrt((all_means[0] + all_means[1]) * all_means[2]), all_means[2], make_val_dic(all_means, all_vars), text
         # return make_val_dic(all_means, all_vars), text
     else:
         # variational information of split and merge error,  i.e., H(X|Y) and H(Y|X)

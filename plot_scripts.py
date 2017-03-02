@@ -10,20 +10,25 @@ from skimage import measure
 import ast
 from scipy import ndimage
 import utils as u
+import time
 
+def gen_colormaps():
+    # np.random.seed(339)
+    np.random.seed(int(time.time())) #39
+    # np.random.seed(439)
+    rand_nums = np.random.rand(256, 3)
+    # rand_nums[:, 0] /= 100    # remove bright red colors from rgb
+    rand_nums[0, 0] = 0
+    rcmap = matplotlib.colors.ListedColormap(rand_nums)
 
-rand_nums = np.random.rand(256, 3)
-rand_nums[:, 0] /= 100    # remove bright red colors from rgb
-rand_nums[0, 0] = 0
-rcmap = matplotlib.colors.ListedColormap(rand_nums)
+    red_nums = np.zeros((256, 3))
+    red_nums[:, 0] = np.random.uniform(0.7, 1, size=256)
+    redcmap = matplotlib.colors.ListedColormap(red_nums)
 
-red_nums = np.zeros((256, 3))
-red_nums[:, 0] = np.random.uniform(0.7, 1, size=256)
-redcmap = matplotlib.colors.ListedColormap(red_nums)
-
-green_nums = np.zeros((256, 3))
-green_nums[:, 1] = np.random.uniform(0.7, 1, size=256)
-greencmap = matplotlib.colors.ListedColormap(green_nums)
+    green_nums = np.zeros((256, 3))
+    green_nums[:, 1] = np.random.uniform(0.7, 1, size=256)
+    greencmap = matplotlib.colors.ListedColormap(green_nums)
+    return  rcmap
 
 
 def find_best_cherry(gt_seg, std_ws_seg, nn_ws_seg, criterium='diff'):
@@ -96,7 +101,10 @@ def set_zero_except_boundaries(seg, n_dil=2):
 def make_cremi_data_plot(gt_seg, std_ws_seg, nn_ws_seg, nn_hm,
                        slices=None,
                        criterum='best_nn_ws',      # also best_nn_ws, o diff
-                       indices=None):
+                        seeds=None,
+                       indices=None,
+                    single_plots=True,
+                         coords=None):
 
     print 'nn_ws seg', nn_ws_seg.shape, 'std_ws seg', std_ws_seg.shape, 'gt seg', gt_seg.shape
 
@@ -111,10 +119,12 @@ def make_cremi_data_plot(gt_seg, std_ws_seg, nn_ws_seg, nn_hm,
     std_ws_seg = std_ws_seg[bnn_wss]
     nn_ws_seg = nn_ws_seg[bnn_wss]
 
+    print "slices = ",slices
+
     # gt_seg, std_ws_seg, nn_ws_seg = fix_color_table(gt_seg[bnn_wss], std_ws_seg[bnn_wss], nn_ws_seg[bnn_wss])
     static_data = dp.load_h5(static_data_p, slices=slices)[0][:, :, pad:-pad, pad:-pad]
-    nn_hm = dp.load_h5(nn_hm_p, slices=slices)[0]
-
+    #nn_hm = dp.load_h5(nn_hm_p, slices=slices)[0]
+    nn_hm = np.min(dp.load_h5(nn_hm_p, slices=slices)[0],axis=3)
 
 
     print 'worst best std', bnn_wss
@@ -130,74 +140,150 @@ def make_cremi_data_plot(gt_seg, std_ws_seg, nn_ws_seg, nn_hm,
     # gs1.update(wspace=0.025, hspace=0.05)  # set the spacing between axes.
 
     for i in range(n_plots):
-        fig, ax = plt.subplots(2, 2)
-        fig.canvas.set_window_title('i_%i_real slice %i' %(i, bnn_wss[i]))
-        fig.tight_layout()
+        for j in range(25):
+            rcmap = gen_colormaps()
+            fig, ax = plt.subplots(2, 2)
+            fig.canvas.set_window_title('i_%i_real slice%i' %(i, bnn_wss[i]))
+            fig.tight_layout()
 
-        ax = u.make_axis_great_again(ax)
+            ax = u.make_axis_great_again(ax)
 
-        # normalize so colors are always the same
-        norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max((gt_seg[i], std_ws_seg[i], nn_ws_seg[i])))
+            # normalize so colors are always the same
+            norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max((gt_seg[i], std_ws_seg[i], nn_ws_seg[i])))
 
-        diag_image = static_data[i, 0, :, :].copy()
-        diag_image /= np.max(diag_image)
-        nn_hm[nn_hm == -np.inf] = 0
-        nn_hm[i, :, :] /= np.max(nn_hm[i, :, :])
+            diag_image = static_data[i, 0, :, :].copy()
+            raw = static_data[i, 0, :, :].copy()
+            probs = static_data[i, 1, :, :].copy()
+            diag_image /= np.max(diag_image)
+            nn_hm[nn_hm == -np.inf] = 0
+            nn_hm[i, :, :] /= np.max(nn_hm[i, :, :])
 
-        diag_image[tri_mask] = nn_hm[i, :, :][tri_mask]
+            diag_image[tri_mask] = probs[:, :][tri_mask]
 
-        # top left
-        nn = norm(nn_ws_seg[i].copy())
-        diag_seg = np.zeros_like(nn)
-        diag_seg[~tri_mask] = nn[~tri_mask]
-        diag_seg = np.ma.masked_where(tri_mask, diag_seg)
+            # top left
+            nn_seg = norm(nn_ws_seg[i].copy())
+            nn = norm(static_data[i, 0, :, :]).copy()
 
-        # edges only
-        # nn_eroded = set_zero_except_boundaries(nn.copy(), n_dil=2)
-        # nn_eroded = np.ma.masked_where(nn_eroded == 0, nn_eroded)       # creates invisible part
+            diag_seg = np.zeros_like(nn)
+            diag_seg[~tri_mask] = nn[~tri_mask]
+            diag_seg = np.ma.masked_where(tri_mask, diag_seg)
 
-        # ax[0, 0].set_title('raw and edges')
-        ax[0, 0].imshow(diag_image, interpolation='none', cmap='gray')
-        ax[0, 0].imshow(diag_seg, interpolation='none', cmap=rcmap, alpha=0.3)
-        ax[0, 0].axis('off')
+            if coords is not None:
+                xlimits = [coords[i]['x']-coords[i]['xel'], coords[i]['x']+coords[i]['xel']]
+                ylimits = [coords[i]['y']-coords[i]['yel'], coords[i]['y']+coords[i]['yel']]
 
-        # plt.savefig('../data/tmp/cherries_%i.pdf' % i, bbox_inches='tight')
-        # plt.show(block=False)
+            # edges only
+            # nn_eroded = set_zero_except_boundaries(nn.copy(), n_dil=2)
+            # nn_eroded = np.ma.masked_where(nn_eroded == 0, nn_eroded)       # creates invisible part
 
-        gt = norm(gt_seg[i].copy())
-        ax[0, 1].set_title('gt')
-        ax[0, 1].imshow(diag_image*256, interpolation='none', cmap='gray')
-        ax[0, 1].imshow(gt, interpolation='none', cmap=rcmap, alpha=0.3)
-        ax[0, 1].axis('off')
+            if single_plots:
+                fig, axs = plt.subplots()
+                # fig.canvas.set_window_title('i_%i_real slice%i_%i' %(i, bnn_wss[i]))
+                fig.tight_layout()
+            else:
+                axs = ax[0, 0]
 
-        ws = norm(std_ws_seg[i].copy())
-        errors = np.ma.masked_where(std_ws_seg[i] == gt_seg[i], ws)
-        errorsnn = np.ma.masked_where(nn_ws_seg[i] == gt_seg[i], nn)
+            x,y = 0, 0
 
-        ax[1, 0].imshow(static_data[i, 0, :, :], interpolation='none', cmap='gray')
-        # ax[1, 0].imshow(ws, interpolation='none', cmap=rcmap, alpha=0.4)
-        ax[1, 0].imshow(errorsnn, interpolation='none', cmap=greencmap, alpha=0.4)
-        ax[1, 0].imshow(errors, interpolation='none', cmap=redcmap, alpha=0.4)
+            # axs = u.make_axis_great_again(ax)
+            # ax[0, 0].set_title('raw and edges')
+            # ax[0, 0].imshow(diag_image, interpolation='none', cmap='gray')
+            axs.imshow(raw, interpolation='none', cmap='gray')
+            # ax[0, 0].imshow(diag_seg, interpolation='none', cmap=rcmap, alpha=0.3)
+            axs.axis('off')
+            axs.set_xlim(xlimits[0], xlimits[1])
+            axs.set_ylim(ylimits[0], ylimits[1])
+            if single_plots:
+                fig.savefig('../data/tmp/cremi_png/picked_cherries_raw_%i_%i.png'%(slices[i], j))
+                fig.savefig('../data/tmp/cremi_pdf/picked_cherries_raw_%i_%i.pdf' %(slices[i], j))
+                print "saving to ",'../data/tmp/cremi_pdf/picked_cherries_raw_%i_%i.pdf'%(slices[i], j)
+                fig, axs = plt.subplots()
+                fig.tight_layout()
+            else:
+                axs = ax[0,1]
+            # plt.show(block=False)
 
-        ax[1, 0].set_title('std ws, Rand Error %.3f' % are_stdws[i])
-        ax[1, 0].axis('off')
 
-        ax[1, 1].imshow(static_data[i, 0, :, :], interpolation='none', cmap='gray')
-        ax[1, 1].imshow(nn, interpolation='none', cmap=rcmap, alpha=0.4)
-        # ax[1, 1].imshow(errorsnn, interpolation='none', cmap=redcmap, alpha=0.4)
-        ax[1, 1].set_title('nn ws, Rand Error %.3f' % are_nnws[i])
-        ax[1, 1].axis('off')
-        print 'enter in style[[2, 726, 340], [2, 726, 340]]'
-        # plt.savefig('../data/tmp/cherries_%i.pdf', bbox_inches='tight')
-        plt.show()
+            gt = norm(gt_seg[i].copy())
+            # axs.set_title('gt')
+            axs.imshow(raw, interpolation='none', cmap='gray')
+            axs.imshow(gt, interpolation='none', cmap=rcmap, alpha=0.5)
+            axs.axis('off')
+            axs.set_xlim(xlimits[0], xlimits[1])
+            axs.set_ylim(ylimits[0], ylimits[1])
+            if seeds is not None:
+                print 'adding seeds'
+                si = np.array(seeds[i])
+                axs.scatter(si[:, 1], si[:, 0], marker='.', c='w', s=1)      # move one away from boundary for visibility
 
+            if single_plots:
+                fig.savefig('../data/tmp/cremi_png/picked_cherries_gt_%i_%i.png'%(slices[i], j))
+                fig.savefig('../data/tmp/cremi_pdf/picked_cherries_gt_%i_%i.pdf' %(slices[i], j))
+                fig, axs = plt.subplots()
+                fig.tight_layout()
+            else:
+                axs = ax[1,0]
+
+            ws = norm(std_ws_seg[i].copy())
+            errors = np.ma.masked_where(std_ws_seg[i] == gt_seg[i], ws)
+            errorsnn = np.ma.masked_where(nn_ws_seg[i] == gt_seg[i], nn)
+
+            axs.imshow(probs, interpolation='none', cmap='gray')
+            # ax[1, 0].imshow(ws, interpolation='none', cmap=rcmap, alpha=0.4)
+            axs.imshow(ws, interpolation='none', cmap=rcmap, alpha=0.8)
+            # ax[1, 0].imshow(errors, interpolation='none', cmap=redcmap, alpha=0.4)
+
+            # axs.set_title('std ws, Rand Error %.3f' % are_stdws[i])
+            axs.set_xlim(xlimits[0], xlimits[1])
+            axs.set_ylim(ylimits[0], ylimits[1])
+            axs.axis('off')
+
+            if single_plots:
+                fig.savefig('../data/tmp/cremi_png/picked_cherries_distws_%i_%i.png'%(slices[i], j))
+                fig.savefig('../data/tmp/cremi_pdf/picked_cherries_distws_%i_%i.pdf' %(slices[i], j))
+                fig, axs = plt.subplots()
+                fig.tight_layout()
+            else:
+                axs = ax[1, 1]
+
+            axs.imshow(nn_hm[i], interpolation='none', cmap='gray')
+            axs.imshow(nn_seg, interpolation='none', cmap=rcmap, alpha=0.8)
+            # ax[1, 1].imshow(errorsnn, interpolation='none', cmap=redcmap, alpha=0.4)
+            # axs.set_title('nn ws, Rand Error %.3f' % are_nnws[i])
+            axs.set_xlim(xlimits[0], xlimits[1])
+            axs.set_ylim(ylimits[0], ylimits[1])
+            axs.axis('off')
+
+            if single_plots:
+                fig.savefig('../data/tmp/cremi_png/picked_cherries_learned_ws_%i_%i.png'%(slices[i], j))
+                fig.savefig('../data/tmp/cremi_pdf/picked_cherries_learned_ws_%i_%i.pdf' %(slices[i], j))
+
+            # ax[2, 0].imshow(probs, interpolation='none', cmap='gray')
+            # # ax[2, 0].imshow(nn_seg, interpolation='none', cmap=rcmap, alpha=0.5)
+            # ax[2, 0].imshow(errors, interpolation='none', cmap=redcmap, alpha=0.5)
+            # ax[2, 0].set_title('std ws error')
+            # ax[2, 0].axis('off')
+            #
+            # ax[2, 1].imshow(nn_hm[i], interpolation='none', cmap='gray')
+            # # ax[2, 0].imshow(errorsnn, interpolation='none', cmap=rcmap, alpha=0.5)
+            # ax[2, 1].imshow(errorsnn, interpolation='none', cmap=redcmap, alpha=0.5)
+            # ax[2, 1].set_title('std ws error')
+            # ax[2, 1].axis('off')
+
+            if not single_plots:
+                plt.savefig('../data/tmp/cremi_pdf/picked_cherries_%i_%i.pdf'%(slices[i], j), bbox_inches='tight')
+                plt.savefig('../data/tmp/cremi_png/picked_cherries_%i_%i.png'%(slices[i], j), bbox_inches='tight')
+                # plt.show()
+
+    print "early_finish"
+    return
     # i = raw_input()     # enter in style[[2, 726, 340], [2, 726, 340]]
     # i = str([[2, 460, 110], [2, 470, 305], [2, 685, 1124]])
     # i = str([[0, 470, 305]])      cherry for 51 comparison
     # i = str([[3, 66, 465]])
     # i = str([[0, 95, 900], [0, 440, 995]])
     # i = str([[0, 476, 1032], [0, 122, 960], [0, 4, 1066], [0, 198, 1143], [0, 299, 1102], [0, 350, 1117],
-    #          [0, 446, 1118], [0, 423, 1159], [0, 464, 815], [0, 244, 640]])
+    #           [0, 446, 1118], [0, 423, 1159], [0, 464, 815], [0, 244, 640]])
     if indices is None:
         indices = ast.literal_eval(i)
     indices = np.array(indices)
@@ -428,14 +514,34 @@ if __name__ == '__main__':
     static_data_p = volume_path + add_input + 'input_' + dataset + '.h5'
 
     # segmenation
+
+    # nn_ws_seg_p = '../data/nets/%s/validation_%s/slice_concat.h5' % (network, net_file)
+    # std_ws_seg_p = '../data/nets/%s/validation_%s/baseline_concat.h5' % (network, net_file)
+
     nn_ws_seg_p = '../data/nets/%s/validation_%s/fixed_slice_concat.h5' % (network, net_file)
-    nn_hm_p = '../data/nets/%s/validation_%s/height_concat.h5' % (network, net_file)
     std_ws_seg_p = '../data/nets/%s/validation_%s/fixed_baseline_concat.h5' % (network, net_file)
+    nn_hm_p = '../data/nets/%s/validation_%s/height_concat.h5' % (network, net_file)
+    nn_hm_p = '../data/nets/%s/validation_%s/pred_nq_path_concat.h5' % (network, net_file)
     gt_seg_p = volume_path + 'fixed_label_' + dataset + '.h5'
     pad = 70 / 2
     n_plots = 150
 
-    slices = [13]         # for network file
+    slices = [39, 116, 51]#[39, 116, 51]#[20,39,116,121,126]#[116]#[20,39,116,121,126]#range(150)         # for network file
+    xel = 75
+    yel = 250
+    x, y = 210, 210
+
+    # cdict = [{'x': 210, 'y': 210, 'xel': 75, 'yel': 250}] #20
+    #cdict = [{'x': 210, 'y': 210, 'xel': 75, 'yel': 250}] #39
+    # cdict = [{'x': 450, 'y': 800, 'xel': 250, 'yel': 75}] #116
+    # cdict = [{'x': 800, 'y': 800, 'xel': 250, 'yel': 125}]   #39
+    # cdict = [{'x': 800, 'y': 260, 'xel': 150, 'yel': 150}]   #51
+    # cdict = [{'x': 300, 'y': 500, 'xel': 150, 'yel': 150}] #13
+    cdict = [{'x': 210, 'y': 210, 'xel': 75, 'yel': 250},
+             {'x': 450, 'y': 800, 'xel': 250, 'yel': 75},
+             {'x': 800, 'y': 260, 'xel': 150, 'yel': 150}]
+
+
 
     # slices = [138, 96, 51, 50, 52]      # cherry slices for comparison, 51 current favorite
     # slices = [24, 82, 83, 81, 93, 97]     # our best nns, 83 steffens favourite
@@ -473,16 +579,25 @@ if __name__ == '__main__':
     #            data=std_ws_seg, overwrite='w')
     # dp.save_h5(volume_path + 'fixed_label_' + dataset + '.h5', 'data', data=gt_seg, overwrite='w')
 
+    # exit()
+
+    sm = du.SeedMan()
+    all_seeds = []
+    for z, label_slice in enumerate(gt_seg):
+        seeds = sm.get_seed_coords_gt(np.copy(label_slice), minsize=5)
+        all_seeds.append(seeds)
 
     make_cremi_data_plot(gt_seg, std_ws_seg,
                        nn_ws_seg, None,
                        slices=slices,
                        criterum='diff',           # best_nn_ws, diff, worst_best
-                       indices=indices)                # which processes (ids) to select from image
+                        seeds=all_seeds,
+                       indices=indices,
+                        coords=cdict)                # which processes (ids) to select from image
 
 
 
-    make_network_plot(gt_seg, nn_ws_seg, std_ws_seg, nn_hm_p,
-                      slices=slices,
-                      # thresh=16.1) # percent of total height
-                      thresh=3.2) # percent of total height
+    # make_network_plot(gt_seg, nn_ws_seg, std_ws_seg, nn_hm_p,
+    #                   slices=slices,
+    #                   # thresh=16.1) # percent of total height
+    #                   thresh=3.2) # percent of total height

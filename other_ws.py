@@ -59,7 +59,8 @@ class PWS(Watershednator):
             seg = np.array(cv2.imread(self.tmp_path + 'seg.ppm'), dtype=np.uint64)
             self.exception_counter = 0
         except:
-            if self.exception_counter < 10:
+            self.exception_counter += 1
+            if self.exception_counter < 100:
                 self.load_from_pgm()
             else:
                 exit()
@@ -86,6 +87,7 @@ class PWS(Watershednator):
         super(PWS, self).do_ws(image, label_image=label_image)
         self.convert_data_to_pgm()
         self.execute_PWS()
+        self.exception_counter = 0
         self.load_from_pgm()
         return self.seg
 
@@ -129,9 +131,10 @@ class EvaluateWSs(object):
                 for z in range(n_z):
                     seg = ws.do_ws(self.edges[z], self.label[z])
                     segs.append(seg[:, :, 0])
+                print 'segs', seg[:, :, 0].shape
                 score, rand_score, _, _ = validate_segmentation(np.array(segs), self.label,
                                                                 resolution=1, border_thresh=2,
-                                              verbose=False)
+                                              verbose=True)
                 print 'rand score', rand_score
                 if rand_score < best_scores[num]:
                     bests_edges[num] = self.edges
@@ -160,20 +163,21 @@ class EvaluateWSs(object):
             ax[2, 1].imshow(bests_edges[2][0], interpolation='none', cmap='gray')
             ax[2, 2].imshow(bests_segs[1][0], interpolation='none')
         plt.show()
-        dp.save_h5('../data/tmp/best_edges_sig6', 'data', data=bests_edges[0])
-        dp.save_h5('../data/tmp/best_seg_sig6', 'data', data=bests_segs[0])
+        # dp.save_h5('../data/tmp/best_edges_sig6.h5', 'data', data=bests_edges[0], overwrite='w')
+        # dp.save_h5('../data/tmp/best_seg_sig6.h5', 'data', data=bests_segs[0], overwrite='w')
 
 if __name__ == '__main__':
     label = np.ones((2, 100, 100))
     label[:, 50:100] = 2
     raw = np.zeros((2, 100, 100))
     raw[:, 50:52, :] = 1.
+    pad = 35
 
-    raw = dp.load_h5('./../data/volumes/toy_nh0_sig6_edges_valid.h5', 'data')[0][:, 0]
-    print 'raw', raw.shape
+    raw = dp.load_h5('./../data/volumes/toy_nh0_sig9_edges_valid.h5', 'data')[0][:, 0, pad:-pad, pad:-pad]
     #raw = dp.load_h5('./../data/volumes/toy_nh0_sig6_edges_valid.h5', 'data')[0][:, 0]
-   # raw = dp.load_h5('./../data/volumes/input_toy_nh0_sig6_valid.h5', 'data')[0][:, 0]
-    label = dp.load_h5('./../data/volumes/label_toy_nh0_sig6_valid.h5', 'data')[0]
+    # raw = dp.load_h5('./../data/volumes/input_toy_nh0_sig9_valid.h5', 'data')[0][:, 0, pad:-pad, pad:-pad]
+    label = dp.load_h5('./../data/volumes/label_toy_nh0_sig6_valid.h5', 'data')[0][:, pad:-pad, pad:-pad]
+    print 'raw', raw.shape
     print label.shape
     # exit()
 
