@@ -11,19 +11,19 @@ import ast
 from scipy import ndimage
 import utils as u
 
+def get_color_maps():
+    rand_nums = np.random.rand(256, 3)
+    rand_nums[:, 0] /= 100    # remove bright red colors from rgb
+    rcmap = matplotlib.colors.ListedColormap(rand_nums)
 
-rand_nums = np.random.rand(256, 3)
-rand_nums[:, 0] /= 100    # remove bright red colors from rgb
-rcmap = matplotlib.colors.ListedColormap(rand_nums)
+    red_nums = np.zeros((256, 3))
+    red_nums[:, 0] = np.random.uniform(0.7, 1, size=256)
+    redcmap = matplotlib.colors.ListedColormap(red_nums)
 
-red_nums = np.zeros((256, 3))
-red_nums[:, 0] = np.random.uniform(0.7, 1, size=256)
-redcmap = matplotlib.colors.ListedColormap(red_nums)
-
-green_nums = np.zeros((256, 3))
-green_nums[:, 1] = np.random.uniform(0.7, 1, size=256)
-greencmap = matplotlib.colors.ListedColormap(green_nums)
-
+    green_nums = np.zeros((256, 3))
+    green_nums[:, 1] = np.random.uniform(0.7, 1, size=256)
+    greencmap = matplotlib.colors.ListedColormap(green_nums)
+    return rcmap, redcmap, greencmap
 
 def find_best_cherry(gt_seg, std_ws_seg, nn_ws_seg, criterium='diff'):
     # splits, merges, are, prec, rec
@@ -121,8 +121,6 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
     static_data = dp.load_h5(static_data_p, slices=slices)[0][:, :, pad:-pad, pad:-pad]
     nn_hm = dp.load_h5(nn_hm_p, slices=slices)[0]
 
-
-
     print 'worst best std', bnn_wss
 
     tri_mask = np.zeros(static_data[0, 0, :, :].shape, dtype=np.bool)
@@ -131,79 +129,83 @@ def make_toy_data_plot(gt_seg, std_ws_seg, nn_ws_seg, best_edges, nn_hm,
     tri_l_mask = tri_mask.copy()
     tri_mask = np.fliplr(tri_mask)
 
-
     # gs1 = gridspec.GridSpec(0.5, 0.5)
     # gs1.update(wspace=0.025, hspace=0.05)  # set the spacing between axes.
+    if seeds is not None:
+        seeds = np.array(seeds[0])
 
-    for i in range(n_plots):
-        fig, ax = plt.subplots(1, 4)
-        fig.canvas.set_window_title('i_%i_real slice %i' %(i, bnn_wss[i]))
-        fig.tight_layout()
-
-        ax = u.make_axis_great_again(ax)
-
-        # normalize so colors are always the same
-        norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max((gt_seg[i], std_ws_seg[i], nn_ws_seg[i])))
-
-        nn = nn_ws_seg[i]
-
-        diag_image = static_data[i, 1, :, :]
-        diag_image /= np.max(diag_image)
-        diag_image[~tri_l_mask] = static_data[i, 0, :, :][~tri_l_mask]
-
-        print 'best edges', best_edges.shape, 'static', static_data.shape
-
-        # ax[0, 0].set_title('raw and edges')
-        ax[0, 0].imshow(diag_image, interpolation='none', cmap='gray')
-        ax[0, 0].axis('off')
-
-        # plt.savefig('../data/tmp/cherries_%i.pdf' % i, bbox_inches='tight')
-        # plt.show(block=False)
+    for j in range(10):
+        for i in range(n_plots):
+            rcmap, redcmap, greencmap = get_color_maps()
 
 
+            fig, ax = plt.subplots(1, 4)
+            fig.canvas.set_window_title('i_%i_real slice %i' % (i, bnn_wss[i]))
+            fig.tight_layout()
 
-        gt = norm(gt_seg[i].copy())
-        # ax[1, 0].set_title('gt')
-        # ax[0, 1].imshow(diag_image*256, interpolation='none', cmap='gray')
-        if seeds is not None:
-            print 'adding seeds'
+            ax = u.make_axis_great_again(ax)
 
-            seeds = np.array(seeds[0])
-            ax[1, 0].scatter(seeds[:, 1], seeds[:, 0])      # move one away from boundary for visibility
-        ax[1, 0].imshow(gt, interpolation='none', alpha=1)
-        ax[1, 0].axis('off')
+            # normalize so colors are always the same
+            norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max((gt_seg[i], std_ws_seg[i], nn_ws_seg[i])))
 
-        ws = norm(std_ws_seg[i].copy())
-        # errors = np.ma.masked_where(std_ws_seg[i] == gt_seg[i], ws)
-        # errorsnn = np.ma.masked_where(nn_ws_seg[i] == gt_seg[i], nn)
+            nn = nn_ws_seg[i]
 
-        # diag_image = best_edges[i, :, :]
-        # diag_image /= np.max(diag_image)
-        # diag_image[tri_mask] = static_data[i, 0, :, :][tri_mask]
+            diag_image = static_data[i, 1, :, :]
+            diag_image /= np.max(diag_image)
+            diag_image[~tri_l_mask] = static_data[i, 0, :, :][~tri_l_mask]
 
-        ax[2, 0].imshow(best_edges[i, :, :], interpolation='none', cmap='gray')
-        ax[2, 0].imshow(ws, interpolation='none', alpha=0.4)
-        # ax[1, 0].imshow(errorsnn, interpolation='none', cmap=greencmap, alpha=0.4)
-        # ax[1, 0].imshow(errors, interpolation='none', cmap=redcmap, alpha=0.4)
+            print 'best edges', best_edges.shape, 'static', static_data.shape
 
-        # ax[2, 0].set_title('std ws, Rand Error %.3f' % are_stdws[i])
-        ax[2, 0].axis('off')
+            # ax[0, 0].set_title('raw and edges')
+            ax[0, 0].imshow(diag_image, interpolation='none', cmap='gray')
+            ax[0, 0].axis('off')
 
-        ax[3, 0].imshow(nn_hm[i, :, :], interpolation='none', cmap='gray')
-        ax[3, 0].imshow(nn, interpolation='none', alpha=0.4)
-        # ax[1, 1].imshow(errorsnn, interpolation='none', cmap=redcmap, alpha=0.4)
-        # ax[3, 0].set_title('nn ws, Rand Error %.3f' % are_nnws[i])
-        ax[3, 0].axis('off')
-        print 'enter in style[[2, 726, 340], [2, 726, 340]]'
-        plt.savefig('../data/tmp/cherries_toyi.pdf', bbox_inches='tight')
-        plt.show()
+            # plt.savefig('../data/tmp/cherries_%i.pdf' % i, bbox_inches='tight')
+            # plt.show(block=False)
+
+
+
+            gt = norm(gt_seg[i].copy())
+            # ax[1, 0].set_title('gt')
+            # ax[0, 1].imshow(diag_image*256, interpolation='none', cmap='gray')
+            if seeds is not None:
+                print 'adding seeds'
+
+                ax[1, 0].scatter(seeds[:, 1], seeds[:, 0])
+            ax[1, 0].imshow(gt, interpolation='none', alpha=1, cmap=rcmap)
+            ax[1, 0].axis('off')
+
+            ws = norm(std_ws_seg[i].copy())
+            # errors = np.ma.masked_where(std_ws_seg[i] == gt_seg[i], ws)
+            # errorsnn = np.ma.masked_where(nn_ws_seg[i] == gt_seg[i], nn)
+
+            # diag_image = best_edges[i, :, :]
+            # diag_image /= np.max(diag_image)
+            # diag_image[tri_mask] = static_data[i, 0, :, :][tri_mask]
+
+            ax[2, 0].imshow(best_edges[i, :, :], interpolation='none', cmap='gray')
+            ax[2, 0].imshow(ws, interpolation='none', alpha=0.4, cmap=rcmap)
+            # ax[1, 0].imshow(errorsnn, interpolation='none', cmap=greencmap, alpha=0.4)
+            # ax[1, 0].imshow(errors, interpolation='none', cmap=redcmap, alpha=0.4)
+
+            # ax[2, 0].set_title('std ws, Rand Error %.3f' % are_stdws[i])
+            ax[2, 0].axis('off')
+
+            ax[3, 0].imshow(nn_hm[i, :, :], interpolation='none', cmap='gray')
+            ax[3, 0].imshow(nn, interpolation='none', alpha=0.4, cmap=rcmap)
+            # ax[1, 1].imshow(errorsnn, interpolation='none', cmap=redcmap, alpha=0.4)
+            # ax[3, 0].set_title('nn ws, Rand Error %.3f' % are_nnws[i])
+            ax[3, 0].axis('off')
+            print 'enter in style[[2, 726, 340], [2, 726, 340]]'
+            plt.savefig('../data/tmp/cherries_toyi_color_%i.pdf' % j, bbox_inches='tight')
+            plt.show()
 
     # i = raw_input()     # enter in style[[2, 726, 340], [2, 726, 340]]
     # i = str([[2, 460, 110], [2, 470, 305], [2, 685, 1124]])
     # i = str([[0, 470, 305]])      cherry for 51 comparison
     # i = str([[3, 66, 465]])
     # i = str([[0, 95, 900], [0, 440, 995]])
-     i = str([[0, 476, 1032], [0, 122, 960], [0, 4, 1066], [0, 198, 1143], [0, 299, 1102], [0, 350, 1117],
+    i = str([[0, 476, 1032], [0, 122, 960], [0, 4, 1066], [0, 198, 1143], [0, 299, 1102], [0, 350, 1117],
               [0, 446, 1118], [0, 423, 1159], [0, 464, 815], [0, 244, 640]])
     if indices is None:
         indices = ast.literal_eval(i)

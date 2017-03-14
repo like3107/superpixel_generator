@@ -949,6 +949,62 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
                         # verbose = True
                         embed()
             # embed()
+
+
+class StaticFCFinePokemonTrainer(FCRecFinePokemonTrainer):
+    def define_loss(self):
+        self.loss = self.builder.get_loss('updates_hydra_v8_static')
+
+
+    def update_BM(self, bm=None):
+        if bm is None:
+            bm = self.bm
+        inputs, gt, centers, ids, hiddens = bm.get_batches()
+        centers = np.array(centers, dtype=np.int)
+        precomp_input_sliced = np.zeros((bm.bs *4)).astype(np.float32)
+        for b, seed in enumerate(centers):
+            if ids[b] is not None:
+                cross_x, cross_y, _ = bm.get_cross_coords(seed)
+                # + 1 because we face the FOV for the BM + 2 because the cross is a inherent FC conv formulation
+                precomp_input_sliced[b*4:(b+1)*4] = \
+                                self.precomp_input[b, 0, cross_x - bm.pad+1,
+                                                         cross_y - bm.pad+1]
+        sequ_len = 2
+        height_probs = precomp_input_sliced
+
+        hidden_new = np.zeros((bm.bs, 4, self.options.n_recurrent_hidden))
+
+        height_probs = height_probs.reshape((bm.bs, 4))
+        bm.update_priority_queue(height_probs, centers, ids, hidden_states=hidden_new)
+
+    def path_training(self):
+        self.err_b_counter += 1
+
+        batch_ft, batch_mask_ft, batch_inits, grad_weights = \
+            self.bm.reconstruct_path_batch(backtrace_length=self.options.backtrace_length)
+
+        # pad the fov and cut it away again to not change net
+        batch_ft = batch_ft[::self.options.backtrace_length,
+                                   self.options.claim_channels:, :, :]
+        outs = self.builder.loss_instance_f(batch_ft, grad_weights[::self.options.backtrace_length])
+        # print outs
+        # print grad_weights
+        # print outs*grad_weights
+        ft_loss_train, grad_mean, grad_std = outs[:3]
+        grads_new = outs[3:]
+
+        if self.grads_sum is None:
+            self.grads_sum = [np.array(g, dtype=np.float32) for g in grads_new]
+        else:
+            for g, gn in zip(self.grads_sum, grads_new):
+                g += gn
+        return grad_mean, grad_std
+
+    def init_BM(self):
+        self.BM = du.HoneyBatcherRec
+        self.images_counter = -1
+
+
 class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
     def __init__(self, options):
         super(FCRecMasterFinePokemonTrainer, self).__init__(options)
@@ -1168,6 +1224,7 @@ class RecurrentTrainer(FCFinePokemonTrainer):
 
 if __name__ == '__main__':
     options = get_options()
+    options.static = False
     # pret
     if options.net_arch == 'net_v8_dilated':
         trainer = GottaCatchemAllTrainer(options)
@@ -1201,6 +1258,30 @@ if __name__ == '__main__':
                 last_val_epoch = trainer.epoch
                 trainer.validate()
         trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
+    elif options.net_arch == 'v8_hydra_dilated_ft_joint_static':
+        options.net_arch = 'net_v8_dilated'
+        options.static = True
+        options.fc_prec = True
+
+
+        print "using normal trainer"
+        trainer = StaticFCFinePokemonTrainer(options)
+
+        if trainer.val_bm is not None:
+            if 'CREMI' in options.input_data_path:
+                trainer.val_bm.set_preselect_batches([12, 101, 53, 98, 138, 60, 20, 131, 35, 119][:trainer.val_bm.bs])
+
+        last_val_epoch = 0
+        while not trainer.converged():
+            trainer.train()
+            if trainer.val_bm is not None \
+                                and not options.master_training\
+                                and trainer.epoch % options.save_counter == 0 \
+                                and trainer.epoch != last_val_epoch:
+                last_val_epoch = trainer.epoch
+                trainer.validate()
+        trainer.save_net(path=trainer.net_param_path, name='pretrain_final.h5')
+
     # elif options.net_arch == 'v8_hydra_dilated_ft_joint':
     #     # from pycallgraph import PyCallGraph
     #     # from pycallgraph.output import GraphvizOutput

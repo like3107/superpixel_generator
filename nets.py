@@ -46,8 +46,12 @@ class NetBuilder:
         print 'building static net'
         n_channels = self.options.network_channels
         layers = {}
-        fov = 69
-        self.fov = 69
+        if self.options.static:
+            fov = 69+2
+            self.fov = 69 + 2
+        else:
+            fov = 69
+            self.fov = 69
         n_classes = 1
         r = self.options.feature_map_size_reduction
         n_hidd = self.options.n_recurrent_hidden
@@ -196,6 +200,86 @@ class NetBuilder:
         self.layers_static = layers_static
         return layers, fov, None
 
+
+    # static and dyn FT NET
+    def build_v8_hydra_dilated_ft_joint_static(self, l_image_in=None, l_claims_in=None):
+        print 'building recurrent joint net'
+        layers_static, fov, _ = self.build_net_v8_dilated(l_image_in=l_image_in)
+        self.layers_static = layers_static
+        if not self.options.load_net_b and self.options.load_init_net_path != 'None':
+            u.load_network(self.options.load_init_net_path, layers_static['l_out_cross'])
+
+        # transfer copied layers to new dictionary
+        layers = {}
+        for layer_old_key in layers_static.iterkeys():
+            if 'conv' in layer_old_key:
+                layers['static_' + layer_old_key] = layers_static[layer_old_key]
+        layers['l_in_static_00'] = layers_static['l_in_00']
+        # print 'layers', layers
+        # build dynamic net bottom
+        self.fov = 69 + 2
+        n_classes = 1
+
+        # replace this for single cut during ft training here prediction
+        # layers['Cross_slicer'] = cs.CrossSlicer(layers['dyn_conv_04'])
+        layers['Cross_slicer_stat'] = cs.CrossSlicer(layers_static['conv_06'])
+
+        # get last output of claims and static input net
+        layers['l_merge_05'] = layers['Cross_slicer_stat']
+
+        # debug
+        r = self.options.feature_map_size_reduction
+        rec_hidden = self.options.n_recurrent_hidden
+        W_fc_07_stat = np.random.random((2048/r, 256/r+rec_hidden, 1, 1)).astype('float32') / 10000.
+        W_fc_07_stat[:, :-rec_hidden, 0, 0] = np.array(layers_static['fc_07'].W.eval()).swapaxes(0, 1)[:, :, 0, 0]
+        layers['fc_06'] = L.Conv2DLayer(layers['l_merge_05'], 2048/r, filter_size=1, name='fc',
+                                        W=shared(W_fc_07_stat.astype(np.float32)),
+                                        b=shared(layers_static['fc_07'].b.eval()),
+                                        nonlinearity=las.nonlinearities.rectify)
+
+
+        # recurrent
+        self.sequ_len = T.iscalar()
+        layers['l_shuffle'] = L.DimshuffleLayer(layers['fc_06'], (0, 2, 3, 1))
+        layers['l_resh_pred_07'] = L.ReshapeLayer(layers['l_shuffle'], (-1, self.sequ_len, 2048/r))
+
+        layers['l_in_hid_08'] = L.InputLayer((None, rec_hidden))
+        layers['l_in_rec_mask_08'] = L.InputLayer((None, self.options.backtrace_length))
+
+        W_hid_to_hid_cell = shared(np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.)
+        layers['l_recurrent_09'] = L.GRULayer(
+                    layers['l_resh_pred_07'], rec_hidden,
+                    hid_init=layers['l_in_hid_08'],
+                    mask_input=layers['l_in_rec_mask_08'],
+                    hidden_update=L.Gate(W_in=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
+                                         W_hid=W_hid_to_hid_cell, b=shared(layers_static['fc_08'].b.eval()),
+                                         nonlinearity=las.nonlinearities.rectify),
+                    updategate=L.Gate(b=las.init.Constant(2.)),
+                    only_return_final=False)
+
+        # W_hid_to_hid = np.random.random((rec_hidden, rec_hidden)).astype('float32') / 10000.
+        # layers['l_recurrent_09'] = L.RecurrentLayer(layers['l_resh_pred_07'], rec_hidden,
+        #                                              hid_init=layers['l_in_hid_08'],
+        #                                              mask_input=layers['l_in_rec_mask_08'],
+        #                                              W_in_to_hid=shared(layers_static['fc_08'].W[:, :, 0, 0].eval()),
+        #                                              W_hid_to_hid=shared(W_hid_to_hid),
+        #                                              b=shared(layers_static['fc_08'].b.eval()),
+        #                                              only_return_final=False,
+        #                                              nonlinearity=las.nonlinearities.rectify)
+        #
+        layers['l_reshape_fc_10'] = L.ReshapeLayer(layers['l_recurrent_09'], (-1, rec_hidden))
+        # last layer
+        layers['l_out_cross'] = L.DenseLayer(layers['l_reshape_fc_10'], 1, name='fc',
+                                             W=shared(layers_static['l_out_cross'].W[:, :, 0, 0].eval()),
+                                             b=shared(layers_static['l_out_cross'].b.eval()),
+                                             nonlinearity=cs.elup1)
+        layers['l_out_cross'].params[layers['l_out_cross'].W].remove('regularizable')
+        self.layers = layers
+        # debug
+        self.layers_static = layers_static
+        return layers, fov, None
+
+
     def loss_updates_probs_v0(self, layers, target, L1_weight=10**-5, update='nesterov'):
         all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
 
@@ -326,6 +410,69 @@ class NetBuilder:
 
         return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
+    def loss_updates_hydra_v8_static(self, layers, L1_weight=10 ** -5, margin=0):
+
+        # theano funcs
+        # precompute convs on raw till dense layer
+        out_precomp = L.get_output(layers['l_out_cross'], deterministic=True)
+        self.fc_prec_conv_body = theano.function([layers['l_in_00'].input_var], out_precomp)
+        self.probs_f = self.fc_prec_conv_body
+
+        # l_out_old = L.get_output(self.layers['l_out_cross'], deterministic=True)
+        # self.old_f = theano.function([self.layers['l_in_00'].input_var], [l_out_old])
+        # on_unused_input='ignore')
+
+        # disconnect graph temporarely
+
+        # l_out_prediciton_prec = L.get_output(layers['l_out_cross'], deterministic=True)
+        # l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+
+        # debug
+        # befo_rec = L.get_output(layers['l_resh_pred_07'], deterministic=True)
+
+        self.probs_f_fc = None
+
+        l_out_prediciton = L.get_output(layers['l_out_cross'], deterministic=True)
+        l_out_train = L.get_output(layers['l_out_cross'], deterministic=False)
+
+
+
+
+        all_params = L.get_all_params(layers['l_out_cross'], trainable=True)
+
+        weight_vector = T.fvector()
+        # loss_train, individual_batch, loss_valid = self.get_loss_fct(layers, self.options.backtrace_length,
+        #                                                              l_out_train, mask, L1_weight,
+        #                                                              weight_vector=weight_vector)
+
+        # grads_mean = T.mean(T.stacklists([T.mean(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        # grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))
+        # grads = theano.grad(loss_train, all_params)
+
+        # self.loss_train_fine_f = theano.function([layers['l_in_dyn_00'].input_var,
+        #                                           layers['l_in_static_00'].input_var,
+        #                                           layers['l_in_hid_08'].input_var,
+        #                                           layers['l_in_rec_mask_08'].input_var,
+        #                                           self.sequ_len, weight_vector],
+        #                                          [loss_train, individual_batch, l_out_prediciton,
+        #                                           grads_mean, grads_std] + grads,
+        #                                           on_unused_input='ignore')
+
+        self.get_instance_loss_fct(layers, self.options.backtrace_length,
+                                   l_out_train, None, L1_weight, all_params,
+                                   weight_vector=weight_vector, static=True)
+        # l_out_hidden = L.get_output(layers['l_recurrent_09'], deterministic=True)
+        # self.hidden_f = theano.function([layers['l_in_dyn_00'].input_var, layers['l_in_static_00'].input_var,
+        #                                 layers['l_in_hid_08'].input_var, layers['l_in_rec_mask_08'].input_var,
+        #                                 self.sequ_len],
+        #                                [l_out_hidden])
+
+        symbolic_grad_params = [T.zeros_like(param) for param in all_params]
+        updates = self.get_update_rule(symbolic_grad_params, all_params, optimizer=self.options.optimizer)
+        self.apply_grads = theano.function(symbolic_grad_params, outputs=[], updates=updates)
+        assert (updates is not None)
+
+        return self.probs_f, self.fc_prec_conv_body, self.loss_train_fine_f, None, None
 
     def get_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, discount_factor=True,
                      weight_vector=1):
@@ -353,10 +500,10 @@ class NetBuilder:
         return loss_train, individual_batch, loss_valid
 
     def get_instance_loss_fct(self, layers, backtrace_length, l_out_train, mask, L1_weight, all_params,
-                     weight_vector):
-
-        bs = layers['l_in_dyn_00'].input_var.shape[0] / backtrace_length
-        step = backtrace_length
+                     weight_vector, static=False):
+        if not static:
+            bs = layers['l_in_static_00'].input_var.shape[0] / backtrace_length
+            step = backtrace_length
         sum_height = T.flatten(l_out_train) * weight_vector
 
         L1_norm = las.regularization.regularize_network_params(layers['l_out_cross'], las.regularization.l1)
@@ -372,13 +519,22 @@ class NetBuilder:
         grads_std = T.mean(T.stacklists([T.std(T.abs_(T.grad(loss_train, param))) for param in all_params]))
         grads = theano.grad(loss_train, all_params)
 
-        self.loss_instance_f = theano.function([layers['l_in_dyn_00'].input_var,
-                                                  layers['l_in_static_00'].input_var,
-                                                  layers['l_in_hid_08'].input_var,
-                                                  layers['l_in_rec_mask_08'].input_var,
-                                                  self.sequ_len, weight_vector],
-                                                  # [l_out_train], on_unused_input='ignore')
-                                                 [loss_train, grads_mean, grads_std] + grads)
+        if static:
+            print 'using static loss instance'
+            self.loss_instance_f = theano.function([layers['l_in_00'].input_var,
+                                                    weight_vector],
+                                               # [l_out_train], on_unused_input='ignore')
+                                               [loss_train, grads_mean, grads_std] + grads)
+
+        else:
+            print 'using dynamic loss instance'
+            self.loss_instance_f = theano.function([layers['l_in_dyn_00'].input_var,
+                                                      layers['l_in_static_00'].input_var,
+                                                      layers['l_in_hid_08'].input_var,
+                                                      layers['l_in_rec_mask_08'].input_var,
+                                                      self.sequ_len, weight_vector],
+                                                      # [l_out_train], on_unused_input='ignore')
+                                                     [loss_train, grads_mean, grads_std] + grads)
         self.loss_train_fine_f = None
 
 

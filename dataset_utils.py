@@ -1650,10 +1650,14 @@ class HoneyBatcherRec(HoneyBatcherPath):
 
     def get_batches(self):
         raw_batch, gts, centers, ids = super(HoneyBatcherRec, self).get_batches()
-        hiddens = np.zeros((self.bs,  self.n_recurrent_hidden), dtype='float32')
-        # load hidden states
-        for b, center in enumerate(centers):
-            hiddens[b] = self.get_hidden(b, center)
+        if not self.options.static:
+
+            hiddens = np.zeros((self.bs,  self.n_recurrent_hidden), dtype='float32')
+            # load hidden states
+            # for b, center in enumerate(centers):
+            #     hiddens[b] = self.get_hidden(b, center)
+        else:
+            hiddens = 0
         return raw_batch, gts, centers, ids, hiddens
 
     def reverse_path(self, path, mask_key):
