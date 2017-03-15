@@ -584,8 +584,8 @@ class FCRecFinePokemonTrainer(FCFinePokemonTrainer):
         self.free_voxel = self.free_voxel_empty
         inputs = self.update_BM_FC()
         # precompute fc partf
-        print inputs.shape
         self.precomp_input = self.builder.fc_prec_conv_body(inputs)
+        print 'prec input', self.precomp_input.shape, 'nput',  inputs.shape
         # self.bm.initialize_hiddens(self.builder.hidden_f)
 
         self.images_counter += 1
@@ -1004,6 +1004,43 @@ class StaticFCFinePokemonTrainer(FCRecFinePokemonTrainer):
         self.BM = du.HoneyBatcherRec
         self.images_counter = -1
 
+    def validate(self):
+        self.val_bm.init_batch()
+
+        timo_seg = self.val_bm.get_ws_segmentation()
+        print "timo reference validation score"
+        vs.validate_segmentation(timo_seg, self.val_bm.global_label_batch)
+
+        inputs = self.val_bm.global_input_batch[:, :, :-1, :-1]
+        print 'val bm ', inputs.shape
+        self.precomp_input = self.builder.fc_prec_conv_body(inputs)
+
+        total_free_voxel = self.val_bm.get_num_free_voxel()
+        bar = progressbar.ProgressBar(max_value=total_free_voxel)
+        for i in range(total_free_voxel):
+            self.update_BM(bm=self.val_bm)
+            bar.update(i)
+
+        cremi_score, rand_error, _, _ = vs.validate_segmentation(self.val_bm.global_claims[:,
+                                                                 self.val_bm.pad:-self.val_bm.pad,
+                                                                 self.val_bm.pad:-self.val_bm.pad],
+                                                                 self.val_bm.global_label_batch)
+
+        self.val_loss_history[0].append(rand_error)
+        self.val_loss_history[1].append(cremi_score)
+        self.val_update_history.append(self.images_counter)
+
+        u.plot_val_errors([self.val_loss_history[0],
+                           self.val_loss_history[1]],
+                          self.val_update_history,
+                          self.save_net_path + '/validation.png',
+                          names=['Adapted Rand error', 'Adapted Rand error precision'])
+        for b in range(self.val_bm.bs):
+            self.val_bm.draw_debug_image("%i_validation_b_%03i_i_%08i_f_%i" % (b, 0, self.iterations, self.free_voxel),
+                                         path=self.image_path_validation, b=b)
+
+        return rand_error
+
 
 class FCRecMasterFinePokemonTrainer(FCRecFinePokemonTrainer):
     def __init__(self, options):
@@ -1261,6 +1298,7 @@ if __name__ == '__main__':
     elif options.net_arch == 'v8_hydra_dilated_ft_joint_static':
         options.net_arch = 'net_v8_dilated'
         options.static = True
+        options.val_options.static = True
         options.fc_prec = True
 
 
