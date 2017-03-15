@@ -13,7 +13,7 @@ import utils as u
 
 def get_color_maps():
     rand_nums = np.random.rand(256, 3)
-    rand_nums[:, 0] /= 100    # remove bright red colors from rgb
+    # rand_nums[:, 0] /= 100    # remove bright red colors from rgb
     rcmap = matplotlib.colors.ListedColormap(rand_nums)
 
     red_nums = np.zeros((256, 3))

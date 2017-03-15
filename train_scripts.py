@@ -984,9 +984,10 @@ class StaticFCFinePokemonTrainer(FCRecFinePokemonTrainer):
             self.bm.reconstruct_path_batch(backtrace_length=self.options.backtrace_length)
 
         # pad the fov and cut it away again to not change net
-        batch_ft = batch_ft[::self.options.backtrace_length,
+        batch_ft = batch_ft[self.options.backtrace_length-1::self.options.backtrace_length,
                                    self.options.claim_channels:, :, :]
-        outs = self.builder.loss_instance_f(batch_ft, grad_weights[::self.options.backtrace_length])
+        outs = self.builder.loss_instance_f(batch_ft,
+                                            grad_weights[self.options.backtrace_length-1::self.options.backtrace_length])
         # print outs
         # print grad_weights
         # print outs*grad_weights

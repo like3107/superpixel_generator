@@ -153,6 +153,7 @@ def get_options(script='training', ignore_config=False):
 
 
     options = p.parse_args()
+    options.static = False
 
     # options.slices = range(2000)
     # options.fc_prec = False
