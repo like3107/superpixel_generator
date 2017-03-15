@@ -15,7 +15,10 @@ def pred_wrapper(options, slices, gpu):
     from data_provider import save_h5
     options.gpu = gpu
     options.slices = slices
-    pred = evaluate_net.Predictor(options)
+    # tmp change back
+    # pred = evaluate_net.Predictor(options)
+
+    pred = evaluate_net.StaticPredictor(options)
     pred.predict()
 
     if not options.fully_conf_valildation_b:
@@ -84,7 +87,9 @@ if __name__ == '__main__':
         for x in range(2):
             print "WARNING edge length is not set to 0. Are you sure ?"
             time.sleep(0.1)
-
+    # tmp remove
+    options.static=True
+    options.network_architecture = 'v8_hydra_dilated_ft_joint_static'
     time.sleep(1)
 
     # loop over slices

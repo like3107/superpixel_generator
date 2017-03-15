@@ -37,12 +37,35 @@ class Predictor(train_scripts.FCRecFinePokemonTrainer):
             self.update_BM()
             # self.save_net()
 
-            if self.free_voxel % ((self.free_voxel_empty-1) / 5) == 0:
+            if self.free_voxel % ((self.free_voxel_empty-1) / 2 ) == 0:
                 self.draw_debug(image_path=self.options.validation_save_path + '/images/' + 'slice_%04i' %
                                                                                             self.options.slices[0])
             if self.free_voxel % 100 == 0:
                 bar.update(self.free_voxel_empty - self.free_voxel)
         # save to h5
+
+class StaticPredictor(Predictor):
+    def define_loss(self):
+        self.loss = self.builder.get_loss('updates_hydra_v8_static')
+
+    def update_BM(self, bm=None):
+        if bm is None:
+            bm = self.bm
+        inputs, gt, centers, ids, hiddens = bm.get_batches()
+        centers = np.array(centers, dtype=np.int)
+        precomp_input_sliced = np.zeros((bm.bs * 4)).astype(np.float32)
+        for b, seed in enumerate(centers):
+            if ids[b] is not None:
+                cross_x, cross_y, _ = bm.get_cross_coords(seed)
+                # + 1 because we face the FOV for the BM + 2 because the cross is a inherent FC conv formulation
+                precomp_input_sliced[b * 4:(b + 1) * 4] = \
+                    self.precomp_input[b, 0, cross_x - bm.pad + 1,
+                                       cross_y - bm.pad + 1]
+        height_probs = precomp_input_sliced
+
+        hidden_new = np.zeros((bm.bs, 4, self.options.n_recurrent_hidden))
+        height_probs = height_probs.reshape((bm.bs, 4))
+        bm.update_priority_queue(height_probs, centers, ids, hidden_states=hidden_new)
 
 
 class GottaCatchemAllPredictor(train_scripts.GottaCatchemAllTrainer):
