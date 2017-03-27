@@ -23,7 +23,7 @@ sl = 1
 
 
 def msf_plot_i(args):
-    zoom, i, time = args
+    zoom, i, time, n_times = args
     BM_FILE = '../data/nets/full_validation_path_01/validation_0/bm_116_116.h5'
     # BM_FILE = '../data/nets/fig1_draw_29_without_min/pretrain/serial_00447999'
 
@@ -49,7 +49,7 @@ def msf_plot_i(args):
 
     with h.File(BM_FILE,'r') as h5f:
         times = sorted(h5f['global_timemap'][b, fov+ROI[0][0]+1:ROI[0][1]+fov-1, ROI[1][0]+fov+1:ROI[1][1]+fov-1].flatten())
-        print 'current step i %i out of %i in percent %f' % (i, len(times), float(i) / len(times) * 100)
+        print 'current step i %i out of %i in percent %f' % (i, len(times), float(i) / n_times * 100)
 
         # debug
         MAX_TIME = np.max(h5f['global_timemap'][b])
@@ -154,7 +154,7 @@ def msf_plot_i(args):
             # print np.unique(D_claims), CM([0,50,100])
             # print CM(masked_claims).shape, CM(np.unique(D_claims))
             ax.plot_surface(X, Y, Z_masked, rstride=8, cstride=8, alpha=1., facecolors=CM(D_claims), vmin=0, vmax=max_label)
-            elevation = 45. + 45. * float(i) / len(times)
+            elevation = 45. + 45. * float(i) / n_times
             print 'elevation', elevation
             ax.view_init(elev=elevation)
             ax.axis('off')
@@ -250,9 +250,10 @@ if __name__ == '__main__':
         # for i, time in enumerate(times):
 
         n_times = len(times)
-        args = [(zoom, i, time) for zoom, i, time in zip(n_times * [zoom],
+        args = [(zoom, i, time, n_t) for zoom, i, time, n_t in zip(n_times * [zoom],
                                                          range(n_times),
-                                                         times)]
+                                                         times,
+                                                         n_times * [n_times])]
         print 'list', args
 
         #debug
