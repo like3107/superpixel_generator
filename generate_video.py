@@ -39,7 +39,6 @@ def msf_plot_i(args):
 
     CM = u.random_color_map()
 
-    START_ZOOM_TIME = 120
     ZOOM_STEPS = 0.1
 
     FINAL_ZOOM = 6
@@ -56,7 +55,6 @@ def msf_plot_i(args):
         times = sorted(h5f['global_timemap'][b, fov+ROI[0][0]+1:ROI[0][1]+fov-1, ROI[1][0]+fov+1:ROI[1][1]+fov-1].flatten())
         print 'current step i %i out of %i in percent %f' % (i, len(times), float(i) / len(times) * 100)
 
-        times = times[:START_ZOOM_TIME] + times[START_ZOOM_TIME::25] + [np.max(h5f['global_timemap'][b])]
         # debug
         # times = times[:START_ZOOM_TIME:5] + times[START_ZOOM_TIME::50] + [np.max(h5f['global_timemap'][b])]
         # START_ZOOM_TIME /= 5
@@ -67,7 +65,7 @@ def msf_plot_i(args):
         claims = np.array(h5f['global_claims'])
         D_raw = np.array(h5f['global_input'][b, 0, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov])
         Z = np.min(h5f['global_prediction_map_nq'][b, ROI_DDD[0][0]:ROI_DDD[0][1], ROI_DDD[1][0]:ROI_DDD[1][1]], axis=2)
-        Z_total = np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2))
+        Z_total = np.log(np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2)))
         D_timemap = h5f['global_timemap'][b, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov]
         D_claims = claims[b, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov].astype(int)
         xlim, ylim = Z.shape
@@ -80,7 +78,7 @@ def msf_plot_i(args):
                 'size': 16,
                         }
 
-        max_label =  np.max(claims[b])
+        max_label = np.max(claims[b])
         if MSF_PLOT:
             if i > START_ZOOM_TIME and zoom < FINAL_ZOOM:
                 # zoom = 7 * float(i-START_ZOOM_TIME) / len(times) + 1
@@ -224,19 +222,26 @@ if __name__ == '__main__':
 
 
     STOP_TIME = 100
+    DDD_OUTPUT_PNG = "img/DDD_%08i.png"     # double
+    DDD_PLOT = True                         # dobule
 
+    START_ZOOM_TIME = 120
 
     MSF_PLOT = False
 
     ROI_DDD = get_new_roi(4)
     with h.File(BM_FILE,'r') as h5f:
         times = sorted(h5f['global_timemap'][b, fov+ROI[0][0]+1:ROI[0][1]+fov-1, ROI[1][0]+fov+1:ROI[1][1]+fov-1].flatten())
-        Z_total = np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2))
+        # Z_total = np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2))
+        times = times[:START_ZOOM_TIME] + times[START_ZOOM_TIME::25] + 100 * [np.max(h5f['global_timemap'][b])]
 
-    max_height = np.max(Z_total)
+    # max_height = np.max(Z_total)
     # times = times[0:START_ZOOM_TIME:1] + times[START_ZOOM_TIME:1000:10] + times[1000::30]
     # times = times[100:1000:10]
-    pool = Pool(5)
+
+
+    pool = Pool(8)
+
     with progressbar.ProgressBar(max_value=len(times)+STOP_TIME) as bar:
         # for i, time in enumerate(times):
 
@@ -257,6 +262,11 @@ if __name__ == '__main__':
                 call(["cp", HEIGHT_PNG%(len(times)-1), HEIGHT_PNG%ii])
                 call(["cp", COMBINED_PNG%(len(times)-1), COMBINED_PNG%ii])
                 bar.update(ii)
+
+        if DDD_PLOT:
+            for ii in range(len(times)-1,len(times)+100):
+                call(["cp", DDD_OUTPUT_PNG%(len(times)-1), DDD_OUTPUT_PNG%ii])
+
 
     if MSF_PLOT:
         call(["ffmpeg","-y","-i","img/test_%08d.png","img/MSF.mp4"])
