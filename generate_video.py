@@ -154,7 +154,9 @@ def msf_plot_i(args):
             # print np.unique(D_claims), CM([0,50,100])
             # print CM(masked_claims).shape, CM(np.unique(D_claims))
             ax.plot_surface(X, Y, Z_masked, rstride=8, cstride=8, alpha=1., facecolors=CM(D_claims), vmin=0, vmax=max_label)
-            ax.view_init(elev=45 + 45 * float(time) / MAX_TIME)
+            elevation = 45. + 45. * float(i) / len(times)
+            print 'elevation', elevation
+            ax.view_init(elev=elevation)
             ax.axis('off')
 
             fig.savefig(DDD_OUTPUT_PNG % i, bbox_inches='tight', dpi=200)
@@ -235,7 +237,7 @@ if __name__ == '__main__':
     with h.File(BM_FILE,'r') as h5f:
         times = sorted(h5f['global_timemap'][b, fov+ROI[0][0]+1:ROI[0][1]+fov-1, ROI[1][0]+fov+1:ROI[1][1]+fov-1].flatten())
         # Z_total = np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2))
-        times = times[:START_ZOOM_TIME][::20] + times[START_ZOOM_TIME::25] + 100 * [np.max(h5f['global_timemap'][b])]
+        times = times[:START_ZOOM_TIME][::50] + times[START_ZOOM_TIME::90] + 100 * [np.max(h5f['global_timemap'][b])]
 
     # max_height = np.max(Z_total)
     # times = times[0:START_ZOOM_TIME:1] + times[START_ZOOM_TIME:1000:10] + times[1000::30]
