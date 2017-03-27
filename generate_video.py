@@ -64,7 +64,7 @@ def msf_plot_i(args):
 
         claims = np.array(h5f['global_claims'])
         D_raw = np.array(h5f['global_input'][b, 0, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov])
-        Z = np.min(h5f['global_prediction_map_nq'][b, ROI_DDD[0][0]:ROI_DDD[0][1], ROI_DDD[1][0]:ROI_DDD[1][1]], axis=2)
+        Z = np.log(np.log(np.min(h5f['global_prediction_map_nq'][b, ROI_DDD[0][0]:ROI_DDD[0][1], ROI_DDD[1][0]:ROI_DDD[1][1]], axis=2)))
         Z_total = np.log(np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2)))
         D_timemap = h5f['global_timemap'][b, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov]
         D_claims = claims[b, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov].astype(int)
@@ -233,14 +233,14 @@ if __name__ == '__main__':
     with h.File(BM_FILE,'r') as h5f:
         times = sorted(h5f['global_timemap'][b, fov+ROI[0][0]+1:ROI[0][1]+fov-1, ROI[1][0]+fov+1:ROI[1][1]+fov-1].flatten())
         # Z_total = np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2))
-        times = times[:START_ZOOM_TIME] + times[START_ZOOM_TIME::25] + 100 * [np.max(h5f['global_timemap'][b])]
+        times = times[:START_ZOOM_TIME][::20] + times[START_ZOOM_TIME::90] + 100 * [np.max(h5f['global_timemap'][b])]
 
     # max_height = np.max(Z_total)
     # times = times[0:START_ZOOM_TIME:1] + times[START_ZOOM_TIME:1000:10] + times[1000::30]
     # times = times[100:1000:10]
 
 
-    pool = Pool(8)
+    pool = Pool(30)
 
     with progressbar.ProgressBar(max_value=len(times)+STOP_TIME) as bar:
         # for i, time in enumerate(times):
