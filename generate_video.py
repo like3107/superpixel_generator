@@ -61,8 +61,10 @@ def msf_plot_i(args):
 
         claims = np.array(h5f['global_claims'])
         D_raw = np.array(h5f['global_input'][b, 0, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov])
-        Z = np.min(h5f['global_prediction_map_nq'][b, ROI_DDD[0][0]:ROI_DDD[0][1], ROI_DDD[1][0]:ROI_DDD[1][1]], axis=2)
-        Z_total = np.log(np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2)))
+        Z = np.min(h5f['global_prediction_map_nq'][b, ROI_DDD[0][0]:ROI_DDD[0][1], ROI_DDD[1][0]:ROI_DDD[1][1]], axis=2)*10
+        Z_total = np.min(h5f['global_prediction_map_nq'][b], axis=2)
+
+
         D_timemap = h5f['global_timemap'][b, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov]
         D_claims = claims[b, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov].astype(int)
         xlim, ylim = Z.shape
@@ -148,19 +150,37 @@ def msf_plot_i(args):
             fig = plt.figure()
             ax = fig.gca(projection='3d')
             Z_masked = np.array(Z)
-            Z_masked[D_timemap > time] = np.nan
+            mask = D_timemap > time
+            Z_masked[mask] = np.nan
+
+            zmax = np.amax(Z_masked[~mask])
+
+            # magnitude = int(np.log(zmax)/np.log(1.2))
+            # print 'magnituede ', magnitude, zmax
+            # ax.axes.set_zlim([0, 1.2**(magnitude+2)])
+
+            # magnitude = zmax
+            # print 'magnituede ', magnitude, zmax
+
             masked_claims = get_masked_claims(h5f, ROI_DDD, time, None, crop_claim=D_claims)
-            ax.plot_surface(x, y, 0, rstride=1, cstride=1, facecolors=plt.cm.gray(D_raw))
+            ax.plot_surface(x, y, 0, rstride=2, cstride=2, facecolors=plt.cm.gray(D_raw))
             # print np.unique(D_claims), CM([0,50,100])
             # print CM(masked_claims).shape, CM(np.unique(D_claims))
-            ax.plot_surface(X, Y, Z_masked, rstride=8, cstride=8, alpha=1., facecolors=CM(D_claims), vmin=0, vmax=max_label)
-            elevation = 45. + 45. * float(i) / n_times
-            print 'elevation', elevation
+            ax.plot_surface(X, Y, Z_masked, rstride=2, cstride=2, alpha=1., facecolors=CM(D_claims), vmin=0, vmax=max_label)
+            elevation = 20.
+            if float(i) / n_times > 0.4:
+                elevation = 20. + 60. * ((float(i) / n_times) - 0.4)/0.6
+
+
+            # elevation = 60
             ax.view_init(elev=elevation)
-            ax.axis('off')
-
+            # ax.axis('off')
+            ax.axes.set_zlim([0, zmax*2 + 0.5])
+            ax.axes.set_xlim([0, 360])
+            ax.axes.set_ylim([0, 700])
+            print ax.axes.get_zlim()
             fig.savefig(DDD_OUTPUT_PNG % i, bbox_inches='tight', dpi=200)
-
+            plt.close()
 
 def get_masked_MSF(h5, roi, time, cm, max_label):
     # lines = [[(0, 1), (100, 100)], [(20, 30), (30, 30)], [(10, 20), (10, 30)]]
@@ -237,14 +257,17 @@ if __name__ == '__main__':
     with h.File(BM_FILE,'r') as h5f:
         times = sorted(h5f['global_timemap'][b, fov+ROI[0][0]+1:ROI[0][1]+fov-1, ROI[1][0]+fov+1:ROI[1][1]+fov-1].flatten())
         # Z_total = np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2))
-        times = times[:START_ZOOM_TIME][::50] + times[START_ZOOM_TIME::90] + 100 * [np.max(h5f['global_timemap'][b])]
+        print 'times total', len(times)
+        # exit()
+        times = times[::20] + 2 * [np.max(h5f['global_timemap'][b])]
+        # times = times[-30:]
 
     # max_height = np.max(Z_total)
     # times = times[0:START_ZOOM_TIME:1] + times[START_ZOOM_TIME:1000:10] + times[1000::30]
     # times = times[100:1000:10]
 
 
-    pool = Pool(8)
+    pool = Pool(30)
 
     with progressbar.ProgressBar(max_value=len(times)+STOP_TIME) as bar:
         # for i, time in enumerate(times):
@@ -261,16 +284,16 @@ if __name__ == '__main__':
         print 'before pool'
         pool.map(msf_plot_i, args)
 
-        if MSF_PLOT:
-            for ii in range(len(times)-1,len(times)+STOP_TIME):
-                call(["cp", OUTPUT_PNG%(len(times)-1), OUTPUT_PNG%ii])
-                call(["cp", HEIGHT_PNG%(len(times)-1), HEIGHT_PNG%ii])
-                call(["cp", COMBINED_PNG%(len(times)-1), COMBINED_PNG%ii])
-                bar.update(ii)
-
-        if DDD_PLOT:
-            for ii in range(len(times)-1,len(times)+100):
-                call(["cp", DDD_OUTPUT_PNG%(len(times)-1), DDD_OUTPUT_PNG%ii])
+        # if MSF_PLOT:
+        #     for ii in range(len(times)-1,len(times)+STOP_TIME):
+        #         call(["cp", OUTPUT_PNG%(len(times)-1), OUTPUT_PNG%ii])
+        #         call(["cp", HEIGHT_PNG%(len(times)-1), HEIGHT_PNG%ii])
+        #         call(["cp", COMBINED_PNG%(len(times)-1), COMBINED_PNG%ii])
+        #         bar.update(ii)
+        #
+        # if DDD_PLOT:
+        #     for ii in range(len(times)-1,len(times)+100):
+        #         call(["cp", DDD_OUTPUT_PNG%(len(times)-1), DDD_OUTPUT_PNG%ii])
 
 
     if MSF_PLOT:
