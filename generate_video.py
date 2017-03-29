@@ -1,9 +1,9 @@
+import matplotlib
+matplotlib.use('Qt4Agg')
 import h5py as h
 import numpy as np
 import utils as u
-import matplotlib
-matplotlib.use('Agg')
-# from matplotlib import pyplot as plt
+# from matplotlib i1mport pyplot as plt
 import pylab as plt
 from matplotlib import collections  as mc
 import progressbar
@@ -14,6 +14,11 @@ from plot_scriptstoy import *
 from draw_MSF import *
 from subprocess import call
 from multiprocessing import Pool
+from mayavi import mlab
+from tvtk.common import configure_input_data, configure_source_data, is_old_pipeline
+from tvtk.api import tvtk
+import moviepy.editor as editor
+
 
 
 coordinate_offset = np.array([[-1, 0], [0, -1], [1, 0], [0, 1]], dtype=np.int)
@@ -23,7 +28,9 @@ sl = 1
 
 
 def msf_plot_i(args):
-    zoom, i, time, n_times = args
+    mlab.clf()
+    print 'args', args
+    i, zoom, time, n_times = args
     BM_FILE = '../data/nets/full_validation_path_01/validation_0/bm_116_116.h5'
     # BM_FILE = '../data/nets/fig1_draw_29_without_min/pretrain/serial_00447999'
 
@@ -68,8 +75,8 @@ def msf_plot_i(args):
         D_timemap = h5f['global_timemap'][b, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov]
         D_claims = claims[b, fov+ROI_DDD[0][0]:ROI_DDD[0][1]+fov, ROI_DDD[1][0]+fov:ROI_DDD[1][1]+fov].astype(int)
         xlim, ylim = Z.shape
-        X, Y = np.mgrid[0:xlim, 0:ylim]
-        x, y = np.mgrid[0:D_raw.shape[0], 0:D_raw.shape[1]]
+        X, Y = np.mgrid[0:xlim+2, 0:ylim+2]
+
 
         font = {'family': 'serif',
                 'color':  'darkred',
@@ -92,7 +99,7 @@ def msf_plot_i(args):
             ax.margins(0.1)
             # print fov+ROI[0][0], ROI[0][1]+fov, ROI[1][0]+fov, ROI[1][1]+fov
             raw = np.array(h5f['global_input'][b, 0, fov + ROI[0][0]:ROI[0][1] + fov, ROI[1][0] + fov:ROI[1][1] + fov])
-            ax.imshow(raw, interpolation=None, cmap='gray')
+            mimshow = ax.imshow(raw, interpolation=None, cmap='gray', extent=[0, raw.shape[0], 0, raw.shape[1]])
             # glob_time_map = h5f['global_timemap'][b, fov+ROI[0][0]:ROI[0][1]+fov, ROI[1][0]+fov:ROI[1][1]+fov]
             # print np.sum(glob_time_map < time)
             # ax.imshow(glob_time_map, interpolation=None, cmap='gray')
@@ -147,40 +154,76 @@ def msf_plot_i(args):
         # bar.update(i)
 
         if DDD_PLOT:
+            D_raw = np.pad(D_raw, 1, 'constant')
             fig = plt.figure()
             ax = fig.gca(projection='3d')
             Z_masked = np.array(Z)
-            mask = D_timemap > time
-            Z_masked[mask] = np.nan
-
-            zmax = np.amax(Z_masked[~mask])
-
-            # magnitude = int(np.log(zmax)/np.log(1.2))
-            # print 'magnituede ', magnitude, zmax
-            # ax.axes.set_zlim([0, 1.2**(magnitude+2)])
-
-            # magnitude = zmax
-            # print 'magnituede ', magnitude, zmax
-
-            masked_claims = get_masked_claims(h5f, ROI_DDD, time, None, crop_claim=D_claims)
-            ax.plot_surface(x, y, 0, rstride=2, cstride=2, facecolors=plt.cm.gray(D_raw))
-            # print np.unique(D_claims), CM([0,50,100])
-            # print CM(masked_claims).shape, CM(np.unique(D_claims))
-            ax.plot_surface(X, Y, Z_masked, rstride=2, cstride=2, alpha=1., facecolors=CM(D_claims), vmin=0, vmax=max_label)
-            elevation = 20.
-            if float(i) / n_times > 0.4:
-                elevation = 20. + 60. * ((float(i) / n_times) - 0.4)/0.6
+            mask = ~ndimage.binary_dilation(D_timemap <= time, iterations=1)
+            Z_masked[mask] = -0.501
 
 
-            # elevation = 60
-            ax.view_init(elev=elevation)
-            # ax.axis('off')
-            ax.axes.set_zlim([0, zmax*2 + 0.5])
-            ax.axes.set_xlim([0, 360])
-            ax.axes.set_ylim([0, 700])
-            print ax.axes.get_zlim()
-            fig.savefig(DDD_OUTPUT_PNG % i, bbox_inches='tight', dpi=200)
-            plt.close()
+            mimshow = mlab.imshow(D_raw, colormap='gray', extent=[0, D_raw.shape[0], 0, D_raw.shape[1], -0.5, -0.1],
+                                  figure=FIGURE)
+
+
+            Z_masked = np.log(Z_masked + 1.00001) * 10
+            Z_masked = np.pad(Z_masked, 1, 'constant', )
+            Z_masked[Z_masked <= 0] = - 0.5001
+            surf = mlab.surf(X, Y, Z_masked, colormap='gray', color=(0.8,0.8,0.8), opacity=0.7, figure=FIGURE)
+
+
+            array_2d = CM(D_claims.astype(np.int))         # uint 8 255, 3
+            img = image_from_array(array_2d)
+
+            texture_img = tvtk.Texture(interpolate=1)
+            configure_input_data(texture_img, img)
+            texture_img.input = img
+
+            surf.actor.enable_texture = True
+            surf.actor.tcoord_generator_mode = 'plane'
+            surf.actor.texture = texture_img
+
+            return mlab.screenshot(antialiased=True)
+
+def image_from_array(ary):
+    """ Create a VTK image object that references the data in ary.
+        The array is either 2D or 3D with.  The last dimension
+        is always the number of channels.  It is only tested
+        with 3 (RGB) or 4 (RGBA) channel images.
+        Note: This works no matter what the ary type is (accept
+        probably complex...).  uint8 gives results that make since
+        to me.  Int32 and Float types give colors that I am not
+        so sure about.  Need to look into this...
+    """
+
+    sz = ary.shape
+    dims = len(sz)
+    # create the vtk image data
+    img = tvtk.ImageData()
+
+    if dims == 2:
+        # 1D array of pixels.
+        img.whole_extent = (0, sz[0]-1, 0, 0, 0, 0)
+        img.dimensions = sz[0], 1, 1
+        img.point_data.scalars = ary
+
+    elif dims == 3:
+        # 2D array of pixels.
+        if is_old_pipeline():
+            img.whole_extent = (0, sz[0]-1, 0, sz[1]-1, 0, 0)
+        else:
+            img.extent = (0, sz[0]-1, 0, sz[1]-1, 0, 0)
+        img.dimensions = sz[0], sz[1], 1
+
+        # create a 2d view of the array
+        ary_2d = ary[:]
+        ary_2d.shape = sz[0]*sz[1],sz[2]
+        img.point_data.scalars = ary_2d
+
+    else:
+        raise ValueError("ary must be 3 dimensional.")
+
+    return img
 
 def get_masked_MSF(h5, roi, time, cm, max_label):
     # lines = [[(0, 1), (100, 100)], [(20, 30), (30, 30)], [(10, 20), (10, 30)]]
@@ -212,7 +255,11 @@ def get_masked_MSF(h5, roi, time, cm, max_label):
 
 def get_new_roi(zoom, poi=(670,460), ratio=(16,9)):
     dx,dy = (5*ratio[0]*zoom),(5*ratio[1]*zoom)
-    return ((int(poi[1]-dy),int(poi[1]+dy)),(int(poi[0]-dx),int(poi[0]+dx)))
+    # return ((int(poi[1]-dy),int(poi[1]+dy)),(int(poi[0]-dx),int(poi[0]+dx)))
+    return ((int(poi[1]-dy),int(poi[1]+dy)),(int(poi[0]-dy),int(poi[0]+dy)))
+
+def get_full_roi():
+    return ((int(0),int(-1)),(int(0),int(-1)))
 
 
 def get_masked_claims(h5, roi, time, claims, b=0, crop_claim=None):
@@ -250,16 +297,17 @@ if __name__ == '__main__':
     DDD_PLOT = True                         # dobule
 
     START_ZOOM_TIME = 120
-
+    FPS = 24
     MSF_PLOT = False
 
-    ROI_DDD = get_new_roi(4)
+    ROI_DDD = get_new_roi(6)
+
     with h.File(BM_FILE,'r') as h5f:
-        times = sorted(h5f['global_timemap'][b, fov+ROI[0][0]+1:ROI[0][1]+fov-1, ROI[1][0]+fov+1:ROI[1][1]+fov-1].flatten())
+        times = sorted(h5f['global_timemap'][b, fov+ROI_DDD[0][0]+1:ROI_DDD[0][1]+fov-1, ROI_DDD[1][0]+fov+1:ROI_DDD[1][1]+fov-1].flatten())
         # Z_total = np.log(np.min(h5f['global_prediction_map_nq'][b], axis=2))
         print 'times total', len(times)
         # exit()
-        times = times[::20] + 2 * [np.max(h5f['global_timemap'][b])]
+        times = times[::30000] + 20 * [np.max(h5f['global_timemap'][b])]
         # times = times[-30:]
 
     # max_height = np.max(Z_total)
@@ -267,22 +315,30 @@ if __name__ == '__main__':
     # times = times[100:1000:10]
 
 
-    pool = Pool(30)
+    pool = Pool(5)
 
     with progressbar.ProgressBar(max_value=len(times)+STOP_TIME) as bar:
         # for i, time in enumerate(times):
 
         n_times = len(times)
-        args = [(zoom, i, time, n_t) for zoom, i, time, n_t in zip(n_times * [zoom],
+        args = [(i, zoom, time, n_t) for zoom, i, time, n_t in zip(n_times * [zoom],
                                                          range(n_times),
                                                          times,
                                                          n_times * [n_times])]
         print 'list', args
-
+        print 'len times', len(times), np.max(times)
         #debug
+
+
         # msf_plot_i(args[0])
+        FIGURE = mlab.figure(1, fgcolor=(0, 0, 0), bgcolor=(1, 1, 1))
+        animation = editor.VideoClip(lambda  t: msf_plot_i(args[int(t*len(times))]), duration=len(times)/FPS)
+        animation.write_videofile('crayc.mp4', fps=FPS)
+        # animation.write_gif('crayc.gif', fps=24, opt='nq')
         print 'before pool'
-        pool.map(msf_plot_i, args)
+        mlab.show()
+
+        # pool.map(msf_plot_i, args)
 
         # if MSF_PLOT:
         #     for ii in range(len(times)-1,len(times)+STOP_TIME):
